@@ -27,16 +27,16 @@ struct get_ticker_return
   double      lowest_ask = 0;
   double      highest_bid = 0;
   double      percent_change = 0;
-  asset       hive_volume = asset( 0 , HIVE_SYMBOL );
-  asset       hbd_volume = asset( 0, HBD_SYMBOL );
+  asset       hive_volume = asset( 0 , PXC_SYMBOL );
+  asset       hbd_volume = asset( 0, PXS_SYMBOL );
 };
 
 typedef void_type get_volume_args;
 
 struct get_volume_return
 {
-  asset       hive_volume = asset( 0, HIVE_SYMBOL );
-  asset       hbd_volume = asset( 0, HBD_SYMBOL );
+  asset       hive_volume = asset( 0, PXC_SYMBOL );
+  asset       hbd_volume = asset( 0, PXS_SYMBOL );
 };
 
 struct order

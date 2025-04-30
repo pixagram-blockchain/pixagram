@@ -70,7 +70,7 @@ struct database_api_fixture_basic : hived_fixture
       std::string name = "voter" + std::to_string(i);
       auto key = generate_private_key( name );
       fund( name, ASSET( "10000.000 TESTS" ) );
-      vest( name, "", asset( 10000000 / i, HIVE_SYMBOL ), key );
+      vest( name, "", asset( 10000000 / i, PXC_SYMBOL ), key );
       op.account = name;
       for( int v = 1; v <= i; ++v )
       {

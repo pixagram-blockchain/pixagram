@@ -1265,7 +1265,7 @@ DEFINE_API_IMPL(database_api_impl, get_comment_pending_payouts)
       comment_pending_payout_info& info = retval.cashout_infos.back();
       info.author = key.first;
       info.permlink = key.second;
-      
+
       const comment_cashout_object* cc = _db.find_comment_cashout(*comment);
       if(cc != nullptr)
         info.cashout_info = api_commment_cashout_info(*cc, _db);
@@ -1376,15 +1376,15 @@ DEFINE_API_IMPL( database_api_impl, get_order_book )
   FC_ASSERT( 0 < args.limit && args.limit <= DATABASE_API_SINGLE_QUERY_LIMIT, "limit not set or too big" );
   get_order_book_return result;
 
-  auto max_sell = price::max( HBD_SYMBOL, HIVE_SYMBOL );
-  auto max_buy = price::max( HIVE_SYMBOL, HBD_SYMBOL );
+  auto max_sell = price::max( PXS_SYMBOL, PXC_SYMBOL );
+  auto max_buy = price::max( PXC_SYMBOL, PXS_SYMBOL );
 
   const auto& limit_price_idx = _db.get_index< chain::limit_order_index >().indices().get< chain::by_price >();
   auto sell_itr = limit_price_idx.lower_bound( max_sell );
   auto buy_itr  = limit_price_idx.lower_bound( max_buy );
   auto end = limit_price_idx.end();
 
-  while( sell_itr != end && sell_itr->sell_price.base.symbol == HBD_SYMBOL && result.bids.size() < args.limit )
+  while( sell_itr != end && sell_itr->sell_price.base.symbol == PXS_SYMBOL && result.bids.size() < args.limit )
   {
     auto itr = sell_itr;
     order cur;
@@ -1392,12 +1392,12 @@ DEFINE_API_IMPL( database_api_impl, get_order_book )
     cur.real_price  = 0.0;
     // cur.real_price  = (cur.order_price).to_real();
     cur.hbd = itr->for_sale;
-    cur.hive = ( asset( itr->for_sale, HBD_SYMBOL ) * cur.order_price ).amount;
+    cur.hive = ( asset( itr->for_sale, PXS_SYMBOL ) * cur.order_price ).amount;
     cur.created = itr->created;
     result.bids.emplace_back( std::move( cur ) );
     ++sell_itr;
   }
-  while( buy_itr != end && buy_itr->sell_price.base.symbol == HIVE_SYMBOL && result.asks.size() < args.limit )
+  while( buy_itr != end && buy_itr->sell_price.base.symbol == PXC_SYMBOL && result.asks.size() < args.limit )
   {
     auto itr = buy_itr;
     order cur;
@@ -1405,7 +1405,7 @@ DEFINE_API_IMPL( database_api_impl, get_order_book )
     cur.real_price = 0.0;
     // cur.real_price  = (~cur.order_price).to_real();
     cur.hive    = itr->for_sale;
-    cur.hbd     = ( asset( itr->for_sale, HIVE_SYMBOL ) * cur.order_price ).amount;
+    cur.hbd     = ( asset( itr->for_sale, PXC_SYMBOL ) * cur.order_price ).amount;
     cur.created = itr->created;
     result.asks.emplace_back( std::move( cur ) );
     ++buy_itr;

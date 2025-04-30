@@ -26,7 +26,7 @@ namespace hive { namespace converter { namespace plugins { namespace iceberg_gen
     {
       using hive::protocol::asset;
 
-      asset fee_hbd( HIVE_TREASURY_FEE, HBD_SYMBOL );
+      asset fee_hbd( HIVE_TREASURY_FEE, PXS_SYMBOL );
 
       if( hf >= HIVE_HARDFORK_1_24 )
       {
@@ -35,7 +35,7 @@ namespace hive { namespace converter { namespace plugins { namespace iceberg_gen
         if(proposal_run_time > HIVE_PROPOSAL_FEE_INCREASE_DAYS_SEC)
         {
           uint32_t extra_days = (proposal_run_time / HIVE_ONE_DAY_SECONDS) - HIVE_PROPOSAL_FEE_INCREASE_DAYS;
-          fee_hbd += asset(HIVE_PROPOSAL_FEE_INCREASE_AMOUNT * extra_days, HBD_SYMBOL);
+          fee_hbd += asset(HIVE_PROPOSAL_FEE_INCREASE_AMOUNT * extra_days, PXS_SYMBOL);
         }
       }
 

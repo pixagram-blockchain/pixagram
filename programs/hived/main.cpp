@@ -53,22 +53,7 @@ void info(const hive::protocol::chain_id_type& chainId)
   ilog("------------------------------------------------------");
   ilog("initminer private key: ${key}", ("key", HIVE_INIT_PRIVATE_KEY.key_to_wif() ) );
 #else
-  ilog("                @     @@@@@@    ,@@@@@%               ");
-  ilog("               @@@@    (@@@@@*    @@@@@@              ");
-  ilog("             %@@@@@@     @@@@@@    %@@@@@,            ");
-  ilog("            @@@@@@@@@@    @@@@@@     @@@@@@           ");
-  ilog("          ,@@@@@@@@@@@@     @@@@@@    @@@@@@          ");
-  ilog("         @@@@@@@@@@@@@@@&    @@@@@@     @@@@@@        ");
-  ilog("        @@@@@@@@@@@@@@@@@@    .@@@@@%    @@@@@@       ");
-  ilog("      @@@@@@@@@@@@@@@@@@@@@(              .@@@@@%     ");
-  ilog("       @@@@@@@@@@@@@@@@@@@@               @@@@@@      ");
-  ilog("        *@@@@@@@@@@@@@@@@     @@@@@@    @@@@@@.       ");
-  ilog("          @@@@@@@@@@@@@@    &@@@@@.    @@@@@@         ");
-  ilog("           #@@@@@@@@@@     @@@@@@    #@@@@@/          ");
-  ilog("             @@@@@@@@    /@@@@@/    @@@@@@            ");
-  ilog("              @@@@@(    @@@@@@    .@@@@@&             ");
-  ilog("                @@     @@@@@&    @@@@@@               \n");
-  ilog("                STARTING HIVE NETWORK\n");
+  ilog("                STARTING PIXAGRAM NETWORK\n");
   ilog("------------------------------------------------------");
 #endif
   ilog("initminer public key: ${key}", ("key", HIVE_INIT_PUBLIC_KEY_STR) );
@@ -109,7 +94,7 @@ int main( int argc, char** argv )
     if( theApp.is_interrupt_request() ) return 0;
 
     theApp.set_version_string( version_string() );
-    theApp.set_app_name( "hived" );
+    theApp.set_app_name( "pixagramd" );
 
     if( theApp.is_interrupt_request() ) return 0;
 
@@ -131,7 +116,7 @@ int main( int argc, char** argv )
 
     if( theApp.is_interrupt_request() ) return 0;
 
-    if( !initializationResult.should_start_loop() ) 
+    if( !initializationResult.should_start_loop() )
       return initializationResult.get_result_code();
     else theApp.notify_status("starting");
 

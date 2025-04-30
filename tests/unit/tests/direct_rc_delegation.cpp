@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE( delegate_rc_operation_apply_single )
     {
       const auto& gpo = db->get_dynamic_global_properties();
       const auto& wso = db->get_witness_schedule_object();
-      min_delegation = (asset( wso.median_props.account_creation_fee.amount / 3, HIVE_SYMBOL ) * gpo.get_vesting_share_price()).amount.value;
+      min_delegation = (asset( wso.median_props.account_creation_fee.amount / 3, PXC_SYMBOL ) * gpo.get_vesting_share_price()).amount.value;
     }
 
     BOOST_TEST_MESSAGE( "Testing:  delegate_rc_operation_apply_single to a single account" );
@@ -233,7 +233,7 @@ BOOST_AUTO_TEST_CASE( delegate_rc_operation_apply_many )
     {
       const auto& gpo = db->get_dynamic_global_properties();
       const auto& wso = db->get_witness_schedule_object();
-      min_delegation = (asset( wso.median_props.account_creation_fee.amount / 3, HIVE_SYMBOL ) * gpo.get_vesting_share_price()).amount.value;
+      min_delegation = (asset( wso.median_props.account_creation_fee.amount / 3, PXC_SYMBOL ) * gpo.get_vesting_share_price()).amount.value;
     }
 
     BOOST_TEST_MESSAGE( "Testing:  delegate_rc_operation_apply_many to many accounts" );
@@ -987,7 +987,7 @@ BOOST_AUTO_TEST_CASE( direct_rc_delegation_vesting_withdrawal_routes )
     set_withdraw_vesting_route( "alice", "bob", HIVE_1_PERCENT * 25, true, alice_private_key);
     set_withdraw_vesting_route( "alice", "alice", HIVE_1_PERCENT * 50, true, alice_private_key);
     set_withdraw_vesting_route( "alice", "dave", HIVE_1_PERCENT * 25, false, alice_private_key);
-    
+
     BOOST_TEST_MESSAGE( "Setting up rc delegations" );
 
     delegate_rc_operation drc_op;

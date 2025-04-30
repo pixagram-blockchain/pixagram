@@ -375,8 +375,8 @@ struct curation_rewards_handler
 
   uint64_t prepare_funds_impl( uint32_t idx, uint32_t amount )
   {
-    test_object.fund( voters[idx], asset( amount, HIVE_SYMBOL ) );
-    test_object.vest( voters[idx], voters[idx], asset( amount / 10, HIVE_SYMBOL ), active_voter_keys[idx] );
+    test_object.fund( voters[idx], asset( amount, PXC_SYMBOL ) );
+    test_object.vest( voters[idx], voters[idx], asset( amount / 10, PXC_SYMBOL ), active_voter_keys[idx] );
     return amount;
   }
 
@@ -403,7 +403,7 @@ struct curation_rewards_handler
     funds += prepare_funds( counter, mid );
     funds += prepare_funds( counter, late );
 
-    test_object.issue_funds( HIVE_INIT_MINER_NAME, asset( funds, HIVE_SYMBOL ) );
+    test_object.issue_funds( HIVE_INIT_MINER_NAME, asset( funds, PXC_SYMBOL ) );
   }
 
   void prepare_funds( uint32_t amount = curation_rewards_handler::default_amount )
@@ -413,7 +413,7 @@ struct curation_rewards_handler
     {
       funds += prepare_funds_impl( i, amount );
     }
-    test_object.issue_funds( HIVE_INIT_MINER_NAME, asset( funds, HIVE_SYMBOL ) );
+    test_object.issue_funds( HIVE_INIT_MINER_NAME, asset( funds, PXC_SYMBOL ) );
   }
 
   void prepare_comment( const std::string& permlink, uint32_t creator_number )
@@ -1620,7 +1620,7 @@ void two_comments_in_different_blocks_impl( cluster_database_fixture& cluster, b
         {
           BOOST_REQUIRE_EQUAL( crh.comment_rewards[1].author_tokens.value, 41 );
         }
-        
+
       }
 
       executor->validate_database();
@@ -2264,7 +2264,7 @@ BOOST_AUTO_TEST_CASE( two_comments_in_the_same_blocks )
     BOOST_TEST_MESSAGE( "HF25: Both comments in `early_window` in the same block. First comment with many votes, second comment with 1 vote." );
 
     /*
-      Changes in HF25: 
+      Changes in HF25:
         1)  curation_reward_curve:  convergent_square_root  ->  linear
         2)  author_reward_curve:    convergent_linear       ->  linear
 
@@ -2298,7 +2298,7 @@ BOOST_AUTO_TEST_CASE( two_comments_in_different_blocks )
     BOOST_TEST_MESSAGE( "HF25: Both comments in `early_window` in different blocks. First comment with many votes, second comment with 1 vote." );
 
     /*
-      Changes in HF25: 
+      Changes in HF25:
         1)  curation_reward_curve:  convergent_square_root  ->  linear
         2)  author_reward_curve:    convergent_linear       ->  linear
 

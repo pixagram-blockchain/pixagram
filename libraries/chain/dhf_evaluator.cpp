@@ -25,7 +25,7 @@ void create_proposal_evaluator::do_apply( const create_proposal_operation& o )
     */
     FC_ASSERT(o.end_date > _db.head_block_time(), "Can't create inactive proposals...");
 
-    asset fee_hbd( HIVE_TREASURY_FEE, HBD_SYMBOL );
+    asset fee_hbd( HIVE_TREASURY_FEE, PXS_SYMBOL );
 
     if(_db.has_hardfork(HIVE_HARDFORK_1_24))
     {
@@ -34,7 +34,7 @@ void create_proposal_evaluator::do_apply( const create_proposal_operation& o )
       if(proposal_run_time > HIVE_PROPOSAL_FEE_INCREASE_DAYS_SEC)
       {
         uint32_t extra_days = (proposal_run_time / HIVE_ONE_DAY_SECONDS) - HIVE_PROPOSAL_FEE_INCREASE_DAYS;
-        fee_hbd += asset(HIVE_PROPOSAL_FEE_INCREASE_AMOUNT * extra_days, HBD_SYMBOL);
+        fee_hbd += asset(HIVE_PROPOSAL_FEE_INCREASE_AMOUNT * extra_days, PXS_SYMBOL);
       }
     }
 
@@ -215,7 +215,7 @@ void remove_proposal_evaluator::do_apply(const remove_proposal_operation& op)
       auto found_id = pidx.find( pid );
       if( found_id == pidx.end() || found_id->removed )
         continue;
-      
+
       _db.modify( *found_id, [new_end_date]( proposal_object& proposal )
       {
         proposal.removed = true;

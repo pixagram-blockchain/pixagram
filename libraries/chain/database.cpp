@@ -111,7 +111,7 @@ namespace hive { namespace chain {
 struct reward_fund_context
 {
   uint128_t   recent_claims = 0;
-  asset       reward_balance = asset( 0, HIVE_SYMBOL );
+  asset       reward_balance = asset( 0, PXC_SYMBOL );
   share_type  hive_awarded = 0;
 };
 
@@ -127,7 +127,7 @@ class database_impl
     evaluator_registry< operation >                   _evaluator_registry;
     std::map<account_name_type, block_id_type>        _last_fast_approved_block_by_witness;
     std::unique_ptr<util::decoded_types_data_storage> _decoded_types_data_storage;
-    
+
     // these used for the node_status API, which reads these values from another thread
     // they're only used to determine if the node is in sync, and nothing particulary bad
     // will happen if we get mismatched values
@@ -258,7 +258,7 @@ void database::load_state_initial_data(const open_args& args)
 
   if (head_block_num())
   {
-    std::shared_ptr<full_block_type> head_block = 
+    std::shared_ptr<full_block_type> head_block =
       _block_writer->get_block_reader().read_block_by_num(head_block_num());
     // This assertion should be caught and a reindex should occur
     FC_ASSERT(head_block && head_block->get_block_id() == head_block_id(),
@@ -973,7 +973,7 @@ uint32_t database::get_slot_at_time(fc::time_point_sec when)const
   */
 std::pair< asset, asset > database::create_hbd( const account_object& to_account, asset hive, bool to_reward_balance )
 {
-  std::pair< asset, asset > assets( asset( 0, HBD_SYMBOL ), asset( 0, HIVE_SYMBOL ) );
+  std::pair< asset, asset > assets( asset( 0, PXS_SYMBOL ), asset( 0, PXC_SYMBOL ) );
 
   try
   {
@@ -988,23 +988,23 @@ std::pair< asset, asset > database::create_hbd( const account_object& to_account
       auto to_hbd = ( gpo.hbd_print_rate * hive.amount ) / HIVE_100_PERCENT;
       auto to_hive = hive.amount - to_hbd;
 
-      auto hbd = asset( to_hbd, HIVE_SYMBOL ) * median_price;
+      auto hbd = asset( to_hbd, PXC_SYMBOL ) * median_price;
 
       if( to_reward_balance )
       {
         adjust_reward_balance( to_account, hbd );
-        adjust_reward_balance( to_account, asset( to_hive, HIVE_SYMBOL ) );
+        adjust_reward_balance( to_account, asset( to_hive, PXC_SYMBOL ) );
       }
       else
       {
         adjust_balance( to_account, hbd );
-        adjust_balance( to_account, asset( to_hive, HIVE_SYMBOL ) );
+        adjust_balance( to_account, asset( to_hive, PXC_SYMBOL ) );
       }
 
-      adjust_supply( asset( -to_hbd, HIVE_SYMBOL ) );
+      adjust_supply( asset( -to_hbd, PXC_SYMBOL ) );
       adjust_supply( hbd );
       assets.first = hbd;
-      assets.second = asset( to_hive, HIVE_SYMBOL );
+      assets.second = asset( to_hive, PXC_SYMBOL );
     }
     else
     {
@@ -1051,7 +1051,7 @@ asset calculate_vesting( database& db, const asset& liquid, bool to_reward_balan
   }
 #endif
 
-  FC_ASSERT( liquid.symbol == HIVE_SYMBOL );
+  FC_ASSERT( liquid.symbol == PXC_SYMBOL );
   // ^ A novelty, needed but risky in case someone managed to slip HBD/TESTS here in blockchain history.
   // Get share price.
   const auto& cprops = db.get_dynamic_global_properties();
@@ -2355,7 +2355,7 @@ share_type database::pay_curators( const comment_object& comment, const comment_
           unclaimed_rewards -= claim;
           const auto& voter = get( item->get_voter() );
           operation vop = curation_reward_operation( voter.get_name(), asset(0, VESTS_SYMBOL), comment_author_name, to_string( comment_cashout.get_permlink() ), has_hardfork( HIVE_HARDFORK_0_17__659 ) );
-          create_vesting2( *this, voter, asset( claim, HIVE_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ),
+          create_vesting2( *this, voter, asset( claim, PXC_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ),
             [&]( const asset& reward )
             {
               vop.get< curation_reward_operation >().reward = reward;
@@ -2426,28 +2426,28 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
           auto benefactor_tokens = ( author_tokens * b.weight ) / HIVE_100_PERCENT;
           auto benefactor_vesting_hive = benefactor_tokens;
           auto vop = comment_benefactor_reward_operation( beneficiary.get_name(), comment_author, to_string( comment_cashout.get_permlink() ),
-            asset( 0, HBD_SYMBOL ), asset( 0, HIVE_SYMBOL ), asset( 0, VESTS_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ) );
+            asset( 0, PXS_SYMBOL ), asset( 0, PXC_SYMBOL ), asset( 0, VESTS_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ) );
 
           if( has_hardfork( HIVE_HARDFORK_0_21__3343 ) && is_treasury( beneficiary.get_name() ) )
           {
             benefactor_vesting_hive = 0;
-            vop.hbd_payout = asset( benefactor_tokens, HIVE_SYMBOL ) * get_feed_history().current_median_history;
+            vop.hbd_payout = asset( benefactor_tokens, PXC_SYMBOL ) * get_feed_history().current_median_history;
             vop.payout_must_be_claimed = false;
             adjust_balance( get_treasury(), vop.hbd_payout );
-            adjust_supply( asset( -benefactor_tokens, HIVE_SYMBOL ) );
+            adjust_supply( asset( -benefactor_tokens, PXC_SYMBOL ) );
             adjust_supply( vop.hbd_payout );
           }
           else if( has_hardfork( HIVE_HARDFORK_0_20__2022 ) )
           {
             auto benefactor_hbd_hive = ( benefactor_tokens * comment_cashout.get_percent_hbd() ) / ( 2 * HIVE_100_PERCENT ) ;
             benefactor_vesting_hive  = benefactor_tokens - benefactor_hbd_hive;
-            auto hbd_payout          = create_hbd( beneficiary, asset( benefactor_hbd_hive, HIVE_SYMBOL ), true );
+            auto hbd_payout          = create_hbd( beneficiary, asset( benefactor_hbd_hive, PXC_SYMBOL ), true );
 
             vop.hbd_payout   = hbd_payout.first; // HBD portion
             vop.hive_payout = hbd_payout.second; // HIVE portion
           }
 
-          create_vesting2( *this, beneficiary, asset( benefactor_vesting_hive, HIVE_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ),
+          create_vesting2( *this, beneficiary, asset( benefactor_vesting_hive, PXC_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ),
           [&]( const asset& reward )
           {
             vop.vesting_payout = reward;
@@ -2463,18 +2463,18 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
         auto hbd_hive     = ( author_tokens * comment_cashout.get_percent_hbd() ) / ( 2 * HIVE_100_PERCENT ) ;
         auto vesting_hive = author_tokens - hbd_hive;
 
-        auto hbd_payout = create_hbd( author, asset( hbd_hive, HIVE_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ) );
+        auto hbd_payout = create_hbd( author, asset( hbd_hive, PXC_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ) );
 
         /*
           Total payout for curators is calculated due to the performance in third party softwares(f.e. `hivemind`).
           During payments calculations it's enough to catch `author_reward_operation`, without adding all values from `curation_reward_operation`.
         */
-        auto curators_vesting_payout = calculate_vesting( *this, asset( curation_tokens, HIVE_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ) );
+        auto curators_vesting_payout = calculate_vesting( *this, asset( curation_tokens, PXC_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ) );
 
         operation vop = author_reward_operation( comment_author, to_string( comment_cashout.get_permlink() ), hbd_payout.first, hbd_payout.second, asset( 0, VESTS_SYMBOL ),
                                                 curators_vesting_payout, has_hardfork( HIVE_HARDFORK_0_17__659 ) );
 
-        create_vesting2( *this, author, asset( vesting_hive, HIVE_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ),
+        create_vesting2( *this, author, asset( vesting_hive, PXC_SYMBOL ), has_hardfork( HIVE_HARDFORK_0_17__659 ),
           [&]( const asset& vesting_payout )
           {
             vop.get< author_reward_operation >().vesting_payout = vesting_payout;
@@ -2482,9 +2482,9 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
           } );
         post_push_virtual_operation( vop );
 
-        asset payout = hbd_payout.first + to_hbd( hbd_payout.second + asset( vesting_hive, HIVE_SYMBOL ) );
-        asset curator_payout = to_hbd( asset( curation_tokens, HIVE_SYMBOL ) );
-        asset beneficiary_payout = to_hbd( asset( total_beneficiary, HIVE_SYMBOL ) );
+        asset payout = hbd_payout.first + to_hbd( hbd_payout.second + asset( vesting_hive, PXC_SYMBOL ) );
+        asset curator_payout = to_hbd( asset( curation_tokens, PXC_SYMBOL ) );
+        asset beneficiary_payout = to_hbd( asset( total_beneficiary, PXC_SYMBOL ) );
         if( !has_hardfork( HIVE_HARDFORK_0_19 ) )
         {
           modify( *comment_cashout_ex, [&]( comment_cashout_ex_object& c_ex )
@@ -2496,7 +2496,7 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
           } );
         }
         vop = comment_reward_operation( comment_author, to_string( comment_cashout.get_permlink() ),
-          to_hbd( asset( claimed_reward, HIVE_SYMBOL ) ), author_tokens, payout, curator_payout, beneficiary_payout );
+          to_hbd( asset( claimed_reward, PXC_SYMBOL ) ), author_tokens, payout, curator_payout, beneficiary_payout );
         pre_push_virtual_operation( vop );
         post_push_virtual_operation( vop );
 
@@ -2699,7 +2699,7 @@ void database::process_comment_cashout()
       modify( get< reward_fund_object, by_id >( reward_fund_object::id_type( i ) ), [&]( reward_fund_object& rfo )
       {
         rfo.recent_claims = funds[ i ].recent_claims;
-        rfo.reward_balance -= asset( funds[ i ].hive_awarded, HIVE_SYMBOL );
+        rfo.reward_balance -= asset( funds[ i ].hive_awarded, PXC_SYMBOL );
       });
     }
   }
@@ -2740,7 +2740,7 @@ void database::process_funds()
       FC_ASSERT( median_price.is_null() == false  );
 
       const auto &treasury_account = get_treasury();
-      const auto hbd_supply_without_treasury = (props.get_current_hbd_supply() - treasury_account.hbd_balance).amount < 0 ? asset(0, HBD_SYMBOL) : (props.get_current_hbd_supply() - treasury_account.hbd_balance);
+      const auto hbd_supply_without_treasury = (props.get_current_hbd_supply() - treasury_account.hbd_balance).amount < 0 ? asset(0, PXS_SYMBOL) : (props.get_current_hbd_supply() - treasury_account.hbd_balance);
       const auto virtual_supply_without_treasury = hbd_supply_without_treasury * median_price + props.current_supply;
 
       new_hive = (virtual_supply_without_treasury.amount * current_inflation_rate) / (int64_t(HIVE_100_PERCENT) * int64_t(HIVE_BLOCKS_PER_YEAR));
@@ -2772,11 +2772,11 @@ void database::process_funds()
 
     witness_reward /= wso.witness_pay_normalization_factor;
 
-    auto new_hbd = asset( 0, HBD_SYMBOL );
+    auto new_hbd = asset( 0, PXS_SYMBOL );
 
     if( dhf_new_funds.value )
     {
-      new_hbd = asset( dhf_new_funds, HIVE_SYMBOL ) * feed.current_median_history;
+      new_hbd = asset( dhf_new_funds, PXC_SYMBOL ) * feed.current_median_history;
       adjust_balance( get_treasury_name(), new_hbd );
     }
 
@@ -2784,17 +2784,17 @@ void database::process_funds()
 
     modify( props, [&]( dynamic_global_property_object& p )
     {
-      p.total_vesting_fund_hive += asset( vesting_reward, HIVE_SYMBOL );
+      p.total_vesting_fund_hive += asset( vesting_reward, PXC_SYMBOL );
       if( !has_hardfork( HIVE_HARDFORK_0_17__774 ) )
-        p.total_reward_fund_hive += asset( content_reward, HIVE_SYMBOL );
-      p.current_supply      += asset( new_hive, HIVE_SYMBOL );
+        p.total_reward_fund_hive += asset( content_reward, PXC_SYMBOL );
+      p.current_supply      += asset( new_hive, PXC_SYMBOL );
       p.current_hbd_supply  += new_hbd;
-      p.virtual_supply      += asset( new_hive + dhf_new_funds, HIVE_SYMBOL );
+      p.virtual_supply      += asset( new_hive + dhf_new_funds, PXC_SYMBOL );
       p.dhf_interval_ledger += new_hbd;
     });
 
     operation vop = producer_reward_operation( cwit.owner, asset( 0, VESTS_SYMBOL ) );
-    create_vesting2( *this, get_account( cwit.owner ), asset( witness_reward, HIVE_SYMBOL ), false,
+    create_vesting2( *this, get_account( cwit.owner ), asset( witness_reward, PXC_SYMBOL ), false,
       [&]( const asset& vesting_shares )
       {
         vop.get< producer_reward_operation >().vesting_shares = vesting_shares;
@@ -2881,11 +2881,11 @@ asset database::get_liquidity_reward()const
 {
   // There is no need to update virtual_supply to take into account treasury as it's done in process_funds
   if( has_hardfork( HIVE_HARDFORK_0_12__178 ) )
-    return asset( 0, HIVE_SYMBOL );
+    return asset( 0, PXC_SYMBOL );
 
   const auto& props = get_dynamic_global_properties();
   static_assert( HIVE_LIQUIDITY_REWARD_PERIOD_SEC == 60*60, "this code assumes a 1 hour time interval" ); // NOLINT(misc-redundant-expression)
-  asset percent( protocol::calc_percent_reward_per_hour< HIVE_LIQUIDITY_APR_PERCENT >( props.virtual_supply.amount ), HIVE_SYMBOL );
+  asset percent( protocol::calc_percent_reward_per_hour< HIVE_LIQUIDITY_APR_PERCENT >( props.virtual_supply.amount ), PXC_SYMBOL );
   return std::max( percent, HIVE_MIN_LIQUIDITY_REWARD );
 }
 
@@ -2894,7 +2894,7 @@ asset database::get_content_reward()const
   // There is no need to update virtual_supply to take into account treasury as it's done in process_funds
   const auto& props = get_dynamic_global_properties();
   static_assert( HIVE_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
-  asset percent( protocol::calc_percent_reward_per_block< HIVE_CONTENT_APR_PERCENT >( props.virtual_supply.amount ), HIVE_SYMBOL );
+  asset percent( protocol::calc_percent_reward_per_block< HIVE_CONTENT_APR_PERCENT >( props.virtual_supply.amount ), PXC_SYMBOL );
   return std::max( percent, HIVE_MIN_CONTENT_REWARD );
 }
 
@@ -2903,7 +2903,7 @@ asset database::get_curation_reward()const
   // There is no need to update virtual_supply to take into account treasury as it's done in process_funds
   const auto& props = get_dynamic_global_properties();
   static_assert( HIVE_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
-  asset percent( protocol::calc_percent_reward_per_block< HIVE_CURATE_APR_PERCENT >( props.virtual_supply.amount ), HIVE_SYMBOL);
+  asset percent( protocol::calc_percent_reward_per_block< HIVE_CURATE_APR_PERCENT >( props.virtual_supply.amount ), PXC_SYMBOL);
   return std::max( percent, HIVE_MIN_CURATE_REWARD );
 }
 
@@ -2912,7 +2912,7 @@ asset database::get_producer_reward()
   // There is no need to update virtual_supply to take into account treasury as it's done in process_funds
   const auto& props = get_dynamic_global_properties();
   static_assert( HIVE_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
-  asset percent( protocol::calc_percent_reward_per_block< HIVE_PRODUCER_APR_PERCENT >( props.virtual_supply.amount ), HIVE_SYMBOL);
+  asset percent( protocol::calc_percent_reward_per_block< HIVE_PRODUCER_APR_PERCENT >( props.virtual_supply.amount ), PXC_SYMBOL);
   auto pay = std::max( percent, HIVE_MIN_PRODUCER_REWARD );
   const auto& witness_account = get_account( props.current_witness );
 
@@ -2949,12 +2949,12 @@ asset database::get_pow_reward()const
 #ifndef IS_TEST_NET
   /// 0 block rewards until at least HIVE_MAX_WITNESSES have produced a POW
   if( props.num_pow_witnesses < HIVE_MAX_WITNESSES && props.head_block_number < HIVE_START_VESTING_BLOCK )
-    return asset( 0, HIVE_SYMBOL );
+    return asset( 0, PXC_SYMBOL );
 #endif
 
   static_assert( HIVE_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
   static_assert( HIVE_MAX_WITNESSES == 21, "this code assumes 21 per round" );
-  asset percent( calc_percent_reward_per_round< HIVE_POW_APR_PERCENT >( props.virtual_supply.amount ), HIVE_SYMBOL);
+  asset percent( calc_percent_reward_per_round< HIVE_POW_APR_PERCENT >( props.virtual_supply.amount ), PXC_SYMBOL);
   return std::max( percent, HIVE_MIN_POW_REWARD );
 }
 
@@ -3014,7 +3014,7 @@ share_type database::pay_reward_funds( const share_type& reward )
 
     modify( *itr, [&]( reward_fund_object& rfo )
     {
-      rfo.reward_balance += asset( r, HIVE_SYMBOL );
+      rfo.reward_balance += asset( r, PXC_SYMBOL );
     });
 
     used_rewards += r;
@@ -3039,8 +3039,8 @@ void database::process_conversions()
   if( fhistory.current_median_history.is_null() )
     return;
 
-  asset net_hbd( 0, HBD_SYMBOL );
-  asset net_hive( 0, HIVE_SYMBOL );
+  asset net_hbd( 0, PXS_SYMBOL );
+  asset net_hive( 0, PXC_SYMBOL );
 
   //regular requests
   int count = 0;
@@ -3091,7 +3091,7 @@ void database::process_conversions()
       //case, when this conversion happens when median price does not reflect market conditions when hard limit was
       //hit - see update_median_feed()
       auto required_hive = multiply_with_fee( itr->get_converted_amount(), fhistory.market_median_history,
-        HIVE_COLLATERALIZED_CONVERSION_FEE, HIVE_SYMBOL );
+        HIVE_COLLATERALIZED_CONVERSION_FEE, PXC_SYMBOL );
       auto excess_collateral = itr->get_collateral_amount() - required_hive;
       if( excess_collateral.amount < 0 )
       {
@@ -3653,7 +3653,7 @@ void database::init_genesis()
 #if defined(IS_TEST_NET) || defined(HIVE_CONVERTER_ICEBERG_PLUGIN_ENABLED)
     create< feed_history_object >( [&]( feed_history_object& o )
     {
-      o.current_median_history = price( asset( 1, HBD_SYMBOL ), asset( 1, HIVE_SYMBOL ) );
+      o.current_median_history = price( asset( 1, PXS_SYMBOL ), asset( 1, PXC_SYMBOL ) );
       o.market_median_history = o.current_median_history;
       o.current_min_history = o.current_median_history;
       o.current_max_history = o.current_median_history;
@@ -4213,8 +4213,8 @@ try {
             static_assert( ( HIVE_HBD_HARD_LIMIT % HIVE_1_PERCENT ) == 0, "Hard cap has to be expressed in full percentage points" );
             limit /= HIVE_1_PERCENT; //ABW: this is just to have two more levels of magnitude bigger margin;
               //even without it we can still fit within 64bit value, even though numbers used here are pretty big
-            price min_price( asset( ( HIVE_100_PERCENT/HIVE_1_PERCENT - limit ) * hbd_supply.amount, HBD_SYMBOL ),
-                             asset( limit * dgpo.get_current_supply().amount, HIVE_SYMBOL ) );
+            price min_price( asset( ( HIVE_100_PERCENT/HIVE_1_PERCENT - limit ) * hbd_supply.amount, PXS_SYMBOL ),
+                             asset( limit * dgpo.get_current_supply().amount, PXC_SYMBOL ) );
 
             /*
             ilog( "GREP${daily}: ${block}, ${minfeed}, ${medfeed}, ${maxfeed}, ${minprice}, ${medprice}, ${maxprice}, ${capprice}, ${debt}, ${hbdinfl}, ${hivesup}, ${virtsup}, ${hbdsup}",
@@ -4741,12 +4741,12 @@ void database::update_global_dynamic_data( const signed_block& b )
         } );
       }
     }
-    
+
     if (missed_blocks != 0)
     {
       fc::microseconds loop_time = fc::time_point::now() - start_time;
       if( loop_time.count() > 1000000ll ) // Report delay longer than 1s.
-        ilog("Missed blocks: ${missed_blocks}, time spent in loop: ${ms} ms (${us} us)", 
+        ilog("Missed blocks: ${missed_blocks}, time spent in loop: ${ms} ms (${us} us)",
           (missed_blocks)("ms", loop_time.count()/1000)("us", loop_time) );
     }
   }
@@ -4795,7 +4795,7 @@ uint16_t database::calculate_HBD_percent()
     // Removing the hbd in the treasury from the debt ratio calculations
     hbd_supply -= get_treasury().get_hbd_balance();
     if( hbd_supply.amount < 0 )
-      hbd_supply = asset( 0, HBD_SYMBOL );
+      hbd_supply = asset( 0, PXS_SYMBOL );
     virtual_supply = hbd_supply * median_price + dgpo.get_current_supply();
   }
 
@@ -4812,7 +4812,7 @@ void database::update_virtual_supply()
   {
     auto median_price = get_feed_history().current_median_history;
     dgp.virtual_supply = dgp.current_supply
-      + ( median_price.is_null() ? asset( 0, HIVE_SYMBOL ) : dgp.get_current_hbd_supply() * median_price );
+      + ( median_price.is_null() ? asset( 0, PXC_SYMBOL ) : dgp.get_current_hbd_supply() * median_price );
 
     if( !median_price.is_null() && has_hardfork( HIVE_HARDFORK_0_14__230 ) )
     {
@@ -5024,7 +5024,7 @@ void database::migrate_irreversible_state(uint32_t old_last_irreversible)
   {
     const dynamic_global_property_object& dpo = get_dynamic_global_properties();
 
-    _block_writer->store_block( get_last_irreversible_block_num(), 
+    _block_writer->store_block( get_last_irreversible_block_num(),
                                 dpo.head_block_number );
 
     // This deletes undo state (when present)
@@ -5130,7 +5130,7 @@ FC_TODO( " Remove if(), do assert unconditionally after HF20 occurs" )
       ( (age >= HIVE_MIN_LIQUIDITY_REWARD_PERIOD_SEC && !has_hardfork( HIVE_HARDFORK_0_10__149)) ||
       (age >= HIVE_MIN_LIQUIDITY_REWARD_PERIOD_SEC_HF10 && has_hardfork( HIVE_HARDFORK_0_10__149) ) ) )
   {
-    if( old_order_receives.symbol == HIVE_SYMBOL )
+    if( old_order_receives.symbol == PXC_SYMBOL )
     {
       adjust_liquidity_reward( get_account( old_order.seller ), old_order_receives, false );
       adjust_liquidity_reward( get_account( new_order.seller ), -old_order_receives, false );
@@ -5362,7 +5362,7 @@ void database::modify_balance( const account_object& a, const asset& delta, bool
   {
     switch( delta.symbol.asset_num )
     {
-      case HIVE_ASSET_NUM_HIVE:
+      case PIXA_ASSET_NUM_PXC:
       {
         auto b = acnt.balance;
         acnt.balance += delta;
@@ -5375,7 +5375,7 @@ void database::modify_balance( const account_object& a, const asset& delta, bool
         }
         break;
       }
-      case HIVE_ASSET_NUM_HBD:
+      case PIXA_ASSET_NUM_PXS:
       {
         /// Starting from HF 25 HBD interest will be paid only from saving balance.
         if( has_hardfork(HIVE_HARDFORK_1_25) == false && a.hbd_seconds_last_update != head_block_time() )
@@ -5388,7 +5388,7 @@ void database::modify_balance( const account_object& a, const asset& delta, bool
             auto interest = acnt.hbd_seconds / HIVE_SECONDS_PER_YEAR;
             interest *= get_dynamic_global_properties().get_hbd_interest_rate();
             interest /= HIVE_100_PERCENT;
-            asset interest_paid(fc::uint128_to_uint64(interest), HBD_SYMBOL);
+            asset interest_paid(fc::uint128_to_uint64(interest), PXS_SYMBOL);
             acnt.hbd_balance += interest_paid;
             acnt.hbd_seconds = 0;
             acnt.hbd_last_interest_payment = head_block_time();
@@ -5416,7 +5416,7 @@ void database::modify_balance( const account_object& a, const asset& delta, bool
         }
         break;
       }
-      case HIVE_ASSET_NUM_VESTS:
+      case PIXA_ASSET_NUM_VESTS:
         acnt.vesting_shares += delta;
         if( check_balance )
         {
@@ -5435,7 +5435,7 @@ void database::modify_reward_balance( const account_object& a, const asset& valu
   {
     switch( value_delta.symbol.asset_num )
     {
-      case HIVE_ASSET_NUM_HIVE:
+      case PIXA_ASSET_NUM_PXC:
         if( share_delta.amount.value == 0 )
         {
           acnt.reward_hive_balance += value_delta;
@@ -5454,7 +5454,7 @@ void database::modify_reward_balance( const account_object& a, const asset& valu
           }
         }
         break;
-      case HIVE_ASSET_NUM_HBD:
+      case PIXA_ASSET_NUM_PXS:
         FC_ASSERT( share_delta.amount.value == 0 );
         acnt.reward_hbd_balance += value_delta;
         if( check_balance )
@@ -5516,14 +5516,14 @@ void database::adjust_savings_balance( const account_object& a, const asset& del
   {
     switch( delta.symbol.asset_num )
     {
-      case HIVE_ASSET_NUM_HIVE:
+      case PIXA_ASSET_NUM_PXC:
         acnt.savings_balance += delta;
         if( check_balance )
         {
           FC_ASSERT( acnt.get_savings().amount.value >= 0, "Insufficient savings HIVE funds" );
         }
         break;
-      case HIVE_ASSET_NUM_HBD:
+      case PIXA_ASSET_NUM_PXS:
         if( a.savings_hbd_seconds_last_update != head_block_time() )
         {
           acnt.savings_hbd_seconds += fc::uint128_t(a.get_hbd_savings().amount.value) * (head_block_time() - a.savings_hbd_seconds_last_update).to_seconds();
@@ -5535,7 +5535,7 @@ void database::adjust_savings_balance( const account_object& a, const asset& del
             auto interest = acnt.savings_hbd_seconds / HIVE_SECONDS_PER_YEAR;
             interest *= get_dynamic_global_properties().get_hbd_interest_rate();
             interest /= HIVE_100_PERCENT;
-            asset interest_paid(fc::uint128_to_uint64(interest), HBD_SYMBOL);
+            asset interest_paid(fc::uint128_to_uint64(interest), PXS_SYMBOL);
             acnt.savings_hbd_balance += interest_paid;
             acnt.savings_hbd_seconds = 0;
             acnt.savings_hbd_last_interest_payment = head_block_time();
@@ -5623,9 +5623,9 @@ void database::adjust_supply( const asset& delta, bool adjust_vesting )
   {
     switch( delta.symbol.asset_num )
     {
-      case HIVE_ASSET_NUM_HIVE:
+      case PIXA_ASSET_NUM_PXC:
       {
-        asset new_vesting( (adjust_vesting && delta.amount > 0) ? delta.amount * 9 : 0, HIVE_SYMBOL );
+        asset new_vesting( (adjust_vesting && delta.amount > 0) ? delta.amount * 9 : 0, PXC_SYMBOL );
         props.current_supply += delta + new_vesting;
         props.virtual_supply += delta + new_vesting;
         props.total_vesting_fund_hive += new_vesting;
@@ -5635,7 +5635,7 @@ void database::adjust_supply( const asset& delta, bool adjust_vesting )
         }
         break;
       }
-      case HIVE_ASSET_NUM_HBD:
+      case PIXA_ASSET_NUM_PXS:
         props.current_hbd_supply += delta;
         props.virtual_supply = props.get_current_hbd_supply() * get_feed_history().current_median_history + props.current_supply;
         if( check_supply )
@@ -5654,9 +5654,9 @@ asset database::get_balance( const account_object& a, asset_symbol_type symbol )
 {
   switch( symbol.asset_num )
   {
-    case HIVE_ASSET_NUM_HIVE:
+    case PIXA_ASSET_NUM_PXC:
       return a.get_balance();
-    case HIVE_ASSET_NUM_HBD:
+    case PIXA_ASSET_NUM_PXS:
       return a.get_hbd_balance();
     default:
     {
@@ -5683,9 +5683,9 @@ asset database::get_savings_balance( const account_object& a, asset_symbol_type 
 {
   switch( symbol.asset_num )
   {
-    case HIVE_ASSET_NUM_HIVE:
+    case PIXA_ASSET_NUM_PXC:
       return a.get_savings();
-    case HIVE_ASSET_NUM_HBD:
+    case PIXA_ASSET_NUM_PXS:
       return a.get_hbd_savings();
     default: // Note no savings balance for SMT per comments in issue 1682.
       FC_ASSERT( !"invalid symbol" );
@@ -5990,7 +5990,7 @@ void database::apply_hardfork( uint32_t hardfork )
 
         modify( gpo, [&]( dynamic_global_property_object& g )
         {
-          g.total_reward_fund_hive = asset( 0, HIVE_SYMBOL );
+          g.total_reward_fund_hive = asset( 0, PXC_SYMBOL );
           g.total_reward_shares2 = 0;
         });
 
@@ -6101,14 +6101,14 @@ void database::apply_hardfork( uint32_t hardfork )
           {
             modify( get< witness_object, by_name >( witness ), [&]( witness_object& w )
             {
-              w.props.account_creation_fee = asset( w.props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER, HIVE_SYMBOL );
+              w.props.account_creation_fee = asset( w.props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER, PXC_SYMBOL );
             } );
           }
         }
 
         modify( wso, [&]( witness_schedule_object& wso )
         {
-          wso.median_props.account_creation_fee = asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER, HIVE_SYMBOL );
+          wso.median_props.account_creation_fee = asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER, PXC_SYMBOL );
         } );
 
         // Initialize RC:
@@ -6318,10 +6318,10 @@ void database::validate_invariants()const
   try
   {
     const auto& account_idx = get_index< account_index, by_name >();
-    asset total_supply = asset( 0, HIVE_SYMBOL );
-    asset total_hbd = asset( 0, HBD_SYMBOL );
+    asset total_supply = asset( 0, PXC_SYMBOL );
+    asset total_hbd = asset( 0, PXS_SYMBOL );
     asset total_vesting = asset( 0, VESTS_SYMBOL );
-    asset pending_vesting_hive = asset( 0, HIVE_SYMBOL );
+    asset pending_vesting_hive = asset( 0, PXC_SYMBOL );
     share_type total_vsf_votes = share_type( 0 );
     ushare_type total_delayed_votes = ushare_type( 0 );
 
@@ -6389,13 +6389,13 @@ void database::validate_invariants()const
 
     for( auto itr = limit_order_idx.begin(); itr != limit_order_idx.end(); ++itr )
     {
-      if( itr->sell_price.base.symbol == HIVE_SYMBOL )
+      if( itr->sell_price.base.symbol == PXC_SYMBOL )
       {
-        total_supply += asset( itr->for_sale, HIVE_SYMBOL );
+        total_supply += asset( itr->for_sale, PXC_SYMBOL );
       }
-      else if ( itr->sell_price.base.symbol == HBD_SYMBOL )
+      else if ( itr->sell_price.base.symbol == PXS_SYMBOL )
       {
-        total_hbd += asset( itr->for_sale, HBD_SYMBOL );
+        total_hbd += asset( itr->for_sale, PXS_SYMBOL );
       }
       ++order_no;
     }
@@ -6407,9 +6407,9 @@ void database::validate_invariants()const
       total_supply += itr->get_hive_balance();
       total_hbd += itr->get_hbd_balance();
 
-      if( itr->get_fee().symbol == HIVE_SYMBOL )
+      if( itr->get_fee().symbol == PXC_SYMBOL )
         total_supply += itr->get_fee();
-      else if( itr->get_fee().symbol == HBD_SYMBOL )
+      else if( itr->get_fee().symbol == PXS_SYMBOL )
         total_hbd += itr->get_fee();
       else
         FC_ASSERT( false, "found escrow pending fee that is not HBD or HIVE" );
@@ -6420,9 +6420,9 @@ void database::validate_invariants()const
 
     for( auto itr = savings_withdraw_idx.begin(); itr != savings_withdraw_idx.end(); ++itr )
     {
-      if( itr->amount.symbol == HIVE_SYMBOL )
+      if( itr->amount.symbol == PXC_SYMBOL )
         total_supply += itr->amount;
-      else if( itr->amount.symbol == HBD_SYMBOL )
+      else if( itr->amount.symbol == PXS_SYMBOL )
         total_hbd += itr->amount;
       else
         FC_ASSERT( false, "found savings withdraw that is not HBD or HIVE" );

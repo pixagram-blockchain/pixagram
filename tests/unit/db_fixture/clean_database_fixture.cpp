@@ -15,7 +15,7 @@ namespace bpo = boost::program_options;
 namespace hive { namespace chain {
 
 
-clean_database_fixture::clean_database_fixture( 
+clean_database_fixture::clean_database_fixture(
   uint16_t shared_file_size_in_mb, fc::optional<uint32_t> hardfork, bool init_ah_plugin, int block_log_split )
 {
   try {
@@ -281,7 +281,7 @@ void t_smt_database_fixture< T >::create_invalid_smt( const char* control_accoun
 {
   // Fail due to precision too big.
   smt_create_operation op_precision;
-  HIVE_REQUIRE_THROW( set_create_op( &op_precision, control_account_name, HIVE_ASSET_MAX_DECIMALS + 1, *this->db ), fc::assert_exception );
+  HIVE_REQUIRE_THROW( set_create_op( &op_precision, control_account_name, PIXA_ASSET_MAX_DECIMALS + 1, *this->db ), fc::assert_exception );
 }
 
 template< typename T >

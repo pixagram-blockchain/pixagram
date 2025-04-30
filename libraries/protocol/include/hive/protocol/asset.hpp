@@ -7,9 +7,9 @@ namespace hive { namespace protocol {
   template< uint32_t _SYMBOL >
   struct tiny_asset;
 
-  using HBD_asset = tiny_asset< HIVE_ASSET_NUM_HBD >;
-  using HIVE_asset = tiny_asset< HIVE_ASSET_NUM_HIVE >;
-  using VEST_asset = tiny_asset< HIVE_ASSET_NUM_VESTS >;
+  using HBD_asset = tiny_asset< PIXA_ASSET_NUM_PXS >;
+  using HIVE_asset = tiny_asset< PIXA_ASSET_NUM_PXC >;
+  using VEST_asset = tiny_asset< PIXA_ASSET_NUM_VESTS >;
 
   struct asset
   {
@@ -20,7 +20,7 @@ namespace hive { namespace protocol {
       : amount( a ), symbol( id ) {}
 
     asset()
-      : amount( 0 ), symbol( HIVE_SYMBOL ) {}
+      : amount( 0 ), symbol( PXC_SYMBOL ) {}
 
     share_type        amount;
     asset_symbol_type symbol;
@@ -118,7 +118,7 @@ namespace hive { namespace protocol {
       static legacy_asset from_string( const string& from );
 
       share_type                       amount;
-      asset_symbol_type                symbol = HIVE_SYMBOL;
+      asset_symbol_type                symbol = PXC_SYMBOL;
   };
 
   /** Represents quotation of the relative value of asset against another asset.

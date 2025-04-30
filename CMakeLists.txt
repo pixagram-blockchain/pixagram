@@ -1,4 +1,4 @@
-# Defines Hive library target.
+# Defines Pixagram library target.
 LIST( APPEND CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
     "${CMAKE_CURRENT_SOURCE_DIR}/libraries/fc/CMakeModules"
@@ -7,10 +7,10 @@ LIST( APPEND CMAKE_MODULE_PATH
 #This must be processed before first project or enable_language statement
 INCLUDE(hive_build_types)
 
-project( Hive )
+project( Pixagram )
 cmake_minimum_required( VERSION 3.22.1 )
 
-set( BLOCKCHAIN_NAME "Hive" )
+set( BLOCKCHAIN_NAME "Pixagram" )
 
 set( CMAKE_CXX_STANDARD 17 )
 set( CMAKE_CXX_EXTENSIONS OFF )
@@ -19,7 +19,7 @@ set( CMAKE_CXX_STANDARD_REQUIRED ON )
 set( CMAKE_C_STANDARD 99 )
 set( CMAKE_C_STANDARD_REQUIRED ON )
 
-set( GUI_CLIENT_EXECUTABLE_NAME Hive )
+set( GUI_CLIENT_EXECUTABLE_NAME Pixagram )
 set( CUSTOM_URL_SCHEME "gcs" )
 set( INSTALLER_APP_ID "68ad7005-8eee-49c9-95ce-9eed97e5b347" )
 
@@ -46,7 +46,7 @@ cmake_policy(SET CMP0057 NEW)
 
 if( WIN32 )
 
-   message( STATUS "Configuring Hive on WIN32")
+   message( STATUS "Configuring Pixagram on WIN32")
    set( DB_VERSION 60 )
    set( BDB_STATIC_LIBS 1 )
 
@@ -100,11 +100,11 @@ else( WIN32 ) # Apple AND Linux
 
     if( APPLE )
         # Apple Specific Options Here
-        message( STATUS "Configuring Hive on OS X" )
+        message( STATUS "Configuring Pixagram on OS X" )
         set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -Wall -Wno-conversion -Wno-deprecated-declarations" )
     else( APPLE )
         # Linux Specific Options Here
-        message( STATUS "Configuring Hive on Linux" )
+        message( STATUS "Configuring Pixagram on Linux" )
         set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall" )
         set( rt_library rt )
         set( pthread_library pthread)
@@ -181,24 +181,24 @@ set(CPACK_OUTPUT_FILE_PREFIX ${CMAKE_BINARY_DIR}/packages)
 set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install)
 
 SET(CPACK_PACKAGE_DIRECTORY "${CMAKE_INSTALL_PREFIX}")
-set(CPACK_PACKAGE_NAME "hive")
-set(CPACK_PACKAGE_VENDOR "Hive Community")
+set(CPACK_PACKAGE_NAME "pixagram")
+set(CPACK_PACKAGE_VENDOR "Pixagram AG")
 set(CPACK_PACKAGE_VERSION_MAJOR "${VERSION_MAJOR}")
 set(CPACK_PACKAGE_VERSION_MINOR "${VERSION_MINOR}")
 set(CPACK_PACKAGE_VERSION_PATCH "${VERSION_PATCH}")
 set(CPACK_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
-set(CPACK_PACKAGE_DESCRIPTION "A client for the Hive network")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A client for the Hive network")
+set(CPACK_PACKAGE_DESCRIPTION "A client for the Pixagram network")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A client for the Pixagram network")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
-set(CPACK_PACKAGE_INSTALL_DIRECTORY "Hive ${CPACK_PACKAGE_VERSION}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "Pixagram ${CPACK_PACKAGE_VERSION}")
 
 if(WIN32)
  SET(CPACK_GENERATOR "ZIP;NSIS")
- set(CPACK_PACKAGE_NAME "Hive") # override above
+ set(CPACK_PACKAGE_NAME "Pixagram") # override above
  set(CPACK_NSIS_EXECUTABLES_DIRECTORY .)
- set(CPACK_NSIS_PACKAGE_NAME "Hive v${CPACK_PACKAGE_VERSION}")
+ set(CPACK_NSIS_PACKAGE_NAME "Pixagram v${CPACK_PACKAGE_VERSION}")
  set(CPACK_NSIS_DISPLAY_NAME "${CPACK_NSIS_PACKAGE_NAME}")
- set(CPACK_NSIS_DEFINES "  !define MUI_STARTMENUPAGE_DEFAULTFOLDER \\\"Hive\\\"")
+ set(CPACK_NSIS_DEFINES "  !define MUI_STARTMENUPAGE_DEFAULTFOLDER \\\"Pixagram\\\"")
  # it seems like windows zip files usually don't have a single directory inside them, unix tgz frequently do
  SET(CPACK_INCLUDE_TOPLEVEL_DIRECTORY 0)
 
@@ -222,7 +222,7 @@ if( BUILD_HIVE_TESTNET )
 elseif( HIVE_CONVERTER_BUILD )
   MESSAGE( STATUS "\n\n             CONFIGURED FOR ALTERNATE NETWORK             \n\n" )
 else()
-  MESSAGE( STATUS "\n\n             CONFIGURED FOR HIVE NETWORK             \n\n" )
+  MESSAGE( STATUS "\n\n             CONFIGURED FOR PIXAGRAM NETWORK             \n\n" )
 endif()
 
 if( ENABLE_SMT_SUPPORT )

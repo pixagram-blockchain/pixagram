@@ -36,7 +36,7 @@ asset_symbol_type asset_symbol_type::from_string( const std::string& str )
 
 void asset_symbol_type::to_nai_string( char* buf )const
 {
-  static_assert( HIVE_ASSET_SYMBOL_NAI_STRING_LENGTH >= 12, "This code will overflow a short buffer" );
+  static_assert( PIXA_ASSET_SYMBOL_NAI_STRING_LENGTH >= 12, "This code will overflow a short buffer" );
   uint32_t x = to_nai();
   buf[11] = '\0';
   buf[10] = ((x%10)+'0');  x /= 10;
@@ -57,7 +57,7 @@ asset_symbol_type asset_symbol_type::from_nai_string( const char* p, uint8_t dec
   try
   {
     FC_ASSERT( p != nullptr, "NAI string cannot be a null" );
-    FC_ASSERT( std::strlen( p ) == HIVE_ASSET_SYMBOL_NAI_STRING_LENGTH - 1, "Incorrect NAI string length" );
+    FC_ASSERT( std::strlen( p ) == PIXA_ASSET_SYMBOL_NAI_STRING_LENGTH - 1, "Incorrect NAI string length" );
     FC_ASSERT( p[0] == '@' && p[1] == '@', "Invalid NAI string prefix" );
     uint32_t nai = boost::lexical_cast< uint32_t >( p + 2 );
     return asset_symbol_type::from_nai( nai, decimal_places );
@@ -120,18 +120,18 @@ uint32_t asset_symbol_type::asset_num_from_nai( uint32_t nai, uint8_t decimal_pl
 
   switch( nai_data_digits )
   {
-    case HIVE_NAI_HIVE:
-      FC_ASSERT( decimal_places == HIVE_PRECISION_HIVE );
-      return HIVE_ASSET_NUM_HIVE;
-    case HIVE_NAI_HBD:
-      FC_ASSERT( decimal_places == HIVE_PRECISION_HBD );
-      return HIVE_ASSET_NUM_HBD;
-    case HIVE_NAI_VESTS:
-      FC_ASSERT( decimal_places == HIVE_PRECISION_VESTS );
-      return HIVE_ASSET_NUM_VESTS;
+    case PIXA_NAI_PXC:
+      FC_ASSERT( decimal_places == PIXA_PRECISION_PXC );
+      return PIXA_ASSET_NUM_PXC;
+    case PIXA_NAI_PXS:
+      FC_ASSERT( decimal_places == PIXA_PRECISION_PXS );
+      return PIXA_ASSET_NUM_PXS;
+    case PIXA_NAI_VESTS:
+      FC_ASSERT( decimal_places == PIXA_PRECISION_PXP );
+      return PIXA_ASSET_NUM_VESTS;
     default:
-      FC_ASSERT( decimal_places <= HIVE_ASSET_MAX_DECIMALS, "Invalid decimal_places" );
-      return (nai_data_digits << HIVE_NAI_SHIFT) | SMT_ASSET_NUM_CONTROL_MASK | decimal_places;
+      FC_ASSERT( decimal_places <= PIXA_ASSET_MAX_DECIMALS, "Invalid decimal_places" );
+      return (nai_data_digits << PIXA_NAI_SHIFT) | SMT_ASSET_NUM_CONTROL_MASK | decimal_places;
   }
 }
 
@@ -142,18 +142,18 @@ uint32_t asset_symbol_type::to_nai()const
   // Can be replaced with some clever bitshifting
   switch( asset_num )
   {
-    case HIVE_ASSET_NUM_HIVE:
-      nai_data_digits = HIVE_NAI_HIVE;
+    case PIXA_ASSET_NUM_PXC:
+      nai_data_digits = PIXA_NAI_PXC;
       break;
-    case HIVE_ASSET_NUM_HBD:
-      nai_data_digits = HIVE_NAI_HBD;
+    case PIXA_ASSET_NUM_PXS:
+      nai_data_digits = PIXA_NAI_PXS;
       break;
-    case HIVE_ASSET_NUM_VESTS:
-      nai_data_digits = HIVE_NAI_VESTS;
+    case PIXA_ASSET_NUM_VESTS:
+      nai_data_digits = PIXA_NAI_VESTS;
       break;
     default:
       FC_ASSERT( space() == smt_nai_space );
-      nai_data_digits = (asset_num >> HIVE_NAI_SHIFT);
+      nai_data_digits = (asset_num >> PIXA_NAI_SHIFT);
   }
 
   uint32_t nai_check_digit = damm_checksum_8digit(nai_data_digits);
@@ -168,12 +168,12 @@ bool asset_symbol_type::is_vesting() const
     {
       switch( asset_num )
       {
-        case HIVE_ASSET_NUM_HIVE:
+        case PIXA_ASSET_NUM_PXC:
           return false;
-        case HIVE_ASSET_NUM_HBD:
+        case PIXA_ASSET_NUM_PXS:
           // HBD is certainly liquid.
           return false;
-        case HIVE_ASSET_NUM_VESTS:
+        case PIXA_ASSET_NUM_VESTS:
           return true;
         default:
           FC_ASSERT( false, "Unknown asset symbol" );
@@ -195,12 +195,12 @@ asset_symbol_type asset_symbol_type::get_paired_symbol() const
     {
       switch( asset_num )
       {
-        case HIVE_ASSET_NUM_HIVE:
-          return from_asset_num( HIVE_ASSET_NUM_VESTS );
-        case HIVE_ASSET_NUM_HBD:
+        case PIXA_ASSET_NUM_PXC:
+          return from_asset_num( PIXA_ASSET_NUM_VESTS );
+        case PIXA_ASSET_NUM_PXS:
           return *this;
-        case HIVE_ASSET_NUM_VESTS:
-          return from_asset_num( HIVE_ASSET_NUM_HIVE );
+        case PIXA_ASSET_NUM_VESTS:
+          return from_asset_num( PIXA_ASSET_NUM_PXC );
         default:
           FC_ASSERT( false, "Unknown asset symbol" );
       }
@@ -221,9 +221,9 @@ asset_symbol_type::asset_symbol_space asset_symbol_type::space()const
   asset_symbol_type::asset_symbol_space s = legacy_space;
   switch( asset_num )
   {
-    case HIVE_ASSET_NUM_HIVE:
-    case HIVE_ASSET_NUM_HBD:
-    case HIVE_ASSET_NUM_VESTS:
+    case PIXA_ASSET_NUM_PXC:
+    case PIXA_ASSET_NUM_PXS:
+    case PIXA_ASSET_NUM_VESTS:
       s = legacy_space;
       break;
     default:
@@ -236,24 +236,24 @@ void asset_symbol_type::validate()const
 {
   switch( asset_num )
   {
-    case HIVE_ASSET_NUM_HIVE:
-    case HIVE_ASSET_NUM_HBD:
-    case HIVE_ASSET_NUM_VESTS:
+    case PIXA_ASSET_NUM_PXC:
+    case PIXA_ASSET_NUM_PXS:
+    case PIXA_ASSET_NUM_VESTS:
       break;
     default:
     {
-      uint32_t nai_data_digits = (asset_num >> HIVE_NAI_SHIFT);
+      uint32_t nai_data_digits = (asset_num >> PIXA_NAI_SHIFT);
       uint32_t nai_1bit = (asset_num & SMT_ASSET_NUM_CONTROL_MASK);
       uint32_t nai_decimal_places = (asset_num & SMT_ASSET_NUM_PRECISION_MASK);
       FC_ASSERT( (nai_data_digits >= SMT_MIN_NAI) &
               (nai_data_digits <= SMT_MAX_NAI) &
               (nai_1bit == SMT_ASSET_NUM_CONTROL_MASK) &
-              (nai_decimal_places <= HIVE_ASSET_MAX_DECIMALS),
+              (nai_decimal_places <= PIXA_ASSET_MAX_DECIMALS),
               "Cannot determine space for asset ${n}", ("n", asset_num) );
     }
   }
   // this assert is duplicated by above code in all cases
-  // FC_ASSERT( decimals() <= HIVE_ASSET_MAX_DECIMALS );
+  // FC_ASSERT( decimals() <= PIXA_ASSET_MAX_DECIMALS );
 }
 
 #define BQ(a) \
@@ -334,7 +334,7 @@ asset multiply_with_fee( const asset& a, const price& p, uint16_t fee, asset_sym
     result = ( result * p.quote.amount.value * scale_q ) / ( uint128_t( p.base.amount.value ) * scale_b );
     return asset( is_negative ? -fc::uint128_to_uint64(result) : fc::uint128_to_uint64(result), p.quote.symbol );
   }
-  else 
+  else
   {
     FC_ASSERT( a.symbol == p.quote.symbol, "invalid ${asset} * ${price}", ( "asset", a )( "price", p ) );
     result = ( result * p.base.amount.value * scale_b ) / ( uint128_t ( p.quote.amount.value ) * scale_q );
@@ -382,25 +382,17 @@ uint32_t string_to_asset_num( const char* p, uint8_t decimals )
       }
       switch( name_u64 )
       {
-#ifndef IS_TEST_NET
-        /// Has same value as HIVE_SYMBOL_U64
-        case OBSOLETE_SYMBOL_U64:
-#endif /// IS_TEST_NET
-        case HIVE_SYMBOL_U64:
+        case PXC_SYMBOL_U64:
           FC_ASSERT( decimals == 3, "Incorrect decimal places" );
-          asset_num = HIVE_ASSET_NUM_HIVE;
+          asset_num = PIXA_ASSET_NUM_PXC;
           break;
-#ifndef IS_TEST_NET
-        /// Has same value as HBD_SYMBOL_U64
-        case OBD_SYMBOL_U64:
-#endif ///IS_TEST_NET
-        case HBD_SYMBOL_U64:
+        case PXS_SYMBOL_U64:
           FC_ASSERT( decimals == 3, "Incorrect decimal places" );
-          asset_num = HIVE_ASSET_NUM_HBD;
+          asset_num = PIXA_ASSET_NUM_PXS;
           break;
         case VESTS_SYMBOL_U64:
           FC_ASSERT( decimals == 6, "Incorrect decimal places" );
-          asset_num = HIVE_ASSET_NUM_VESTS;
+          asset_num = PIXA_ASSET_NUM_VESTS;
           break;
         default:
           FC_ASSERT( false, "Cannot parse asset symbol" );
@@ -435,18 +427,20 @@ std::string legacy_asset::asset_num_to_string() const
   switch( symbol.asset_num )
   {
 #ifdef IS_TEST_NET
-    case HIVE_ASSET_NUM_HIVE:
-      return "TESTS";
-    case HIVE_ASSET_NUM_HBD:
-      return "TBD";
+    case PIXA_ASSET_NUM_PXC:
+      return "PXCT";
+    case PIXA_ASSET_NUM_PXS:
+      return "PXST";
+    case PIXA_ASSET_NUM_VESTS:
+      return "PXPT";
 #else
-    case HIVE_ASSET_NUM_HIVE:
-      return "HIVE";
-    case HIVE_ASSET_NUM_HBD:
-      return "HBD";
+    case PIXA_ASSET_NUM_PXC:
+      return "PXC";
+    case PIXA_ASSET_NUM_PXS:
+      return "PXS";
+    case PIXA_ASSET_NUM_VESTS:
+      return "PXP";
 #endif
-    case HIVE_ASSET_NUM_VESTS:
-      return "VESTS";
     default:
       return "UNKN"; // SMTs will return this symbol if returned as a legacy asset
   }

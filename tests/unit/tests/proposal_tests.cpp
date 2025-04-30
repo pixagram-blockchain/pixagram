@@ -306,9 +306,9 @@ BOOST_AUTO_TEST_CASE( db_remove_expired_governance_votes )
     auto end_2 = LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS + fc::days((101));
     auto end_3 = LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS + fc::days((102));
 
-    int64_t proposal_1 = create_proposal( proposal_creator, "acc1",  start_1,  end_1, asset( 100, HBD_SYMBOL ), accp_private_key, accp_post_key );
-    int64_t proposal_2 = create_proposal( proposal_creator, "acc2",  start_2,  end_2, asset( 100, HBD_SYMBOL ), accp_private_key, accp_post_key );
-    int64_t proposal_3 = create_proposal( proposal_creator, "acc3",  start_3,  end_3, asset( 100, HBD_SYMBOL ), accp_private_key, accp_post_key );
+    int64_t proposal_1 = create_proposal( proposal_creator, "acc1",  start_1,  end_1, asset( 100, PXS_SYMBOL ), accp_private_key, accp_post_key );
+    int64_t proposal_2 = create_proposal( proposal_creator, "acc2",  start_2,  end_2, asset( 100, PXS_SYMBOL ), accp_private_key, accp_post_key );
+    int64_t proposal_3 = create_proposal( proposal_creator, "acc3",  start_3,  end_3, asset( 100, PXS_SYMBOL ), accp_private_key, accp_post_key );
 
     private_key_type accw_witness_key = generate_private_key( "accw_key" );
     witness_create( "accw", accw_private_key, "foo.bar", accw_witness_key.get_public_key(), 1000 );
@@ -669,8 +669,8 @@ BOOST_AUTO_TEST_CASE( db_remove_expired_governance_votes_with_proxy )
     auto _start = db->head_block_time();
     auto _end = LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS + fc::days( 100 );
 
-    int64_t _id_proposal_00 = create_proposal( "propcreator", "propcreator", _start, _end, asset( 100, HBD_SYMBOL ), propcreator_private_key, propcreator_post_key );
-    int64_t _id_proposal_01 = create_proposal( "propcreator2", "propcreator2", _start, _end, asset( 101, HBD_SYMBOL ), propcreator2_private_key, propcreator2_post_key );
+    int64_t _id_proposal_00 = create_proposal( "propcreator", "propcreator", _start, _end, asset( 100, PXS_SYMBOL ), propcreator_private_key, propcreator_post_key );
+    int64_t _id_proposal_01 = create_proposal( "propcreator2", "propcreator2", _start, _end, asset( 101, PXS_SYMBOL ), propcreator2_private_key, propcreator2_post_key );
 
     witness_create( "witness", witness_private_key, "http://something.com", witness_public_key, 1000 );
     witness_plugin->add_signing_key( witness_private_key );
@@ -761,8 +761,8 @@ BOOST_AUTO_TEST_CASE( proposals_with_decline_voting_rights )
     const fc::time_point_sec hardfork_25_time( HIVE_HARDFORK_1_25_TIME );
 
     ISSUE_FUNDS( "accp", ASSET( "10000.000 TBD" ) );
-    int64_t proposal_1 = create_proposal( "accp", "acc1", hardfork_25_time - fc::days( 50 ), LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS + fc::days( 50 ), asset( 100, HBD_SYMBOL ), accp_private_key );
-    int64_t proposal_2 = create_proposal( "accp", "acc2", hardfork_25_time - fc::days( 150 ), LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS + fc::days( 150 ), asset( 100, HBD_SYMBOL ), accp_private_key );
+    int64_t proposal_1 = create_proposal( "accp", "acc1", hardfork_25_time - fc::days( 50 ), LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS + fc::days( 50 ), asset( 100, PXS_SYMBOL ), accp_private_key );
+    int64_t proposal_2 = create_proposal( "accp", "acc2", hardfork_25_time - fc::days( 150 ), LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS + fc::days( 150 ), asset( 100, PXS_SYMBOL ), accp_private_key );
     generate_block();
 
     generate_blocks( hardfork_25_time - fc::days( 201 ) );
@@ -872,7 +872,7 @@ BOOST_AUTO_TEST_CASE( db_remove_expired_governance_votes_threshold_exceeded )
     for(const auto& user : users )
     {
       ISSUE_FUNDS( user.account, ASSET( "100000.000 TBD" ) );
-      proposals.push_back(create_proposal( user.account, receiver,  proposals_start_time,  proposals_end_time, asset( 100, HBD_SYMBOL ), user.active_key, user.post_key));
+      proposals.push_back(create_proposal( user.account, receiver,  proposals_start_time,  proposals_end_time, asset( 100, PXS_SYMBOL ), user.active_key, user.post_key));
     }
 
     generate_block();
@@ -938,7 +938,7 @@ BOOST_AUTO_TEST_CASE( db_remove_expired_governance_votes_threshold_exceeded )
           BOOST_REQUIRE( acc_name == userI->account );
           ++userI;
         }
-        
+
         check_vote_count();
       }
     }
@@ -1687,7 +1687,7 @@ BOOST_AUTO_TEST_CASE( expired_proposals_forbidden_voting)
     auto start_date_02 = start_time + fc::seconds( 50 );
     auto end_date_02 = start_time + fc::minutes( 200 );
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     ISSUE_FUNDS( creator, ASSET( "100.000 TBD" ) );
     //=====================preparing=====================
@@ -1766,7 +1766,7 @@ BOOST_AUTO_TEST_CASE( proposals_maintenance)
     auto start_date_02 = start_time + fc::seconds( 50 );
     auto end_date_02 = start_time + fc::minutes( 20 );
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     ISSUE_FUNDS( creator, ASSET( "100.000 TBD" ) );
     //=====================preparing=====================
@@ -1796,11 +1796,11 @@ BOOST_AUTO_TEST_CASE( proposals_maintenance)
             Take a look at comment in `dhf_processor::remove_proposals`
       */
       generate_blocks( start_time + fc::minutes( 11 ) );
-      
+
       //BOOST_REQUIRE( !exist_proposal( id_proposal_00 ) ); //earlier
       BOOST_REQUIRE( exist_proposal( id_proposal_00 ) );    //now
-      
-      
+
+
       BOOST_REQUIRE( exist_proposal( id_proposal_01 ) );
       BOOST_REQUIRE( exist_proposal( id_proposal_02 ) );
 
@@ -1838,7 +1838,7 @@ BOOST_AUTO_TEST_CASE( proposal_object_apply )
     set_price_feed( price( ASSET( "1.000 TBD" ), ASSET( "1.000 TESTS" ) ) );
     generate_block();
 
-    auto fee = asset( HIVE_TREASURY_FEE, HBD_SYMBOL );
+    auto fee = asset( HIVE_TREASURY_FEE, PXS_SYMBOL );
 
     auto creator = "alice";
     auto receiver = "bob";
@@ -1846,7 +1846,7 @@ BOOST_AUTO_TEST_CASE( proposal_object_apply )
     auto start_date = db->head_block_time() + fc::days( 1 );
     auto end_date = start_date + fc::days( 20 );
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     auto subject = "hello";
     auto permlink = "somethingpermlink";
@@ -1942,9 +1942,9 @@ BOOST_AUTO_TEST_CASE( proposal_object_apply_fee_increase )
 
     auto start_date = db->head_block_time() + fc::days( 1 );
     auto end_date = start_date + fc::days( proposal_duration );
-    auto fee = asset( HIVE_TREASURY_FEE + extra_days * HIVE_PROPOSAL_FEE_INCREASE_AMOUNT, HBD_SYMBOL );
+    auto fee = asset( HIVE_TREASURY_FEE + extra_days * HIVE_PROPOSAL_FEE_INCREASE_AMOUNT, PXS_SYMBOL );
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     auto subject = "hello";
     auto permlink = "somethingpermlink";
@@ -2039,7 +2039,7 @@ BOOST_AUTO_TEST_CASE( proposal_vote_object_apply )
     auto start_date = db->head_block_time() + fc::days( 1 );
     auto end_date = start_date + fc::days( 2 );
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     ISSUE_FUNDS( creator, ASSET( "80.000 TBD" ) );
 
@@ -2107,9 +2107,9 @@ BOOST_AUTO_TEST_CASE( proposal_vote_object_01_apply )
     auto start_date = db->head_block_time() + fc::days( 1 );
     auto end_date = start_date + fc::days( 2 );
 
-    auto daily_pay_00 = asset( 100, HBD_SYMBOL );
-    auto daily_pay_01 = asset( 101, HBD_SYMBOL );
-    auto daily_pay_02 = asset( 102, HBD_SYMBOL );
+    auto daily_pay_00 = asset( 100, PXS_SYMBOL );
+    auto daily_pay_01 = asset( 101, PXS_SYMBOL );
+    auto daily_pay_02 = asset( 102, PXS_SYMBOL );
 
     ISSUE_FUNDS( creator, ASSET( "80.000 TBD" ) );
 
@@ -2346,7 +2346,7 @@ BOOST_AUTO_TEST_CASE( create_proposal_000 )
     auto receiver   = "bob";
     auto start_date = db->head_block_time() + fc::days( 1 );
     auto end_date   = start_date + fc::days( 2 );
-    auto daily_pay  = asset( 100, HBD_SYMBOL );
+    auto daily_pay  = asset( 100, PXS_SYMBOL );
 
     ISSUE_FUNDS( creator, ASSET( "80.000 TBD" ) );
     {
@@ -2434,7 +2434,7 @@ BOOST_AUTO_TEST_CASE( create_proposal_005 )
     cpo.receiver   = "bob";
     cpo.start_date = db->head_block_time() + fc::days( 1 );
     cpo.end_date   = cpo.start_date + fc::days( 2 );
-    cpo.daily_pay  = asset( 100, HBD_SYMBOL );
+    cpo.daily_pay  = asset( 100, PXS_SYMBOL );
     cpo.subject    = "";
     cpo.permlink        = "http:://something.html";
     ISSUE_FUNDS( cpo.creator, ASSET( "80.000 TBD" ) );
@@ -2461,7 +2461,7 @@ BOOST_AUTO_TEST_CASE( create_proposal_006 )
     cpo.receiver   = "bob";
     cpo.start_date = db->head_block_time() + fc::days( 1 );
     cpo.end_date   = cpo.start_date + fc::days( 2 );
-    cpo.daily_pay  = asset( 100, HBD_SYMBOL );
+    cpo.daily_pay  = asset( 100, PXS_SYMBOL );
     cpo.subject    = "very very very very very very long long long long long long subject subject subject subject subject subject";
     cpo.permlink        = "http:://something.html";
     ISSUE_FUNDS( cpo.creator, ASSET( "80.000 TBD" ) );
@@ -2488,7 +2488,7 @@ BOOST_AUTO_TEST_CASE( create_proposal_007 )
     cpo.receiver   = "bob";
     cpo.start_date = db->head_block_time() + fc::days( 1 );
     cpo.end_date   = cpo.start_date + fc::days( 2 );
-    cpo.daily_pay  = asset( 100, HBD_SYMBOL );
+    cpo.daily_pay  = asset( 100, PXS_SYMBOL );
     cpo.subject    = "subject";
     cpo.permlink        = "http:://something.html";
 
@@ -2522,7 +2522,7 @@ BOOST_AUTO_TEST_CASE( create_proposal_008 )
     generate_block();
     generate_block();
     cpd.end_date = cpd.start_date + fc::days(20);
-    cpd.daily_pay = asset( -10, HBD_SYMBOL );
+    cpd.daily_pay = asset( -10, PXS_SYMBOL );
     HIVE_REQUIRE_THROW(create_proposal( cpd.creator, cpd.receiver, cpd.start_date, cpd.end_date, cpd.daily_pay, alice_private_key, alice_post_key ), fc::exception);
     validate_database();
   }
@@ -2541,7 +2541,7 @@ BOOST_AUTO_TEST_CASE( create_proposal_009 )
     generate_block();
     generate_block();
     cpd.end_date = cpd.start_date + fc::days(80);
-    cpd.daily_pay = asset( 10, HBD_SYMBOL );
+    cpd.daily_pay = asset( 10, PXS_SYMBOL );
     HIVE_REQUIRE_THROW(create_proposal( cpd.creator, cpd.receiver, cpd.start_date, cpd.end_date, cpd.daily_pay, alice_private_key, alice_post_key ), fc::exception);
     validate_database();
   }
@@ -3181,7 +3181,7 @@ BOOST_AUTO_TEST_CASE( proposals_maintenance_01 )
     auto start_date_00 = start_time + start_time_shift;
     auto end_date_00 = start_date_00 + end_time_shift;
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     const auto nr_proposals = 200;
     std::vector< int64_t > proposals_id;
@@ -3272,7 +3272,7 @@ BOOST_AUTO_TEST_CASE( proposals_maintenance_02 )
     auto start_date_00 = start_time + start_time_shift;
     auto end_date_00 = start_date_00 + end_time_shift;
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     const auto nr_proposals = 10;
     std::vector< int64_t > proposals_id;
@@ -3380,7 +3380,7 @@ BOOST_AUTO_TEST_CASE( proposals_removing_with_threshold )
     auto start_date_00 = start_time + start_time_shift;
     auto end_date_00 = start_date_00 + end_time_shift;
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     const auto nr_proposals = 5;
     std::vector< int64_t > proposals_id;
@@ -3479,7 +3479,7 @@ BOOST_AUTO_TEST_CASE( proposals_removing_with_threshold_01 )
     auto start_date_00 = start_time + start_time_shift;
     auto end_date_00 = start_date_00 + end_time_shift;
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     const auto nr_proposals = 10;
     std::vector< int64_t > proposals_id;
@@ -3725,7 +3725,7 @@ BOOST_AUTO_TEST_CASE( proposals_removing_with_threshold_02 )
     auto start_date_00 = start_time + start_time_shift;
     auto end_date_00 = start_date_00 + end_time_shift;
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     const auto nr_proposals = 5;
     std::vector< int64_t > proposals_id;
@@ -4034,7 +4034,7 @@ BOOST_AUTO_TEST_CASE( update_proposal_000 )
     auto start_date = db->head_block_time() + fc::days( 1 );
     auto end_date = start_date + fc::days( 2 );
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     auto subject = "hello";
     auto permlink = "somethingpermlink";
@@ -4083,7 +4083,7 @@ BOOST_AUTO_TEST_CASE( update_proposal_000 )
 
     time_point_sec new_end_date = end_date - fc::days( 1 );
     auto new_subject = "Other subject";
-    auto new_daily_pay = asset( 100, HBD_SYMBOL );
+    auto new_daily_pay = asset( 100, PXS_SYMBOL );
 
     update_proposal(found->proposal_id, creator, new_daily_pay, new_subject, new_permlink, alice_private_key);
     generate_block();
@@ -4127,7 +4127,7 @@ BOOST_AUTO_TEST_CASE( update_proposal_001 )
     auto receiver   = "bob";
     time_point_sec start_date = db->head_block_time() + fc::days( 1 );
     auto end_date   = start_date + fc::days( 2 );
-    auto daily_pay  = asset( 100, HBD_SYMBOL );
+    auto daily_pay  = asset( 100, PXS_SYMBOL );
     auto subject = "hello";
     auto permlink = "somethingpermlink";
 
@@ -4173,7 +4173,7 @@ BOOST_AUTO_TEST_CASE( update_proposal_002 )
     auto receiver   = "bob";
     auto start_date = db->head_block_time() + fc::days( 1 );
     auto end_date   = start_date + fc::days( 2 );
-    auto daily_pay  = asset( 100, HBD_SYMBOL );
+    auto daily_pay  = asset( 100, PXS_SYMBOL );
     auto subject = "hello";
     auto permlink = "somethingpermlink";
 
@@ -4221,7 +4221,7 @@ BOOST_AUTO_TEST_CASE( update_proposal_003 )
     auto receiver   = "bob";
     auto start_date = db->head_block_time() + fc::days( 1 );
     auto end_date   = start_date + fc::days( 2 );
-    auto daily_pay  = asset( 100, HBD_SYMBOL );
+    auto daily_pay  = asset( 100, PXS_SYMBOL );
     auto subject = "hello";
     auto permlink = "somethingpermlink";
 
@@ -4249,9 +4249,9 @@ BOOST_AUTO_TEST_CASE( update_proposal_003 )
     auto proposal = proposal_idx.find( creator );
 
     // Superior than current proposal
-    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, HBD_SYMBOL ), subject, permlink, alice_private_key), fc::exception);
+    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, PXS_SYMBOL ), subject, permlink, alice_private_key), fc::exception);
     // Negative value
-    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( -110, HBD_SYMBOL ), subject, permlink, alice_private_key), fc::exception);
+    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( -110, PXS_SYMBOL ), subject, permlink, alice_private_key), fc::exception);
 
     validate_database();
   } FC_LOG_AND_RETHROW()
@@ -4272,7 +4272,7 @@ BOOST_AUTO_TEST_CASE( update_proposal_004 )
     auto receiver   = "bob";
     auto start_date = db->head_block_time() + fc::days( 1 );
     auto end_date   = start_date + fc::days( 2 );
-    auto daily_pay  = asset( 100, HBD_SYMBOL );
+    auto daily_pay  = asset( 100, PXS_SYMBOL );
     auto subject = "hello";
     auto permlink = "somethingpermlink";
 
@@ -4299,9 +4299,9 @@ BOOST_AUTO_TEST_CASE( update_proposal_004 )
     const auto& proposal_idx = db->get_index< proposal_index >().indices().get< by_creator >();
     auto proposal = proposal_idx.find( creator );
     // Empty subject
-    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, HBD_SYMBOL ), "", permlink, alice_private_key), fc::exception);
+    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, PXS_SYMBOL ), "", permlink, alice_private_key), fc::exception);
     // Subject too long
-    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, HBD_SYMBOL ), "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, PXS_SYMBOL ), "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
                                         permlink, alice_private_key), fc::exception);
 
     validate_database();
@@ -4323,7 +4323,7 @@ BOOST_AUTO_TEST_CASE( update_proposal_005 )
     auto receiver   = "bob";
     fc::time_point_sec start_date = db->head_block_time() + fc::days( 1 );
     auto end_date   = start_date + fc::days( 2 );
-    auto daily_pay  = asset( 100, HBD_SYMBOL );
+    auto daily_pay  = asset( 100, PXS_SYMBOL );
     auto subject = "hello";
     auto permlink = "somethingpermlink";
 
@@ -4351,11 +4351,11 @@ BOOST_AUTO_TEST_CASE( update_proposal_005 )
     const auto& proposal_idx = db->get_index< proposal_index >().indices().get< by_creator >();
     auto proposal = proposal_idx.find( creator );
     // Empty permlink
-    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, HBD_SYMBOL ), subject, "", alice_private_key), fc::exception);
+    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, PXS_SYMBOL ), subject, "", alice_private_key), fc::exception);
     // Post doesn't exist
-    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, HBD_SYMBOL ), subject, "doesntexist", alice_private_key), fc::exception);
+    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, PXS_SYMBOL ), subject, "doesntexist", alice_private_key), fc::exception);
     // Post exists but is made by an user that is neither the receiver or the creator
-    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, HBD_SYMBOL ), subject, "davepermlink", alice_private_key), fc::exception);
+    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, PXS_SYMBOL ), subject, "davepermlink", alice_private_key), fc::exception);
 
     validate_database();
   } FC_LOG_AND_RETHROW()
@@ -4378,7 +4378,7 @@ BOOST_AUTO_TEST_CASE( update_proposal_006 )
     fc::time_point_sec start_date = db->head_block_time() + fc::days( 1 );
     auto end_date   = start_date + fc::days( 2 );
     fc::time_point_sec end_date_invalid = start_date + fc::days( 3 );
-    auto daily_pay  = asset( 100, HBD_SYMBOL );
+    auto daily_pay  = asset( 100, PXS_SYMBOL );
     auto subject = "hello";
     auto permlink = "somethingpermlink";
 
@@ -4404,8 +4404,8 @@ BOOST_AUTO_TEST_CASE( update_proposal_006 )
 
     const auto& proposal_idx = db->get_index< proposal_index >().indices().get< by_creator >();
     auto proposal = proposal_idx.find( creator );
-    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, HBD_SYMBOL ), subject, permlink, alice_private_key, &start_date), fc::exception);
-    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, HBD_SYMBOL ), subject, permlink, alice_private_key, &end_date_invalid), fc::exception);
+    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, PXS_SYMBOL ), subject, permlink, alice_private_key, &start_date), fc::exception);
+    HIVE_REQUIRE_THROW( update_proposal(proposal->proposal_id, creator, asset( 110, PXS_SYMBOL ), subject, permlink, alice_private_key, &end_date_invalid), fc::exception);
 
     validate_database();
   } FC_LOG_AND_RETHROW()
@@ -4495,7 +4495,7 @@ BOOST_AUTO_TEST_CASE( proposals_removing_with_threshold_03 )
     auto start_date_00 = start_time + start_time_shift;
     auto end_date_00 = start_date_00 + end_time_shift;
 
-    auto daily_pay = asset( 100, HBD_SYMBOL );
+    auto daily_pay = asset( 100, PXS_SYMBOL );
 
     const auto nr_proposals = 200;
     std::vector< int64_t > proposals_id;
@@ -4704,9 +4704,9 @@ BOOST_AUTO_TEST_CASE( converting_hive_to_dhf )
     auto before_treasury_hbd_balance =  _treasury.get_hbd_balance();
     auto before_treasury_hive_balance =  _treasury.get_balance();
 
-    const auto hive_converted = asset(HIVE_PROPOSAL_CONVERSION_RATE * before_treasury_hive_balance.amount / HIVE_100_PERCENT, HIVE_SYMBOL);
+    const auto hive_converted = asset(HIVE_PROPOSAL_CONVERSION_RATE * before_treasury_hive_balance.amount / HIVE_100_PERCENT, PXC_SYMBOL);
     // Same because of the 1:1 tests to tbd ratio
-    const auto hbd_converted = asset(hive_converted.amount, HBD_SYMBOL);
+    const auto hbd_converted = asset(hive_converted.amount, PXS_SYMBOL);
     // Generate until the next daily maintenance
     auto next_block = get_nr_blocks_until_daily_proposal_maintenance_block();
     auto before_daily_maintenance_time = dgpo.next_daily_maintenance_time;

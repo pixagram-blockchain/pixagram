@@ -47,7 +47,7 @@ namespace detail
 
       legacy_substitutes_type create_legacy_substitutes();
 
-      template< typename T > 
+      template< typename T >
       T force_legacy_serialization( const fc::variant& input )
       {
         hive::protocol::serialization_mode_controller::mode_guard guard( transaction_serialization_type::legacy );
@@ -190,8 +190,8 @@ namespace detail
     legacy_substitutes_type _result
     {
       {"VESTS_SYMBOL",             fc::variant{ legacy_asset::from_asset( asset(0, VESTS_SYMBOL) ).asset_num_to_string() } },
-      {"HIVE_SYMBOL",              fc::variant{ legacy_asset::from_asset( asset(0, HIVE_SYMBOL) ).asset_num_to_string() } },
-      {"HBD_SYMBOL",               fc::variant{ legacy_asset::from_asset( asset(0, HBD_SYMBOL) ).asset_num_to_string() } },
+      {"PXC_SYMBOL",              fc::variant{ legacy_asset::from_asset( asset(0, PXC_SYMBOL) ).asset_num_to_string() } },
+      {"PXS_SYMBOL",               fc::variant{ legacy_asset::from_asset( asset(0, PXS_SYMBOL) ).asset_num_to_string() } },
       {"HIVE_MINING_REWARD",        fc::variant{ _asset_type{ HIVE_MINING_REWARD,         transaction_serialization_type::legacy } } },
       {"HIVE_MIN_LIQUIDITY_REWARD", fc::variant{ _asset_type{ HIVE_MIN_LIQUIDITY_REWARD,  transaction_serialization_type::legacy } } },
       {"HIVE_MIN_CONTENT_REWARD",   fc::variant{ _asset_type{ HIVE_MIN_CONTENT_REWARD,    transaction_serialization_type::legacy } } },
@@ -753,7 +753,7 @@ namespace detail
     {
       result.push_back( *itr );
 
-      if( itr->sell_price.base.symbol == HIVE_SYMBOL )
+      if( itr->sell_price.base.symbol == PXC_SYMBOL )
         result.back().real_price = ASSET_TO_REAL( itr->sell_price.quote ) / ASSET_TO_REAL( itr->sell_price.base );
       else
         result.back().real_price =  ASSET_TO_REAL( itr->sell_price.base ) / ASSET_TO_REAL( itr->sell_price.quote );
@@ -1290,7 +1290,7 @@ namespace detail
     CHECK_ARG_SIZE( 1 )
     FC_ASSERT( _rc_api, "rc_api_plugin not enabled." );
 
-    return hive::protocol::serializer_wrapper< std::vector< rc::rc_account_api_object > >{ 
+    return hive::protocol::serializer_wrapper< std::vector< rc::rc_account_api_object > >{
       _rc_api->find_rc_accounts( { args.at(0).as< vector< account_name_type > >() } ).rc_accounts,
        transaction_serialization_type::legacy };
   }
@@ -1303,7 +1303,7 @@ namespace detail
     a.start = args.at(0).as< account_name_type >();
     a.limit = args.at(1).as< uint32_t >();
 
-    return hive::protocol::serializer_wrapper< std::vector< rc::rc_account_api_object > >{ 
+    return hive::protocol::serializer_wrapper< std::vector< rc::rc_account_api_object > >{
       _rc_api->list_rc_accounts( a ).rc_accounts,
       transaction_serialization_type::legacy };
   }

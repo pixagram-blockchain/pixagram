@@ -613,7 +613,7 @@ BOOST_AUTO_TEST_CASE( basic_expiration_test )
       transfer_operation _op;
       _op.from = "alice";
       _op.to = "bob";
-      _op.amount = asset(1,HIVE_SYMBOL);
+      _op.amount = asset(1,PXC_SYMBOL);
       _op.memo = "";
 
       {
@@ -1495,11 +1495,11 @@ BOOST_AUTO_TEST_CASE( disturbed_power_down )
     // check to make sure mainnet values are used
     static_assert( ( gil_amount / 104 == 9615 ) && ( gil_amount * split / 104 == 9615384615 ) );
     BOOST_REQUIRE( db->get_dynamic_global_properties().get_vesting_share_price() ==
-      price( asset( 1000000, VESTS_SYMBOL ), asset( 1000, HIVE_SYMBOL ) ) );
+      price( asset( 1000000, VESTS_SYMBOL ), asset( 1000, PXC_SYMBOL ) ) );
 
     ACTORS_DEFAULT_FEE( (bob)(gil) );
-    vest( "bob", asset( bob_amount / 1000, HIVE_SYMBOL ) );
-    vest( "gil", asset( gil_amount / 1000, HIVE_SYMBOL ) );
+    vest( "bob", asset( bob_amount / 1000, PXC_SYMBOL ) );
+    vest( "gil", asset( gil_amount / 1000, PXC_SYMBOL ) );
     generate_block();
 
     BOOST_CHECK_EQUAL( get_vesting( "bob" ).amount.value, bob_amount );
@@ -2302,7 +2302,7 @@ BOOST_AUTO_TEST_CASE( global_witness_props_change_applied_after_hf_test )
     BOOST_REQUIRE_EQUAL( wso.median_props.hbd_interest_rate, new_hbd_apr1 );
     BOOST_REQUIRE_EQUAL( wso.median_props.account_creation_fee.amount.value, new_fee1.amount.value );
   }
- 
+
   FC_LOG_AND_RETHROW()
 }
 
@@ -2332,7 +2332,7 @@ BOOST_AUTO_TEST_CASE( treasury_hbd_does_not_affect_inflation_basic )
 
     before_virtual_supply = props.virtual_supply.amount;
     ISSUE_FUNDS( db->get_treasury_name(), ASSET( "5000000.000 TBD" ) );
-    
+
     generate_blocks( db->head_block_time() + 50 * HIVE_BLOCK_INTERVAL, false );
 
     after_virtual_supply = props.virtual_supply.amount;
@@ -2382,7 +2382,7 @@ BOOST_AUTO_TEST_CASE(treasury_hbd_does_not_affect_inflation_advanced)
             auto new_hive = (props.virtual_supply.amount * current_inflation_rate) / (int64_t(HIVE_100_PERCENT) * int64_t(HIVE_BLOCKS_PER_YEAR));
             if (db->has_hardfork(HIVE_HARDFORK_1_28_NO_DHF_HBD_IN_INFLATION)) {
               const auto &treasury_account = db->get_treasury();
-              const auto hbd_supply_without_treasury = (props.get_current_hbd_supply() - treasury_account.hbd_balance).amount < 0 ? asset(0, HBD_SYMBOL) : (props.get_current_hbd_supply() - treasury_account.hbd_balance);
+              const auto hbd_supply_without_treasury = (props.get_current_hbd_supply() - treasury_account.hbd_balance).amount < 0 ? asset(0, PXS_SYMBOL) : (props.get_current_hbd_supply() - treasury_account.hbd_balance);
               const auto virtual_supply_without_treasury = hbd_supply_without_treasury * db->get_feed_history().current_median_history + props.current_supply;
 
               new_hive = (virtual_supply_without_treasury.amount * current_inflation_rate) / (int64_t(HIVE_100_PERCENT) * int64_t(HIVE_BLOCKS_PER_YEAR));

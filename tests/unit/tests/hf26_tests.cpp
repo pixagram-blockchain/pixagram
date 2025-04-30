@@ -28,14 +28,14 @@ BOOST_AUTO_TEST_CASE( update_operation )
     };
 
     std::vector<data> _v
-    { 
+    {
       { "bob_owner",    "key number 01", false },
       { "key number 01", "key number 02", true },
       { "key number 01", "key number 03", true }
     };
 
     std::vector<data> _v_hf26 =
-    { 
+    {
       { "bob_owner",    "key number 01", false },
       { "key number 01", "key number 02", false },
       { "key number 02", "key number 03", true }
@@ -292,7 +292,7 @@ BOOST_AUTO_TEST_CASE( pack_transaction_basic )
       {
         BOOST_TEST_MESSAGE( "Executing operation using legacy/hf26 serialization - transfer operation" );
 
-        auto _66 = asset( 66, HIVE_SYMBOL );
+        auto _66 = asset( 66, PXC_SYMBOL );
 
         transfer_operation _op;
         _op.from    = "alice";
@@ -380,7 +380,7 @@ BOOST_AUTO_TEST_CASE( pack_transaction_basic )
 
         _op2.author   = "alice";
         _op2.permlink = "lemon";
-        _op2.max_accepted_payout = asset( 13456, HBD_SYMBOL );
+        _op2.max_accepted_payout = asset( 13456, PXS_SYMBOL );
 
         if( is_hf26 )
         {

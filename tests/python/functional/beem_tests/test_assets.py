@@ -35,7 +35,7 @@ def node(chain_id, skeleton_key):
 
 
 @pytest.mark.mirrornet()
-@pytest.mark.parametrize("asset", ["HIVE", "HBD", "VESTS"])
+@pytest.mark.parametrize("asset", ["PXC", "PXS", "PXP"])
 def test_assets(asset: str, node_client: NodeClientMaker):
     # ARRANGE
     node_client = node_client()
@@ -72,10 +72,10 @@ def test_hive_transfer(node_client: NodeClientMaker):
     node_client.create_account(new_account_name, creator="initminer", password="secret")
 
     # ACT
-    initminer_account.transfer(to=new_account_name, amount=expected_amount, asset="HIVE")
+    initminer_account.transfer(to=new_account_name, amount=expected_amount, asset="PXC")
 
     # ASSERT
     new_account = Account(new_account_name, hive_instance=node_client)
-    balance = new_account.get_balance("available", "HIVE")
+    balance = new_account.get_balance("available", "P")
 
     assert balance.amount == expected_amount

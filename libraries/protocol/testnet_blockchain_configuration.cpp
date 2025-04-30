@@ -101,7 +101,7 @@ void configuration::set_hive_owner_update_limit( uint16_t limit )
 void configuration::set_initial_asset_supply( uint64_t hive, uint64_t hbd, uint64_t to_vest, const price& vest_price )
 {
   FC_ASSERT( hive >= to_vest, "Too much HIVE requested for vesting compared to given supply" );
-  FC_ASSERT( vest_price.base.symbol == VESTS_SYMBOL && vest_price.quote.symbol == HIVE_SYMBOL,
+  FC_ASSERT( vest_price.base.symbol == VESTS_SYMBOL && vest_price.quote.symbol == PXC_SYMBOL,
     "Invalid price of vests - expected VESTS on HIVE" );
 
   init_hive_supply = hive;

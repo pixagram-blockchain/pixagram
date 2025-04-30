@@ -74,15 +74,15 @@ BOOST_AUTO_TEST_CASE( restore_accounts_02 )
     uint32_t cnt = 1;
     for( auto& account : accounts )
     {
-      ISSUE_FUNDS( account, asset( cnt * 1000,      HIVE_SYMBOL ) );
-      ISSUE_FUNDS( account, asset( cnt * 1000 + 1,  HBD_SYMBOL ) );
+      ISSUE_FUNDS( account, asset( cnt * 1000,      PXC_SYMBOL ) );
+      ISSUE_FUNDS( account, asset( cnt * 1000 + 1,  PXS_SYMBOL ) );
       ++cnt;
 
       old_balances.emplace( tmp_data{ account, get_balance( account ), get_hbd_balance( account ) } );
     }
     {
-      ISSUE_FUNDS( "dude", asset( 68,   HIVE_SYMBOL ) );
-      ISSUE_FUNDS( "dude", asset( 78,   HBD_SYMBOL ) );
+      ISSUE_FUNDS( "dude", asset( 68,   PXC_SYMBOL ) );
+      ISSUE_FUNDS( "dude", asset( 78,   PXS_SYMBOL ) );
       generate_block();
     }
     {
@@ -94,11 +94,11 @@ BOOST_AUTO_TEST_CASE( restore_accounts_02 )
 
         idump(( _acc.get_balance() ));
         idump(( _acc.get_hbd_balance() ));
-        BOOST_REQUIRE( _acc.get_balance() == asset( 0, HIVE_SYMBOL ) );
-        BOOST_REQUIRE( _acc.get_hbd_balance() == asset( 0, HBD_SYMBOL ) );
+        BOOST_REQUIRE( _acc.get_balance() == asset( 0, PXC_SYMBOL ) );
+        BOOST_REQUIRE( _acc.get_hbd_balance() == asset( 0, PXS_SYMBOL ) );
       }
-      BOOST_REQUIRE( get_balance( "dude" )      == asset( 68, HIVE_SYMBOL ) );
-      BOOST_REQUIRE( get_hbd_balance( "dude" )  == asset( 78, HBD_SYMBOL ) );
+      BOOST_REQUIRE( get_balance( "dude" )      == asset( 68, PXC_SYMBOL ) );
+      BOOST_REQUIRE( get_hbd_balance( "dude" )  == asset( 78, PXS_SYMBOL ) );
     }
     {
       auto accounts_ex = accounts;
@@ -118,8 +118,8 @@ BOOST_AUTO_TEST_CASE( restore_accounts_02 )
 
         ++itr_old_balances;
       }
-      BOOST_REQUIRE( get_balance( "dude" )      == asset( 68, HIVE_SYMBOL ) );
-      BOOST_REQUIRE( get_hbd_balance( "dude" )  == asset( 78, HBD_SYMBOL ) );
+      BOOST_REQUIRE( get_balance( "dude" )      == asset( 68, PXC_SYMBOL ) );
+      BOOST_REQUIRE( get_hbd_balance( "dude" )  == asset( 78, PXS_SYMBOL ) );
     }
 
     database_fixture::validate_database();
@@ -906,7 +906,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     UNDO_CLEAR;
 
     //after dispute it doesn't matter if the escrow expires
-    
+
     {
       escrow_release_operation op;
       op.from = "alice";

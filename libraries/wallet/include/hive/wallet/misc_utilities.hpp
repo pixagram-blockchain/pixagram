@@ -121,7 +121,7 @@ struct wallet_formatter
 
     asset total_hive;
     asset total_vest(0, VESTS_SYMBOL );
-    asset total_hbd(0, HBD_SYMBOL );
+    asset total_hbd(0, PXS_SYMBOL );
     for( const auto& account_in_wrapper : accounts.value ) {
       auto a = account_in_wrapper;
       total_hive += a.balance;
@@ -204,7 +204,7 @@ struct wallet_formatter
     vector<get_account_history_json_op> _out_json;
 
     if( output_formatter == output_formatter_type::text )
-      create_get_account_history_header( _out_text ); 
+      create_get_account_history_header( _out_text );
 
     for( const auto& item : history.value )
     {
@@ -219,7 +219,7 @@ struct wallet_formatter
 
   static double calculate_price( const protocol::price& price )
   {
-    if( price.base.symbol == HIVE_SYMBOL )
+    if( price.base.symbol == PXC_SYMBOL )
       return ASSET_TO_REAL( price.quote ) / ASSET_TO_REAL( price.base );
     else
       return ASSET_TO_REAL( price.base ) / ASSET_TO_REAL( price.quote );
@@ -252,7 +252,7 @@ struct wallet_formatter
       auto o = order_in_wrapper;
 
       auto _asset = asset( o.for_sale, o.sell_price.base.symbol );
-      string _type = o.sell_price.base.symbol == HIVE_SYMBOL ? "SELL" : "BUY";
+      string _type = o.sell_price.base.symbol == PXC_SYMBOL ? "SELL" : "BUY";
 
       double _price = calculate_price( o.sell_price );
 
@@ -287,8 +287,8 @@ struct wallet_formatter
 
     auto orders = orders_in_wrapper.value;
 
-    asset _bid_sum = asset( 0, HBD_SYMBOL );
-    asset _ask_sum = asset( 0, HBD_SYMBOL );
+    asset _bid_sum = asset( 0, PXS_SYMBOL );
+    asset _ask_sum = asset( 0, PXS_SYMBOL );
     int spacing = 16;
 
     if( output_formatter == output_formatter_type::text )
@@ -297,13 +297,13 @@ struct wallet_formatter
 
       _out_text << ' ' << setw( ( spacing * 4 ) + 6 ) << "Bids" << "Asks\n"
         << ' '
-        << setw( spacing + 3 ) << "Sum(HBD)"
-        << setw( spacing + 1 ) << "HBD"
-        << setw( spacing + 1 ) << "HIVE"
+        << setw( spacing + 3 ) << "Sum(PXS)"
+        << setw( spacing + 1 ) << "PXS"
+        << setw( spacing + 1 ) << "PXC"
         << setw( spacing + 1 ) << "Price"
         << setw( spacing + 1 ) << "Price"
-        << setw( spacing + 1 ) << "HIVE "
-        << setw( spacing + 1 ) << "HBD " << "Sum(HBD)"
+        << setw( spacing + 1 ) << "PXC "
+        << setw( spacing + 1 ) << "PXS " << "Sum(PXS)"
         << "\n====================================================================="
         << "|=====================================================================\n";
     }
@@ -312,10 +312,10 @@ struct wallet_formatter
     {
       if( i < orders.bids.size() )
       {
-        _bid_sum += asset( orders.bids[i].hbd, HBD_SYMBOL );
+        _bid_sum += asset( orders.bids[i].hbd, PXS_SYMBOL );
 
-        auto _hbd = asset( orders.bids[i].hbd, HBD_SYMBOL);
-        auto _hive = asset( orders.bids[i].hive, HIVE_SYMBOL);
+        auto _hbd = asset( orders.bids[i].hbd, PXS_SYMBOL);
+        auto _hive = asset( orders.bids[i].hive, PXC_SYMBOL);
         double _price = orders.bids[i].real_price;
 
         if( output_formatter == output_formatter_type::text )
@@ -342,10 +342,10 @@ struct wallet_formatter
 
       if( i < orders.asks.size() )
       {
-        _ask_sum += asset(orders.asks[i].hbd, HBD_SYMBOL);
+        _ask_sum += asset(orders.asks[i].hbd, PXS_SYMBOL);
 
-        auto _hbd = asset( orders.asks[i].hbd, HBD_SYMBOL);
-        auto _hive = asset( orders.asks[i].hive, HIVE_SYMBOL);
+        auto _hbd = asset( orders.asks[i].hbd, PXS_SYMBOL);
+        auto _hive = asset( orders.asks[i].hive, PXC_SYMBOL);
         double _price = orders.asks[i].real_price;
 
         if( output_formatter == output_formatter_type::text )
@@ -418,7 +418,7 @@ struct wallet_formatter
 
   static std::map<string, std::function<string(variant,const variants&)>> get_result_formatters()
   {
-    static std::map<string, std::function<string(variant,const variants&)>> m = 
+    static std::map<string, std::function<string(variant,const variants&)>> m =
     {
       { "help",                 general_formatter },
       { "gethelp",              general_formatter },

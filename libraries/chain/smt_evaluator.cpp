@@ -82,7 +82,7 @@ void smt_create_evaluator::do_apply( const smt_create_operation& o )
       const auto& fhistory = _db.get_feed_history();
       FC_ASSERT( !fhistory.current_median_history.is_null(), "Cannot pay the fee using different asset symbol because there is no price feed." );
 
-      if( dgpo.smt_creation_fee.symbol == HIVE_SYMBOL )
+      if( dgpo.smt_creation_fee.symbol == PXC_SYMBOL )
         creation_fee = _db.to_hive( o.smt_creation_fee );
       else
         creation_fee = _db.to_hbd( o.smt_creation_fee );
@@ -303,7 +303,7 @@ void smt_contribute_evaluator::do_apply( const smt_contribute_operation& o )
     FC_ASSERT( token_ico->contributed.amount < token_ico->hive_units_hard_cap, "SMT ICO has reached its hard cap and no longer accepts contributions" );
     FC_ASSERT( token_ico->contributed.amount + o.contribution.amount <= token_ico->hive_units_hard_cap,
       "The proposed contribution would exceed the ICO hard cap, maximum possible contribution: ${c}",
-      ("c", asset( token_ico->hive_units_hard_cap - token_ico->contributed.amount, HIVE_SYMBOL )) );
+      ("c", asset( token_ico->hive_units_hard_cap - token_ico->contributed.amount, PXC_SYMBOL )) );
 
     auto key = boost::tuple< asset_symbol_type, account_name_type, uint32_t >( o.contribution.symbol, o.contributor, o.contribution_id );
     auto contrib_ptr = _db.find< smt_contribution_object, by_symbol_contributor >( key );

@@ -212,7 +212,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 
 #define HIVE_BLOCKCHAIN_HARDFORK_VERSION      ( hardfork_version( HIVE_BLOCKCHAIN_VERSION ) )
 
-#define HIVE_ADDRESS_PREFIX                   "STM"
+#define HIVE_ADDRESS_PREFIX                   "PIX"
 
 
 #define HIVE_100_PERCENT                      10000
@@ -288,7 +288,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_CREATE_ACCOUNT_DELEGATION_RATIO     5
 #define HIVE_CREATE_ACCOUNT_DELEGATION_TIME      fc::days(30)
 
-#define HIVE_MINING_REWARD                    asset( 1000, HIVE_SYMBOL )
+#define HIVE_MINING_REWARD                    asset( 1000, PXC_SYMBOL )
 #define HIVE_EQUIHASH_N                       140
 #define HIVE_EQUIHASH_K                       6
 
@@ -296,14 +296,14 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_MIN_LIQUIDITY_REWARD_PERIOD_SEC  (fc::seconds(60)) // 1 minute required on books to receive volume
 #define HIVE_LIQUIDITY_REWARD_PERIOD_SEC      (60*60)
 #define HIVE_LIQUIDITY_REWARD_BLOCKS          (HIVE_LIQUIDITY_REWARD_PERIOD_SEC/HIVE_BLOCK_INTERVAL)
-#define HIVE_MIN_LIQUIDITY_REWARD             (asset( 1000*HIVE_LIQUIDITY_REWARD_BLOCKS, HIVE_SYMBOL )) // Minumum reward to be paid out to liquidity providers
+#define HIVE_MIN_LIQUIDITY_REWARD             (asset( 1000*HIVE_LIQUIDITY_REWARD_BLOCKS, PXC_SYMBOL )) // Minumum reward to be paid out to liquidity providers
 #define HIVE_MIN_CONTENT_REWARD               HIVE_MINING_REWARD
 #define HIVE_MIN_CURATE_REWARD                HIVE_MINING_REWARD
 #define HIVE_MIN_PRODUCER_REWARD              HIVE_MINING_REWARD
 #define HIVE_MIN_POW_REWARD                   HIVE_MINING_REWARD
 
-#define HIVE_ACTIVE_CHALLENGE_FEE             asset( 2000, HIVE_SYMBOL )
-#define HIVE_OWNER_CHALLENGE_FEE              asset( 30000, HIVE_SYMBOL )
+#define HIVE_ACTIVE_CHALLENGE_FEE             asset( 2000, PXC_SYMBOL )
+#define HIVE_OWNER_CHALLENGE_FEE              asset( 30000, PXC_SYMBOL )
 #define HIVE_ACTIVE_CHALLENGE_COOLDOWN        fc::days(1)
 #define HIVE_OWNER_CHALLENGE_COOLDOWN         fc::days(1)
 
@@ -349,7 +349,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_PRODUCER_APR_PERCENT             750
 #define HIVE_POW_APR_PERCENT                  750
 
-#define HIVE_MIN_PAYOUT_HBD                   (asset(20,HBD_SYMBOL))
+#define HIVE_MIN_PAYOUT_HBD                   (asset(20,PXS_SYMBOL))
 
 #define HIVE_HBD_START_PERCENT_HF14           (2*HIVE_1_PERCENT) // Start reducing printing of HBD at 2% Market Cap
 #define HIVE_HBD_STOP_PERCENT_HF14            (5*HIVE_1_PERCENT) // Stop printing HBD at 5% Market Cap

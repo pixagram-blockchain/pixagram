@@ -122,7 +122,7 @@ namespace detail {
     props.maximum_block_size = requested_max_block_size;
 
     op.props = props;
-    op.fee = hp::asset( 1, HIVE_SYMBOL );
+    op.fee = hp::asset( 1, PXC_SYMBOL );
 
     tx.operations.push_back(op);
     tx.signatures.emplace_back();
@@ -141,36 +141,36 @@ namespace detail {
 
   hp::transfer_to_vesting_operation iceberg_generate_plugin_impl::generate_vesting_for_account( const hp::account_name_type& acc )const
   {
-    static const uint64_t hive_precision = std::pow(10, HIVE_PRECISION_HIVE);
+    static const uint64_t hive_precision = std::pow(10, PIXA_PRECISION_PXC);
 
     hp::transfer_to_vesting_operation op;
     op.from = HIVE_INIT_MINER_NAME;
     op.to = acc;
-    op.amount = hp::asset{ 100 * hive_precision, HIVE_SYMBOL };
+    op.amount = hp::asset{ 100 * hive_precision, PXC_SYMBOL };
 
     return op;
   }
 
   hp::transfer_operation iceberg_generate_plugin_impl::generate_hbd_transfer_for_account( const hp::account_name_type& acc )const
   {
-    static const uint64_t hbd_precision = std::pow(10, HIVE_PRECISION_HBD);
+    static const uint64_t hbd_precision = std::pow(10, PIXA_PRECISION_PXS);
 
     hp::transfer_operation op;
     op.from = HIVE_INIT_MINER_NAME;
     op.to = acc;
-    op.amount = hp::asset{ 100 * hbd_precision, HBD_SYMBOL };
+    op.amount = hp::asset{ 100 * hbd_precision, PXS_SYMBOL };
 
     return op;
   }
 
   hp::transfer_operation iceberg_generate_plugin_impl::generate_hive_transfer_for_account( const hp::account_name_type& acc )const
   {
-    static const uint64_t hive_precision = std::pow(10, HIVE_PRECISION_HIVE);
+    static const uint64_t hive_precision = std::pow(10, PIXA_PRECISION_PXC);
 
     hp::transfer_operation op;
     op.from = HIVE_INIT_MINER_NAME;
     op.to = acc;
-    op.amount = hp::asset{ 100 * hive_precision, HIVE_SYMBOL };
+    op.amount = hp::asset{ 100 * hive_precision, PXC_SYMBOL };
 
     return op;
   }
@@ -421,13 +421,13 @@ namespace detail {
     int64_t real_hbd_supply = current_hbd_supply == 0 ? init_hbd_supply : current_hbd_supply;
 
     ilog("Init supply: [${is} HIVE required, available: ${vs} HIVE], HBD Init supply: [${his} HBD required, available: ${hvs} HBD]",
-      ("is", init_assets[HIVE_NAI_HIVE])("vs", virtual_supply)
-      ("his", init_assets[HIVE_NAI_HBD])("hvs", real_hbd_supply)
+      ("is", init_assets[PIXA_NAI_PXC])("vs", virtual_supply)
+      ("his", init_assets[PIXA_NAI_PXS])("hvs", real_hbd_supply)
     );
 
-    // XXX: Should we also handle HIVE_NAI_VESTS?
-    FC_ASSERT( virtual_supply >= init_assets[HIVE_NAI_HIVE], "Insufficient initial supply in the output node blockchain" );
-    FC_ASSERT( real_hbd_supply >= init_assets[HIVE_NAI_HBD], "Insufficient HBD initial supply in the output node blockchain" );
+    // XXX: Should we also handle PIXA_NAI_VESTS?
+    FC_ASSERT( virtual_supply >= init_assets[PIXA_NAI_PXC], "Insufficient initial supply in the output node blockchain" );
+    FC_ASSERT( real_hbd_supply >= init_assets[PIXA_NAI_PXS], "Insufficient HBD initial supply in the output node blockchain" );
 
     ilog("Blockchain ready for the conversion.");
   }

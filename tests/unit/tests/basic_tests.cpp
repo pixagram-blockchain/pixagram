@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE( fixed_string_verification )
       op.from = "abcde-0123456789";
       op.to = "bob";
       op.memo = "Memo";
-      op.amount = asset( 100, HIVE_SYMBOL );
+      op.amount = asset( 100, PXC_SYMBOL );
       op.validate();
     }
 
@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE( fixed_string_verification )
       op.from = "abcde-0123456789xxx";
       op.to = "bob";
       op.memo = "Memo";
-      op.amount = asset( 100, HIVE_SYMBOL );
+      op.amount = asset( 100, PXC_SYMBOL );
       op.validate();
     }
 
@@ -141,7 +141,7 @@ BOOST_AUTO_TEST_CASE( fixed_string_verification )
       op.from = "abcde-0123456789";
       op.to = "bob";
       op.memo = "Memo";
-      op.amount = asset( 100, HIVE_SYMBOL );
+      op.amount = asset( 100, PXC_SYMBOL );
 
       op.validate();
     }
@@ -538,26 +538,26 @@ BOOST_AUTO_TEST_CASE( adjust_balance_test )
 
   BOOST_TEST_MESSAGE( "Testing adjust_balance" );
 
-  BOOST_TEST_MESSAGE( " --- Testing adding HIVE_SYMBOL" );
-  db->adjust_balance( "alice", asset( 50000, HIVE_SYMBOL ) );
-  BOOST_REQUIRE( db->get_balance( "alice", HIVE_SYMBOL ) == asset( 50000, HIVE_SYMBOL ) );
+  BOOST_TEST_MESSAGE( " --- Testing adding PXC_SYMBOL" );
+  db->adjust_balance( "alice", asset( 50000, PXC_SYMBOL ) );
+  BOOST_REQUIRE( db->get_balance( "alice", PXC_SYMBOL ) == asset( 50000, PXC_SYMBOL ) );
 
-  BOOST_TEST_MESSAGE( " --- Testing deducting HIVE_SYMBOL" );
-  HIVE_REQUIRE_THROW( db->adjust_balance( "alice", asset( -50001, HIVE_SYMBOL ) ), fc::assert_exception );
-  db->adjust_balance( "alice", asset( -30000, HIVE_SYMBOL ) );
-  db->adjust_balance( "alice", asset( -20000, HIVE_SYMBOL ) );
-  BOOST_REQUIRE( db->get_balance( "alice", HIVE_SYMBOL ) == asset( 0, HIVE_SYMBOL ) );
+  BOOST_TEST_MESSAGE( " --- Testing deducting PXC_SYMBOL" );
+  HIVE_REQUIRE_THROW( db->adjust_balance( "alice", asset( -50001, PXC_SYMBOL ) ), fc::assert_exception );
+  db->adjust_balance( "alice", asset( -30000, PXC_SYMBOL ) );
+  db->adjust_balance( "alice", asset( -20000, PXC_SYMBOL ) );
+  BOOST_REQUIRE( db->get_balance( "alice", PXC_SYMBOL ) == asset( 0, PXC_SYMBOL ) );
 
-  BOOST_TEST_MESSAGE( " --- Testing adding HBD_SYMBOL" );
-  db->adjust_balance( "alice", asset( 100000, HBD_SYMBOL ) );
-  BOOST_REQUIRE( db->get_balance( "alice", HBD_SYMBOL ) == asset( 100000, HBD_SYMBOL ) );
+  BOOST_TEST_MESSAGE( " --- Testing adding PXS_SYMBOL" );
+  db->adjust_balance( "alice", asset( 100000, PXS_SYMBOL ) );
+  BOOST_REQUIRE( db->get_balance( "alice", PXS_SYMBOL ) == asset( 100000, PXS_SYMBOL ) );
 
-  BOOST_TEST_MESSAGE( " --- Testing deducting HBD_SYMBOL" );
-  HIVE_REQUIRE_THROW( db->adjust_balance( "alice", asset( -100001, HBD_SYMBOL ) ), fc::assert_exception );
-  db->adjust_balance( "alice", asset( -50000, HBD_SYMBOL ) );
-  db->adjust_balance( "alice", asset( -25000, HBD_SYMBOL ) );
-  db->adjust_balance( "alice", asset( -25000, HBD_SYMBOL ) );
-  BOOST_REQUIRE( db->get_balance( "alice", HBD_SYMBOL ) == asset( 0, HBD_SYMBOL ) );
+  BOOST_TEST_MESSAGE( " --- Testing deducting PXS_SYMBOL" );
+  HIVE_REQUIRE_THROW( db->adjust_balance( "alice", asset( -100001, PXS_SYMBOL ) ), fc::assert_exception );
+  db->adjust_balance( "alice", asset( -50000, PXS_SYMBOL ) );
+  db->adjust_balance( "alice", asset( -25000, PXS_SYMBOL ) );
+  db->adjust_balance( "alice", asset( -25000, PXS_SYMBOL ) );
+  BOOST_REQUIRE( db->get_balance( "alice", PXS_SYMBOL ) == asset( 0, PXS_SYMBOL ) );
 }
 
 BOOST_AUTO_TEST_CASE( curation_weight_test )
@@ -1330,7 +1330,7 @@ BOOST_AUTO_TEST_CASE( decoded_type_data_json_operations )
   }
   // 6. passing json which should not match to current decoded types map data and error should be thrown.
   {
-    
+
     const std::string wrong_json_pattern = "["
       "{\"name\":\"hive::chain::witness_object::witness_schedule_type\",\"enum_values\":["
         "[\"elected\",0],[\"timeshare\",1],[\"miner\",2],[\"none\",3]],"

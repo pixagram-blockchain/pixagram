@@ -317,7 +317,7 @@ void dhf_processor::record_funding( const block_notification& note )
 
   db.modify( props, []( dynamic_global_property_object& dgpo )
   {
-    dgpo.dhf_interval_ledger = asset( 0, HBD_SYMBOL );
+    dgpo.dhf_interval_ledger = asset( 0, PXS_SYMBOL );
   });
 }
 
@@ -338,7 +338,7 @@ void dhf_processor::convert_funds( const block_notification& note )
   if (treasury_account.balance.amount == 0)
     return;
 
-  const auto to_convert = asset(HIVE_PROPOSAL_CONVERSION_RATE * treasury_account.balance.amount / HIVE_100_PERCENT, HIVE_SYMBOL);
+  const auto to_convert = asset(HIVE_PROPOSAL_CONVERSION_RATE * treasury_account.balance.amount / HIVE_100_PERCENT, PXC_SYMBOL);
 
   const feed_history_object& fhistory = db.get_feed_history();
   if( fhistory.current_median_history.is_null() )

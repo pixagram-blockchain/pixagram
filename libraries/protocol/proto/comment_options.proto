@@ -35,7 +35,7 @@ message comment_options {
   required string                     permlink = 2;
 
   // @param {asset} max_accepted_payout - The maximum value of payout in HBD.
-  //                                      Default value: max_accepted_payout = asset( 1000000000, HBD_SYMBOL ).
+  //                                      Default value: max_accepted_payout = asset( 1000000000, PXS_SYMBOL ).
   //                                      The allowed value should be less than the default value.
   //                                      If max_accepted_payout = 0, then voters and authors will not receive the payout.
   required asset                      max_accepted_payout = 3 [json_name = "max_accepted_payout"];

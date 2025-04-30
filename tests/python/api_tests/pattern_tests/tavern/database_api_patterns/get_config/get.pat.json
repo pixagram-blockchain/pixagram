@@ -1,5 +1,5 @@
 {
-  "HBD_SYMBOL": {
+  "PXS_SYMBOL": {
     "decimals": 3,
     "nai": "@@000000013"
   },
@@ -247,7 +247,7 @@
   "HIVE_SOFT_MAX_COMMENT_DEPTH": 255,
   "HIVE_START_MINER_VOTING_BLOCK": 864000,
   "HIVE_START_VESTING_BLOCK": 201600,
-  "HIVE_SYMBOL": {
+  "PXC_SYMBOL": {
     "decimals": 3,
     "nai": "@@000000021"
   },

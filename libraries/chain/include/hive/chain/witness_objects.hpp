@@ -38,7 +38,7 @@ namespace hive { namespace chain {
       *  ability to vote and make transactions.
       */
     asset             account_creation_fee =
-      asset( HIVE_MIN_ACCOUNT_CREATION_FEE, HIVE_SYMBOL );
+      asset( HIVE_MIN_ACCOUNT_CREATION_FEE, PXC_SYMBOL );
 
     /**
       *  This witnesses vote for the maximum_block_size which is used by the network
@@ -205,7 +205,7 @@ namespace hive { namespace chain {
       rd_dynamics_params account_subsidy_rd;
       rd_dynamics_params account_subsidy_witness_rd;
       int64_t            min_witness_account_subsidy_decay = 0;
-      
+
       void copy_values_from(const witness_schedule_object& rhs)
       {
         current_virtual_time = rhs.current_virtual_time;

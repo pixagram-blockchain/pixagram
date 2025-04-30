@@ -114,14 +114,14 @@ BOOST_AUTO_TEST_CASE( account_create_apply )
     op.json_metadata = "{\"foo\":\"bar\"}";
 
     BOOST_TEST_MESSAGE( "--- Test failure paying more than the fee" );
-    op.fee = asset( 101, HIVE_SYMBOL );
+    op.fee = asset( 101, PXC_SYMBOL );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
     tx.operations.push_back( op );
     tx.validate();
     HIVE_REQUIRE_THROW( push_transaction( tx, init_account_priv_key ), fc::assert_exception );
 
     BOOST_TEST_MESSAGE( "--- Test normal account creation" );
-    op.fee = asset( 100, HIVE_SYMBOL );
+    op.fee = asset( 100, PXC_SYMBOL );
     tx.clear();
     tx.operations.push_back( op );
     tx.validate();
@@ -165,7 +165,7 @@ BOOST_AUTO_TEST_CASE( account_create_apply )
 
     BOOST_TEST_MESSAGE( "--- Test failure when creator cannot cover fee" );
     tx.operations.clear();
-    op.fee = asset( get_balance( HIVE_INIT_MINER_NAME ).amount + 1, HIVE_SYMBOL );
+    op.fee = asset( get_balance( HIVE_INIT_MINER_NAME ).amount + 1, PXC_SYMBOL );
     op.new_account_name = "bob";
     tx.operations.push_back( op );
     HIVE_REQUIRE_THROW( push_transaction( tx, init_account_priv_key ), fc::exception );
@@ -1179,7 +1179,7 @@ BOOST_AUTO_TEST_CASE( vote_weights )
       BOOST_REQUIRE_EQUAL( voteObjs[i]->get_weight(), voteObjs[7]->get_weight() );
     for( i = 32; i < 40; ++i ) //deleted votes have zero weight
       BOOST_REQUIRE_EQUAL( voteObjs[i]->get_weight(), 0 );
-    
+
     generate_blocks( cashout_time, false );
 
     for( auto i : { 8,16,24 } ) //upvotes edited in early window have the same rewards as early window pattern
@@ -1216,7 +1216,7 @@ BOOST_AUTO_TEST_CASE( transfer_validate )
     op.from = "alice";
     op.to = "bob";
     op.memo = "Memo";
-    op.amount = asset( 100, HIVE_SYMBOL );
+    op.amount = asset( 100, PXC_SYMBOL );
     op.validate();
 
     BOOST_TEST_MESSAGE( " --- Invalid from account" );
@@ -1245,7 +1245,7 @@ BOOST_AUTO_TEST_CASE( transfer_validate )
     BOOST_TEST_MESSAGE( " --- Transferring vests" );
     op.amount = asset( 100, VESTS_SYMBOL );
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
-    op.amount = asset( 100, HIVE_SYMBOL );
+    op.amount = asset( 100, PXC_SYMBOL );
 
     op.validate();
   }
@@ -1510,7 +1510,7 @@ BOOST_AUTO_TEST_CASE( transfer_to_vesting_apply )
     BOOST_REQUIRE( alice.get_balance() == ASSET( "10.000 TESTS" ) );
 
     auto shares = asset( gpo.get_total_vesting_shares().amount, VESTS_SYMBOL );
-    auto vests = asset( gpo.get_total_vesting_fund_hive().amount, HIVE_SYMBOL );
+    auto vests = asset( gpo.get_total_vesting_fund_hive().amount, PXC_SYMBOL );
     auto alice_shares = alice.get_vesting();
     auto bob_shares = bob.get_vesting();
 
@@ -1541,7 +1541,7 @@ BOOST_AUTO_TEST_CASE( transfer_to_vesting_apply )
     validate_database();
 
     op.to = "bob";
-    op.amount = asset( 2000, HIVE_SYMBOL );
+    op.amount = asset( 2000, PXC_SYMBOL );
     tx.operations.clear();
     tx.operations.push_back( op );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
@@ -1823,7 +1823,7 @@ BOOST_AUTO_TEST_CASE( witness_update_apply )
     op.url = "foo.bar";
     op.fee = ASSET( "1.000 TESTS" );
     op.block_signing_key = signing_key.get_public_key();
-    op.props.account_creation_fee = legacy_hive_asset::from_asset( asset(HIVE_MIN_ACCOUNT_CREATION_FEE + 10, HIVE_SYMBOL) );
+    op.props.account_creation_fee = legacy_hive_asset::from_asset( asset(HIVE_MIN_ACCOUNT_CREATION_FEE + 10, PXC_SYMBOL) );
     op.props.maximum_block_size = HIVE_MIN_BLOCK_SIZE_LIMIT + 100;
 
     signed_transaction tx;
@@ -3321,7 +3321,7 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_apply )
   try
   {
     BOOST_TEST_MESSAGE( "Testing: collateralized_convert_apply" );
-    
+
     // Testing mainnet convert values here, which are dependent on feed values.
     auto auto_reset( set_mainnet_feed_values() );
 
@@ -3332,7 +3332,7 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_apply )
     const auto& dgpo = db->get_dynamic_global_properties();
     const auto& feed = db->get_feed_history();
     db->skip_price_feed_limit_check = false;
-    
+
     price price_1_for_4 = price( ASSET( "1.000 TBD" ), ASSET( "4.000 TESTS" ) );
     set_price_feed( price_1_for_4 );
     BOOST_REQUIRE( feed.current_median_history == price_1_for_4 );
@@ -3350,7 +3350,7 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_apply )
     collateralized_convert_operation op;
     op.owner = "alice";
     op.amount = ASSET( "5.000 TBD" );
-    HIVE_REQUIRE_ASSERT( push_transaction( op, alice_private_key ), "is_asset_type( amount, HIVE_SYMBOL )" );
+    HIVE_REQUIRE_ASSERT( push_transaction( op, alice_private_key ), "is_asset_type( amount, PXC_SYMBOL )" );
     transfer( "alice", db->get_treasury_name(), get_hbd_balance( "alice" ), "", alice_private_key );
 
     BOOST_TEST_MESSAGE( "--- Test failure sending negative collateral" );
@@ -3507,7 +3507,7 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_apply )
       fc::uint128_t amount( dgpo.get_current_supply().amount.value );
       uint16_t limit2 = 2 * dgpo.hbd_stop_percent + HIVE_1_BASIS_POINT; //there is rounding when percent is calculated, hence some strange correction
       amount = ( amount * limit2 ) / ( 2 * HIVE_100_PERCENT - limit2 );
-      auto new_hbd = asset( fc::uint128_to_uint64(amount), HIVE_SYMBOL ) * feed.current_median_history;
+      auto new_hbd = asset( fc::uint128_to_uint64(amount), PXC_SYMBOL ) * feed.current_median_history;
       new_hbd -= dgpo.get_current_hbd_supply() - db->get_treasury().get_hbd_balance();
       issue_funds( "alice", new_hbd, false );
       uint16_t percent = db->calculate_HBD_percent();
@@ -3860,7 +3860,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == op.amount_to_sell.amount );
     BOOST_REQUIRE( limit_order->sell_price == price( op.amount_to_sell, op.min_to_receive ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "990.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "0.000 TBD" ).amount.value );
     validate_database();
@@ -3878,7 +3878,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == 10000 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "10.000 TESTS" ), op.min_to_receive ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "990.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "0.000 TBD" ).amount.value );
     validate_database();
@@ -3919,7 +3919,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == 5000 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "10.000 TESTS" ), ASSET( "15.000 TBD" ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "bob", op.orderid ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "990.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "7.500 TBD" ).amount.value );
@@ -3947,7 +3947,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == 1 );
     BOOST_REQUIRE( limit_order->for_sale.value == 7500 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "15.000 TBD" ), ASSET( "10.000 TESTS" ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 1 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "990.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "15.000 TBD" ).amount.value );
@@ -3998,7 +3998,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == 4 );
     BOOST_REQUIRE( limit_order->for_sale.value == 1000 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "12.000 TBD" ), ASSET( "10.000 TESTS" ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "975.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "33.500 TBD" ).amount.value );
     BOOST_REQUIRE( db->get_account( "bob" ).get_balance().amount.value == ASSET( "25.000 TESTS" ).amount.value );
@@ -4040,7 +4040,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == 5 );
     BOOST_REQUIRE( limit_order->for_sale.value == 9091 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "20.000 TESTS" ), ASSET( "22.000 TBD" ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "955.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "45.500 TBD" ).amount.value );
     BOOST_REQUIRE( db->get_account( "bob" ).get_balance().amount.value == ASSET( "35.909 TESTS" ).amount.value );
@@ -4198,7 +4198,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == op.amount_to_sell.amount );
     BOOST_REQUIRE( limit_order->sell_price == op.exchange_rate );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "990.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "0.000 TBD" ).amount.value );
     validate_database();
@@ -4216,7 +4216,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == 10000 );
     BOOST_REQUIRE( limit_order->sell_price == op.exchange_rate );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "990.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "0.000 TBD" ).amount.value );
     validate_database();
@@ -4257,7 +4257,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == 5000 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "2.000 TESTS" ), ASSET( "3.000 TBD" ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "bob", op.orderid ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "990.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "7.500 TBD" ).amount.value );
@@ -4285,7 +4285,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == 1 );
     BOOST_REQUIRE( limit_order->for_sale.value == 7500 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "3.000 TBD" ), ASSET( "2.000 TESTS" ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 1 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "990.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "15.000 TBD" ).amount.value );
@@ -4336,7 +4336,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == 4 );
     BOOST_REQUIRE( limit_order->for_sale.value == 1000 );
     BOOST_REQUIRE( limit_order->sell_price == op.exchange_rate );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "975.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "33.500 TBD" ).amount.value );
     BOOST_REQUIRE( db->get_account( "bob" ).get_balance().amount.value == ASSET( "25.000 TESTS" ).amount.value );
@@ -4379,7 +4379,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == 5 );
     BOOST_REQUIRE( limit_order->for_sale.value == 9091 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "1.000 TESTS" ), ASSET( "1.100 TBD" ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( PXS_SYMBOL, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_account( "alice" ).get_balance().amount.value == ASSET( "955.000 TESTS" ).amount.value );
     BOOST_REQUIRE( db->get_account( "alice" ).get_hbd_balance().amount.value == ASSET( "45.500 TBD" ).amount.value );
     BOOST_REQUIRE( db->get_account( "bob" ).get_balance().amount.value == ASSET( "35.909 TESTS" ).amount.value );
@@ -4926,21 +4926,21 @@ BOOST_AUTO_TEST_CASE( escrow_transfer_validate )
     op.escrow_expiration = db->head_block_time() + 200;
 
     BOOST_TEST_MESSAGE( "--- failure when hbd symbol != HBD" );
-    op.hbd_amount.symbol = HIVE_SYMBOL;
+    op.hbd_amount.symbol = PXC_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::exception );
 
     BOOST_TEST_MESSAGE( "--- failure when hive symbol != HIVE" );
-    op.hbd_amount.symbol = HBD_SYMBOL;
-    op.hive_amount.symbol = HBD_SYMBOL;
+    op.hbd_amount.symbol = PXS_SYMBOL;
+    op.hive_amount.symbol = PXS_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::exception );
 
     BOOST_TEST_MESSAGE( "--- failure when fee symbol != HBD and fee symbol != HIVE" );
-    op.hive_amount.symbol = HIVE_SYMBOL;
+    op.hive_amount.symbol = PXC_SYMBOL;
     op.fee.symbol = VESTS_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::exception );
 
     BOOST_TEST_MESSAGE( "--- failure when hbd == 0 and hive == 0" );
-    op.fee.symbol = HIVE_SYMBOL;
+    op.fee.symbol = PXC_SYMBOL;
     op.hbd_amount.amount = 0;
     op.hive_amount.amount = 0;
     HIVE_REQUIRE_THROW( op.validate(), fc::exception );
@@ -5743,13 +5743,13 @@ BOOST_AUTO_TEST_CASE( escrow_release_validate )
 
 
     BOOST_TEST_MESSAGE( "--- failure when hive is not HIVE symbol" );
-    op.hbd_amount.symbol = HBD_SYMBOL;
+    op.hbd_amount.symbol = PXS_SYMBOL;
     op.hive_amount = ASSET( "1.000 TBD" );
     HIVE_REQUIRE_THROW( op.validate(), fc::exception );
 
 
     BOOST_TEST_MESSAGE( "--- success" );
-    op.hive_amount.symbol = HIVE_SYMBOL;
+    op.hive_amount.symbol = PXC_SYMBOL;
     op.validate();
   }
   FC_LOG_AND_RETHROW()
@@ -6242,7 +6242,7 @@ BOOST_AUTO_TEST_CASE( escrow_limit )
       generate_block();
       BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, i + 1 );
     }
-    
+
     //another escrow transfer from "alice" should fail
     {
       signed_transaction tx;
@@ -8315,7 +8315,7 @@ BOOST_AUTO_TEST_CASE( witness_set_properties_validate )
     op.url = "foo.bar";
     op.fee = ASSET( "1.000 TESTS" );
     op.block_signing_key = signing_key.get_public_key();
-    op.props.account_creation_fee = legacy_hive_asset::from_asset( asset(HIVE_MIN_ACCOUNT_CREATION_FEE + 10, HIVE_SYMBOL) );
+    op.props.account_creation_fee = legacy_hive_asset::from_asset( asset(HIVE_MIN_ACCOUNT_CREATION_FEE + 10, PXC_SYMBOL) );
     op.props.maximum_block_size = HIVE_MIN_BLOCK_SIZE_LIMIT + 100;
 
     signed_transaction tx;
@@ -8496,7 +8496,7 @@ BOOST_AUTO_TEST_CASE( witness_set_properties_apply )
     op.url = "foo.bar";
     op.fee = ASSET( "1.000 TESTS" );
     op.block_signing_key = signing_key.get_public_key();
-    op.props.account_creation_fee = legacy_hive_asset::from_asset( asset(HIVE_MIN_ACCOUNT_CREATION_FEE + 10, HIVE_SYMBOL) );
+    op.props.account_creation_fee = legacy_hive_asset::from_asset( asset(HIVE_MIN_ACCOUNT_CREATION_FEE + 10, PXC_SYMBOL) );
     op.props.maximum_block_size = HIVE_MIN_BLOCK_SIZE_LIMIT + 100;
 
     signed_transaction tx;
@@ -9493,7 +9493,7 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_validate )
     op.memo = "Memo";
     op.recurrence = 24;
     op.executions = 10;
-    op.amount = asset( 100, HIVE_SYMBOL );
+    op.amount = asset( 100, PXC_SYMBOL );
     op.validate();
 
     BOOST_TEST_MESSAGE( " --- Invalid from account" );
@@ -9522,7 +9522,7 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_validate )
     BOOST_TEST_MESSAGE( " --- Transferring vests" );
     op.amount = asset( 100, VESTS_SYMBOL );
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
-    op.amount = asset( 100, HIVE_SYMBOL );
+    op.amount = asset( 100, PXC_SYMBOL );
 
     BOOST_TEST_MESSAGE( " --- Recurrence too low" );
     op.recurrence = 3;
@@ -10346,7 +10346,7 @@ BOOST_AUTO_TEST_CASE( private_key_memo_test )
     account_create_operation op;
     op.new_account_name = "alice1";
     op.creator = HIVE_INIT_MINER_NAME;
-    op.fee = asset( db->get_witness_schedule_object().median_props.account_creation_fee.amount, HIVE_SYMBOL );
+    op.fee = asset( db->get_witness_schedule_object().median_props.account_creation_fee.amount, PXC_SYMBOL );
     op.owner = authority( 1, alice_owner_key, 1 );
     op.active = authority( 1, other_key, 1 );
     op.posting = authority( 1, other_key, 1 );
@@ -10611,7 +10611,7 @@ struct timeshare_test_fixture : clean_database_fixture
 
       for (unsigned i = 1; i <= 10; ++i)
         vote("timesharevoter1", "timeshare" + std::to_string(i));
-   
+
       const fc::uint128 first_virtual_scheduled_time = get_virtual_schedule_time("timeshare1");
       for (unsigned i = 2; i <= 10; ++i)
         BOOST_REQUIRE(get_virtual_schedule_time("timeshare" + std::to_string(i)) == first_virtual_scheduled_time);
@@ -10708,12 +10708,12 @@ struct timeshare_test_fixture : clean_database_fixture
       {
         std::multiset<std::string> timeshare_witnesses_that_produced;
         bool unvoted = false;
-        // generate 100 rounds of blocks (2100 blocks), allowing the scheduling algorithm to 
+        // generate 100 rounds of blocks (2100 blocks), allowing the scheduling algorithm to
         // fill the timeshare slot 100 times.
         for (unsigned i = 0; i < 100; ++i)
         {
           // for each block in the round, either unvote or re-vote using littlevoter1
-          // on average, timeshare1 will have slightly less votes than the other timeshare witnesses, but not by enough to 
+          // on average, timeshare1 will have slightly less votes than the other timeshare witnesses, but not by enough to
           // alter the schedule in the short term
           for (unsigned j = 0; j < 21; ++j)
           {
@@ -10738,7 +10738,7 @@ struct timeshare_test_fixture : clean_database_fixture
         for (unsigned i = 1; i <= 10; ++i)
           BOOST_TEST_MESSAGE("timeshare" << i << ": " << std::count(timeshare_witnesses_that_produced.begin(), timeshare_witnesses_that_produced.end(), "timeshare" + std::to_string(i)));
 
-        // In correct operation, each timeshare witness would have an equal number of slots.  
+        // In correct operation, each timeshare witness would have an equal number of slots.
         // Due to the bug in HF26, timeshare1 will get considerably more slots because its votes were adjusted incorrectly
         // HF26 results will be:
         // timeshare1: 22
@@ -10781,7 +10781,7 @@ BOOST_FIXTURE_TEST_CASE(test_pre_hf26_behavior, timeshare_test_fixture<25>)
 
     for (unsigned i = 1; i <= 10; ++i)
       vote("timesharevoter1", "timeshare" + std::to_string(i));
- 
+
     const fc::uint128 first_virtual_scheduled_time = get_virtual_schedule_time("timeshare1");
     for (unsigned i = 2; i <= 10; ++i)
       BOOST_REQUIRE(get_virtual_schedule_time("timeshare" + std::to_string(i)) == first_virtual_scheduled_time);
@@ -10880,12 +10880,12 @@ BOOST_FIXTURE_TEST_CASE(test_pre_hf26_behavior, timeshare_test_fixture<25>)
     {
       std::multiset<std::string> timeshare_witnesses_that_produced;
       bool unvoted = false;
-      // generate 100 rounds of blocks (2100 blocks), allowing the scheduling algorithm to 
+      // generate 100 rounds of blocks (2100 blocks), allowing the scheduling algorithm to
       // fill the timeshare slot 100 times.
       for (unsigned i = 0; i < 100; ++i)
       {
         // for each block in the round, either unvote or re-vote using littlevoter1
-        // on average, timeshare1 will have slightly less votes than the other timeshare witnesses, but not by enough to 
+        // on average, timeshare1 will have slightly less votes than the other timeshare witnesses, but not by enough to
         // alter the schedule in the short term
         for (unsigned j = 0; j < 21; ++j)
         {

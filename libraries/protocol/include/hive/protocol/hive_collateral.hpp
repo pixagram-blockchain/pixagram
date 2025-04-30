@@ -13,9 +13,9 @@ namespace hive { namespace protocol {
       FC_ASSERT( !static_cast<price>( current_median_history ).is_null(), "Cannot estimate conversion collateral because there is no price feed." );
 
       auto needed_hive = multiply_with_fee( hbd_amount_to_get, current_min_history,
-        HIVE_COLLATERALIZED_CONVERSION_FEE, HIVE_SYMBOL );
+        HIVE_COLLATERALIZED_CONVERSION_FEE, PXC_SYMBOL );
       uint128_t _amount = ( uint128_t( needed_hive.amount.value ) * HIVE_CONVERSION_COLLATERAL_RATIO ) / HIVE_100_PERCENT;
-      asset required_collateral = asset( fc::uint128_to_uint64(_amount), HIVE_SYMBOL );
+      asset required_collateral = asset( fc::uint128_to_uint64(_amount), PXC_SYMBOL );
 
       return required_collateral;
     }

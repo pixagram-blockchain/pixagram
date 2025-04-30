@@ -375,7 +375,7 @@ struct database_fixture {
   void limit_order_cancel( const string& owner, uint32_t orderid, const fc::ecc::private_key& key );
   void limit_order2_create( const string& owner, const asset& amount_to_sell, const price& exchange_rate, bool fill_or_kill,
                             const fc::microseconds& expiration_shift, uint32_t orderid, const fc::ecc::private_key& key );
-  void escrow_transfer( const string& from, const string& to, const string& agent, const asset& hive_amount, 
+  void escrow_transfer( const string& from, const string& to, const string& agent, const asset& hive_amount,
                         const asset& hbd_amount, const asset& fee, const std::string& json_meta, const fc::microseconds& ratification_shift,
                         const fc::microseconds& expiration_shift, uint32_t escrow_id, const fc::ecc::private_key& key );
   void escrow_approve( const string& from, const string& to, const string& agent, const string& who, bool approve, uint32_t escrow_id, const fc::ecc::private_key& key );
@@ -389,7 +389,7 @@ struct database_fixture {
 
   void push_custom_operation( const flat_set< account_name_type >& required_auths, uint16_t id,
                               const vector< char >& data, const fc::ecc::private_key& key );
-  void push_custom_json_operation( const flat_set< account_name_type >& required_auths, 
+  void push_custom_json_operation( const flat_set< account_name_type >& required_auths,
                                    const flat_set< account_name_type >& required_posting_auths,
                                    const custom_id_type& id, const std::string& json, const fc::ecc::private_key& key );
 
@@ -411,7 +411,7 @@ struct database_fixture {
       receiver   = "bob";
       start_date = _start     + fc::days( 1 );
       end_date   = start_date + fc::days( 2 );
-      daily_pay  = asset( 100, HBD_SYMBOL );
+      daily_pay  = asset( 100, PXS_SYMBOL );
       subject    = "hello";
       url        = "http:://something.html";
     }
@@ -475,9 +475,9 @@ public:
   void create_claimed_account( const std::string& creator, const std::string& new_account_name, const fc::ecc::public_key& public_key,
                                const fc::ecc::public_key& posting_key, const string& json_metadata, const fc::ecc::private_key& key );
   void change_recovery_account( const std::string& account_to_recover, const std::string& new_recovery_account, const fc::ecc::private_key& key );
-  void request_account_recovery( const std::string& recovery_account, const std::string& account_to_recover, 
+  void request_account_recovery( const std::string& recovery_account, const std::string& account_to_recover,
                                  const authority& new_owner_authority, const fc::ecc::private_key& key );
-  void recover_account( const std::string& account_to_recover, const fc::ecc::private_key& new_owner_key, 
+  void recover_account( const std::string& account_to_recover, const fc::ecc::private_key& new_owner_key,
                         const fc::ecc::private_key& recent_owner_key );
 
   bool compare_delayed_vote_count( const account_name_type& name, const std::vector<uint64_t>& data_to_compare );
@@ -505,7 +505,7 @@ struct dhf_database
       receiver   = "bob";
       start_date = _start     + fc::days( 1 );
       end_date   = start_date + fc::days( 2 );
-      daily_pay  = asset( 100, HBD_SYMBOL );
+      daily_pay  = asset( 100, PXS_SYMBOL );
       subject    = "hello";
       url        = "http:://something.html";
     }

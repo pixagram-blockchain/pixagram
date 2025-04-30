@@ -49,7 +49,7 @@ BOOST_AUTO_TEST_CASE( vests_hive_evaluation )
     hive::protocol::VEST_asset _total_vests( total_vests );
     hive::protocol::HIVE_asset _hive_modifier;
     hive::protocol::VEST_asset _vest_modifier;
-    hive::protocol::price _new_price   = hive::protocol::price( hive::protocol::asset( price_hive_base, HIVE_SYMBOL ), hive::protocol::asset( price_vests_quote, VESTS_SYMBOL ) );
+    hive::protocol::price _new_price   = hive::protocol::price( hive::protocol::asset( price_hive_base, PXC_SYMBOL ), hive::protocol::asset( price_vests_quote, VESTS_SYMBOL ) );
 
     db_plugin->calculate_modifiers_according_to_new_price( _new_price, _total_vested_hive, _total_vests, _hive_modifier, _vest_modifier );
 
@@ -98,7 +98,7 @@ BOOST_AUTO_TEST_CASE( state_modification )
     hive::protocol::VEST_asset _old_total_vests = _dgpo.total_vesting_shares;
     hive::protocol::HIVE_asset _hive_modifier;
     hive::protocol::VEST_asset _vest_modifier;
-    hive::protocol::price _new_price = hive::protocol::price( hive::protocol::asset( price_hive_base, HIVE_SYMBOL ), hive::protocol::asset( price_vests_quote, VESTS_SYMBOL ) );
+    hive::protocol::price _new_price = hive::protocol::price( hive::protocol::asset( price_hive_base, PXC_SYMBOL ), hive::protocol::asset( price_vests_quote, VESTS_SYMBOL ) );
 
     db_plugin->calculate_modifiers_according_to_new_price( _new_price, _old_total_vested_hive, _old_total_vests, _hive_modifier, _vest_modifier );
 
@@ -153,7 +153,7 @@ BOOST_AUTO_TEST_CASE( debug_update_use_bug )
 
   generate_block();
 
-  db_plugin->debug_set_vest_price( hive::protocol::price( hive::protocol::asset( 1, HIVE_SYMBOL ), hive::protocol::asset( 2000, VESTS_SYMBOL ) ) );
+  db_plugin->debug_set_vest_price( hive::protocol::price( hive::protocol::asset( 1, PXC_SYMBOL ), hive::protocol::asset( 2000, VESTS_SYMBOL ) ) );
 
   // when your call to debug_update refers to local variables you must make sure they will remain
   // alive at least until registered action can no longer be called again
@@ -321,7 +321,7 @@ BOOST_AUTO_TEST_CASE( debug_update_transaction_order )
   BOOST_REQUIRE( get_balance( "greg" ) == zero );
 
   // initminer -> alice
-  fund( "alice", asset( token.amount.value, HIVE_SYMBOL ) );
+  fund( "alice", asset( token.amount.value, PXC_SYMBOL ) );
   BOOST_REQUIRE( get_balance( "alice" ) == token );
   BOOST_REQUIRE( get_balance( "bob" ) == zero );
   BOOST_REQUIRE( get_balance( "carol" ) == zero );

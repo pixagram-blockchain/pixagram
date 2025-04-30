@@ -10,7 +10,7 @@ std::string calculate_checksum_from_string(const std::string_view str)
 {
   fc::ripemd160::encoder encoder;
   encoder.write(str.data(), str.size());
-  return std::move(encoder.result().str());
+  return encoder.result().str();
 }
 
 decoded_type_data::decoded_type_data(const std::string_view _checksum, const std::string_view _type_name, const size_t _type_size, const size_t type_align)
@@ -85,7 +85,7 @@ decoded_type_data::decoded_type_data(const std::string& json)
     FC_THROW_EXCEPTION( fc::invalid_arg_exception, "Json with reflected decoded type doesn't contain enough data. ${json}", (json));
   else if (!reflected && (members || enum_values))
     FC_THROW_EXCEPTION( fc::invalid_arg_exception, "Json with non reflected decoded type contains data for reflected type. ${json}", (json));
-  
+
   if ((!enum_values || enum_values->empty()) && (!size_of || !align_of))
     FC_THROW_EXCEPTION( fc::invalid_arg_exception, "Json with decoded type should contains data about sizeof and alignof if type is not an reflected enum. ${json}", (json));
   else if ((enum_values && !enum_values->empty()) && (size_of || align_of))

@@ -334,7 +334,7 @@ namespace hive { namespace chain {
       const asset& get_reward_balance() const { return reward_balance; }
 
       reward_fund_name_type   name;
-      asset                   reward_balance = asset( 0, HIVE_SYMBOL );
+      asset                   reward_balance = asset( 0, PXC_SYMBOL );
       uint128_t               recent_claims = 0;
       time_point_sec          last_update;
       uint128_t               content_constant = HIVE_CONTENT_CONSTANT_HF0;

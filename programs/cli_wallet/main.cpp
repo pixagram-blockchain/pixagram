@@ -160,7 +160,7 @@ int main( int argc, char** argv )
 # endif
                             " WALLET\n";
 #else
-    std::cout << "STARTING HIVE WALLET\n";
+    std::cout << "STARTING PIXAGRAM WALLET\n";
 #endif
     std::cout << "chain id: " << std::string(_hive_chain_id) << "\n";
     std::cout << "blockchain version: " << fc::string(HIVE_BLOCKCHAIN_VERSION) << "\n";

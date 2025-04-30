@@ -71,21 +71,21 @@ namespace hive { namespace chain {
         */
       uint32_t num_pow_witnesses = 0;
 
-      asset       virtual_supply             = asset( 0, HIVE_SYMBOL ); //< TODO: replace with HIVE_asset
-      asset       current_supply             = asset( 0, HIVE_SYMBOL ); //< TODO: replace with HIVE_asset
-      asset       init_hbd_supply            = asset( 0, HBD_SYMBOL ); //< TODO: remove
-      asset       current_hbd_supply         = asset( 0, HBD_SYMBOL ); //< TODO: replace with HBD_asset
-      asset       total_vesting_fund_hive    = asset( 0, HIVE_SYMBOL ); //< TODO: replace with HIVE_asset
+      asset       virtual_supply             = asset( 0, PXC_SYMBOL ); //< TODO: replace with HIVE_asset
+      asset       current_supply             = asset( 0, PXC_SYMBOL ); //< TODO: replace with HIVE_asset
+      asset       init_hbd_supply            = asset( 0, PXS_SYMBOL ); //< TODO: remove
+      asset       current_hbd_supply         = asset( 0, PXS_SYMBOL ); //< TODO: replace with HBD_asset
+      asset       total_vesting_fund_hive    = asset( 0, PXC_SYMBOL ); //< TODO: replace with HIVE_asset
       asset       total_vesting_shares       = asset( 0, VESTS_SYMBOL ); //< TODO: replace with VEST_asset
-      asset       total_reward_fund_hive     = asset( 0, HIVE_SYMBOL ); //< TODO: replace with HIVE_asset
+      asset       total_reward_fund_hive     = asset( 0, PXC_SYMBOL ); //< TODO: replace with HIVE_asset
       fc::uint128 total_reward_shares2 = 0; ///< the running total of REWARD^2
       asset       pending_rewarded_vesting_shares = asset( 0, VESTS_SYMBOL ); //< TODO: replace with VEST_asset
-      asset       pending_rewarded_vesting_hive   = asset( 0, HIVE_SYMBOL ); //< TODO: replace with HIVE_asset
+      asset       pending_rewarded_vesting_hive   = asset( 0, PXC_SYMBOL ); //< TODO: replace with HIVE_asset
 
       price       get_vesting_share_price() const
       {
         if ( total_vesting_fund_hive.amount == 0 || total_vesting_shares.amount == 0 )
-          return price( asset( 1000000, VESTS_SYMBOL ), asset( 1000, HIVE_SYMBOL ) );
+          return price( asset( 1000000, VESTS_SYMBOL ), asset( 1000, PXC_SYMBOL ) );
 
         return price( total_vesting_shares, total_vesting_fund_hive );
       }
@@ -154,7 +154,7 @@ namespace hive { namespace chain {
       uint16_t vesting_reward_percent = HIVE_VESTING_FUND_PERCENT_HF16;
       uint16_t proposal_fund_percent = HIVE_PROPOSAL_FUND_PERCENT_HF0;
 
-      asset dhf_interval_ledger = asset( 0, HBD_SYMBOL ); //< TODO: replace with HBD_asset
+      asset dhf_interval_ledger = asset( 0, PXS_SYMBOL ); //< TODO: replace with HBD_asset
 
       uint16_t downvote_pool_percent = 0;
 
@@ -168,7 +168,7 @@ namespace hive { namespace chain {
       uint16_t max_open_recurrent_transfers = HIVE_MAX_OPEN_RECURRENT_TRANSFERS;
 
 #ifdef HIVE_ENABLE_SMT
-      asset smt_creation_fee = asset( 1000, HBD_SYMBOL ); //< TODO: replace with HBD_asset
+      asset smt_creation_fee = asset( 1000, PXS_SYMBOL ); //< TODO: replace with HBD_asset
 #endif
     CHAINBASE_UNPACK_CONSTRUCTOR(dynamic_global_property_object);
   };

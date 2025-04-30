@@ -34,21 +34,21 @@ namespace hive { namespace protocol {
   void account_create_operation::validate() const
   {
     validate_account_name( new_account_name );
-    FC_ASSERT( is_asset_type( fee, HIVE_SYMBOL ), "Account creation fee must be HIVE" );
+    FC_ASSERT( is_asset_type( fee, PXC_SYMBOL ), "Account creation fee must be HIVE" );
     owner.validate();
     active.validate();
 
     if (!json_metadata.empty())
       validate_json_with_fallback(json_metadata);
 
-    FC_ASSERT( fee >= asset( 0, HIVE_SYMBOL ), "Account creation fee cannot be negative" );
+    FC_ASSERT( fee >= asset( 0, PXC_SYMBOL ), "Account creation fee cannot be negative" );
   }
 
   void account_create_with_delegation_operation::validate() const
   {
     validate_account_name( new_account_name );
     validate_account_name( creator );
-    FC_ASSERT( is_asset_type( fee, HIVE_SYMBOL ), "Account creation fee must be HIVE" );
+    FC_ASSERT( is_asset_type( fee, PXC_SYMBOL ), "Account creation fee must be HIVE" );
     FC_ASSERT( is_asset_type( delegation, VESTS_SYMBOL ), "Delegation must be VESTS" );
 
     owner.validate();
@@ -58,7 +58,7 @@ namespace hive { namespace protocol {
     if (!json_metadata.empty())
       validate_json_with_fallback(json_metadata);
 
-    FC_ASSERT( fee >= asset( 0, HIVE_SYMBOL ), "Account creation fee cannot be negative" );
+    FC_ASSERT( fee >= asset( 0, PXC_SYMBOL ), "Account creation fee cannot be negative" );
     FC_ASSERT( delegation >= asset( 0, VESTS_SYMBOL ), "Delegation cannot be negative" );
   }
 
@@ -149,7 +149,7 @@ namespace hive { namespace protocol {
   {
     validate_account_name( author );
     FC_ASSERT( percent_hbd <= HIVE_100_PERCENT, "Percent cannot exceed 100%" );
-    FC_ASSERT( max_accepted_payout.symbol == HBD_SYMBOL, "Max accepted payout must be in HBD" );
+    FC_ASSERT( max_accepted_payout.symbol == PXS_SYMBOL, "Max accepted payout must be in HBD" );
     FC_ASSERT( max_accepted_payout.amount.value >= 0, "Cannot accept less than 0 payout" );
     validate_permlink( permlink );
     for( auto& e : extensions )
@@ -165,9 +165,9 @@ namespace hive { namespace protocol {
   void claim_account_operation::validate()const
   {
     validate_account_name( creator );
-    FC_ASSERT( is_asset_type( fee, HIVE_SYMBOL ), "Account creation fee must be HIVE" );
-    FC_ASSERT( fee >= asset( 0, HIVE_SYMBOL ), "Account creation fee cannot be negative" );
-    FC_ASSERT( fee <= asset( HIVE_MAX_ACCOUNT_CREATION_FEE, HIVE_SYMBOL ), "Account creation fee cannot be too large" );
+    FC_ASSERT( is_asset_type( fee, PXC_SYMBOL ), "Account creation fee must be HIVE" );
+    FC_ASSERT( fee >= asset( 0, PXC_SYMBOL ), "Account creation fee cannot be negative" );
+    FC_ASSERT( fee <= asset( HIVE_MAX_ACCOUNT_CREATION_FEE, PXC_SYMBOL ), "Account creation fee cannot be too large" );
 
     FC_ASSERT( extensions.size() == 0, "There are no extensions for claim_account_operation." );
   }
@@ -210,7 +210,7 @@ namespace hive { namespace protocol {
   void transfer_to_vesting_operation::validate() const
   {
     validate_account_name( from );
-    FC_ASSERT( amount.symbol == HIVE_SYMBOL ||
+    FC_ASSERT( amount.symbol == PXC_SYMBOL ||
             ( amount.symbol.space() == asset_symbol_type::smt_nai_space && amount.symbol.is_vesting() == false ),
             "Amount must be HIVE or SMT liquid" );
     if ( to != account_name_type() ) validate_account_name( to );
@@ -238,7 +238,7 @@ namespace hive { namespace protocol {
 
     FC_ASSERT( url.size() > 0, "URL size must be greater than 0" );
     FC_ASSERT( fc::is_utf8( url ), "URL is not valid UTF8" );
-    FC_ASSERT( fee >= asset( 0, HIVE_SYMBOL ), "Fee cannot be negative" );
+    FC_ASSERT( fee >= asset( 0, PXC_SYMBOL ), "Fee cannot be negative" );
     props.validate< false >();
   }
 
@@ -254,7 +254,7 @@ namespace hive { namespace protocol {
     {
       asset account_creation_fee;
       fc::raw::unpack_from_vector( itr->second, account_creation_fee );
-      FC_ASSERT( account_creation_fee.symbol == HIVE_SYMBOL, "account_creation_fee must be in HIVE" );
+      FC_ASSERT( account_creation_fee.symbol == PXC_SYMBOL, "account_creation_fee must be in HIVE" );
       FC_ASSERT( account_creation_fee.amount >= HIVE_MIN_ACCOUNT_CREATION_FEE, "account_creation_fee smaller than minimum account creation fee" );
     }
 
@@ -294,7 +294,7 @@ namespace hive { namespace protocol {
     {
       price hbd_exchange_rate;
       fc::raw::unpack_from_vector( itr->second, hbd_exchange_rate );
-      FC_ASSERT( ( is_asset_type( hbd_exchange_rate.base, HBD_SYMBOL ) && is_asset_type( hbd_exchange_rate.quote, HIVE_SYMBOL ) ),
+      FC_ASSERT( ( is_asset_type( hbd_exchange_rate.base, PXS_SYMBOL ) && is_asset_type( hbd_exchange_rate.quote, PXC_SYMBOL ) ),
         "Price feed must be a HIVE/HBD price" );
       hbd_exchange_rate.validate();
     }
@@ -496,8 +496,8 @@ void pow2::create(const block_id_type & prev, const account_name_type & account_
   void feed_publish_operation::validate()const
   {
     validate_account_name( publisher );
-    FC_ASSERT( ( is_asset_type( exchange_rate.base, HIVE_SYMBOL ) && is_asset_type( exchange_rate.quote, HBD_SYMBOL ) )
-      || ( is_asset_type( exchange_rate.base, HBD_SYMBOL ) && is_asset_type( exchange_rate.quote, HIVE_SYMBOL ) ),
+    FC_ASSERT( ( is_asset_type( exchange_rate.base, PXC_SYMBOL ) && is_asset_type( exchange_rate.quote, PXS_SYMBOL ) )
+      || ( is_asset_type( exchange_rate.base, PXS_SYMBOL ) && is_asset_type( exchange_rate.quote, PXC_SYMBOL ) ),
       "Price feed must be a HIVE/HBD price" );
     exchange_rate.validate();
   }
@@ -506,14 +506,14 @@ void pow2::create(const block_id_type & prev, const account_name_type & account_
   {
     validate_account_name( owner );
 
-    FC_ASSERT(  ( is_asset_type( amount_to_sell, HIVE_SYMBOL ) && is_asset_type( min_to_receive, HBD_SYMBOL ) )
-          || ( is_asset_type( amount_to_sell, HBD_SYMBOL ) && is_asset_type( min_to_receive, HIVE_SYMBOL ) )
+    FC_ASSERT(  ( is_asset_type( amount_to_sell, PXC_SYMBOL ) && is_asset_type( min_to_receive, PXS_SYMBOL ) )
+          || ( is_asset_type( amount_to_sell, PXS_SYMBOL ) && is_asset_type( min_to_receive, PXC_SYMBOL ) )
           || (
               amount_to_sell.symbol.space() == asset_symbol_type::smt_nai_space
-              && is_asset_type( min_to_receive, HIVE_SYMBOL )
+              && is_asset_type( min_to_receive, PXC_SYMBOL )
             )
           || (
-              is_asset_type( amount_to_sell, HIVE_SYMBOL )
+              is_asset_type( amount_to_sell, PXC_SYMBOL )
               && min_to_receive.symbol.space() == asset_symbol_type::smt_nai_space
             ),
           "Limit order must be for the HIVE:HBD or SMT:(HIVE/HBD) market" );
@@ -528,14 +528,14 @@ void pow2::create(const block_id_type & prev, const account_name_type & account_
     FC_ASSERT( amount_to_sell.symbol == exchange_rate.base.symbol, "Sell asset must be the base of the price" );
     exchange_rate.validate();
 
-    FC_ASSERT(  ( is_asset_type( amount_to_sell, HIVE_SYMBOL ) && is_asset_type( exchange_rate.quote, HBD_SYMBOL ) )
-          || ( is_asset_type( amount_to_sell, HBD_SYMBOL ) && is_asset_type( exchange_rate.quote, HIVE_SYMBOL ) )
+    FC_ASSERT(  ( is_asset_type( amount_to_sell, PXC_SYMBOL ) && is_asset_type( exchange_rate.quote, PXS_SYMBOL ) )
+          || ( is_asset_type( amount_to_sell, PXS_SYMBOL ) && is_asset_type( exchange_rate.quote, PXC_SYMBOL ) )
           || (
               amount_to_sell.symbol.space() == asset_symbol_type::smt_nai_space
-              && is_asset_type( exchange_rate.quote, HIVE_SYMBOL )
+              && is_asset_type( exchange_rate.quote, PXC_SYMBOL )
             )
           || (
-              is_asset_type( amount_to_sell, HIVE_SYMBOL )
+              is_asset_type( amount_to_sell, PXC_SYMBOL )
               && exchange_rate.quote.symbol.space() == asset_symbol_type::smt_nai_space
             ),
           "Limit order must be for the HIVE:HBD or SMT:(HIVE/HBD) market" );
@@ -553,7 +553,7 @@ void pow2::create(const block_id_type & prev, const account_name_type & account_
     validate_account_name( owner );
     /// only allow conversion from HBD to HIVE, allowing the opposite can enable traders to abuse
     /// market fluxuations through converting large quantities without moving the price.
-    FC_ASSERT( is_asset_type( amount, HBD_SYMBOL ), "Can only convert HBD to HIVE" );
+    FC_ASSERT( is_asset_type( amount, PXS_SYMBOL ), "Can only convert HBD to HIVE" );
     FC_ASSERT( amount.amount > 0, "Must convert some HBD" );
   }
 
@@ -561,7 +561,7 @@ void pow2::create(const block_id_type & prev, const account_name_type & account_
   {
     validate_account_name( owner );
     /// only allow conversion from HIVE to HBD (at least for now)
-    FC_ASSERT( is_asset_type( amount, HIVE_SYMBOL ), "Can only convert HIVE to HBD" );
+    FC_ASSERT( is_asset_type( amount, PXC_SYMBOL ), "Can only convert HIVE to HBD" );
     FC_ASSERT( amount.amount > 0, "Must convert some HIVE" );
   }
 
@@ -575,9 +575,9 @@ void pow2::create(const block_id_type & prev, const account_name_type & account_
     FC_ASSERT( hive_amount.amount >= 0, "HIVE amount cannot be negative" );
     FC_ASSERT( hbd_amount.amount > 0 || hive_amount.amount > 0, "escrow must transfer a non-zero amount" );
     FC_ASSERT( from != agent && to != agent, "agent must be a third party" );
-    FC_ASSERT( (fee.symbol == HIVE_SYMBOL) || (fee.symbol == HBD_SYMBOL), "fee must be HIVE or HBD" );
-    FC_ASSERT( hbd_amount.symbol == HBD_SYMBOL, "HBD amount must contain HBD asset" );
-    FC_ASSERT( hive_amount.symbol == HIVE_SYMBOL, "HIVE amount must contain HIVE asset" );
+    FC_ASSERT( (fee.symbol == PXC_SYMBOL) || (fee.symbol == PXS_SYMBOL), "fee must be HIVE or HBD" );
+    FC_ASSERT( hbd_amount.symbol == PXS_SYMBOL, "HBD amount must contain HBD asset" );
+    FC_ASSERT( hive_amount.symbol == PXC_SYMBOL, "HIVE amount must contain HIVE asset" );
     FC_ASSERT( ratification_deadline < escrow_expiration, "ratification deadline must be before escrow expiration" );
     if (!json_meta.empty())
       validate_json_with_fallback(json_meta);
@@ -613,8 +613,8 @@ void pow2::create(const block_id_type & prev, const account_name_type & account_
     FC_ASSERT( hbd_amount.amount >= 0, "HBD amount cannot be negative" );
     FC_ASSERT( hive_amount.amount >= 0, "HIVE amount cannot be negative" );
     FC_ASSERT( hbd_amount.amount > 0 || hive_amount.amount > 0, "escrow must release a non-zero amount" );
-    FC_ASSERT( hbd_amount.symbol == HBD_SYMBOL, "HBD amount must contain HBD asset" );
-    FC_ASSERT( hive_amount.symbol == HIVE_SYMBOL, "HIVE amount must contain HIVE asset" );
+    FC_ASSERT( hbd_amount.symbol == PXS_SYMBOL, "HBD amount must contain HBD asset" );
+    FC_ASSERT( hive_amount.symbol == PXC_SYMBOL, "HIVE amount must contain HIVE asset" );
   }
 
   void request_account_recovery_operation::validate()const
@@ -645,7 +645,7 @@ void pow2::create(const block_id_type & prev, const account_name_type & account_
     validate_account_name( from );
     validate_account_name( to );
     FC_ASSERT( amount.amount > 0 );
-    FC_ASSERT( amount.symbol == HIVE_SYMBOL || amount.symbol == HBD_SYMBOL );
+    FC_ASSERT( amount.symbol == PXC_SYMBOL || amount.symbol == PXS_SYMBOL );
     FC_ASSERT( memo.size() < HIVE_MAX_MEMO_SIZE, "Memo is too large" );
     FC_ASSERT( fc::is_utf8( memo ), "Memo is not UTF8" );
   }
@@ -653,7 +653,7 @@ void pow2::create(const block_id_type & prev, const account_name_type & account_
     validate_account_name( from );
     validate_account_name( to );
     FC_ASSERT( amount.amount > 0 );
-    FC_ASSERT( amount.symbol == HIVE_SYMBOL || amount.symbol == HBD_SYMBOL );
+    FC_ASSERT( amount.symbol == PXC_SYMBOL || amount.symbol == PXS_SYMBOL );
     FC_ASSERT( memo.size() < HIVE_MAX_MEMO_SIZE, "Memo is too large" );
     FC_ASSERT( fc::is_utf8( memo ), "Memo is not UTF8" );
   }
@@ -687,8 +687,8 @@ void pow2::create(const block_id_type & prev, const account_name_type & account_
   void claim_reward_balance_operation::validate()const
   {
     validate_account_name( account );
-    FC_ASSERT( is_asset_type( reward_hive, HIVE_SYMBOL ), "Reward HIVE must be expressed in HIVE" );
-    FC_ASSERT( is_asset_type( reward_hbd, HBD_SYMBOL ), "Reward HBD must be expressed in HBD" );
+    FC_ASSERT( is_asset_type( reward_hive, PXC_SYMBOL ), "Reward HIVE must be expressed in HIVE" );
+    FC_ASSERT( is_asset_type( reward_hbd, PXS_SYMBOL ), "Reward HBD must be expressed in HBD" );
     FC_ASSERT( is_asset_type( reward_vests, VESTS_SYMBOL ), "Reward VESTS must be expressed in VESTS" );
     FC_ASSERT( reward_hbd.amount >= 0, "Cannot claim a negative amount" );
     FC_ASSERT( reward_hive.amount >= 0, "Cannot claim a negative amount" );

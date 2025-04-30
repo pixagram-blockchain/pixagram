@@ -206,7 +206,7 @@ BOOST_AUTO_TEST_CASE( consolidate_balance )
   {
     BOOST_TEST_MESSAGE( "After HF24 even if steem.dao gets some funds they will be transfered to new treasury account" );
     generate_block();
-    
+
     //instead of trying to find a way to fund various balances of steem.dao, just write to them directly
     asset vested_3, vested_7;
     db_plugin->debug_update( [&]( database& db )
@@ -290,7 +290,7 @@ BOOST_AUTO_TEST_CASE( treasury_debt_ratio )
     ISSUE_FUNDS("alice", ASSET( "1000000.000 TBD" ));
     const auto during_hbd_print_rate = dgpo.hbd_print_rate;
 
-    transfer( "alice", db->get_treasury_name(), asset( 1000000000, HBD_SYMBOL ), "", alice_private_key );
+    transfer( "alice", db->get_treasury_name(), asset( 1000000000, PXS_SYMBOL ), "", alice_private_key );
     generate_block();
     const auto after_hbd_print_rate = dgpo.hbd_print_rate;
 

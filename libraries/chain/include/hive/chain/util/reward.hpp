@@ -42,7 +42,7 @@ uint128_t evaluate_reward_curve( const uint128_t& rshares, const protocol::curve
 
 inline bool is_comment_payout_dust( const price& p, uint64_t hive_payout )
 {
-  return to_hbd( p, asset( hive_payout, HIVE_SYMBOL ) ) < HIVE_MIN_PAYOUT_HBD;
+  return to_hbd( p, asset( hive_payout, PXC_SYMBOL ) ) < HIVE_MIN_PAYOUT_HBD;
 }
 
 } } } // hive::chain::util

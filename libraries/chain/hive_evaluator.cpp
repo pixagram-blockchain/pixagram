@@ -285,7 +285,7 @@ const account_object& create_account( database& db, const account_name_type& nam
   int64_t rc_adjustment_from_fee = 0; // accounts created prior to HF20 have all RC related data set during HF20
   if( db.has_hardfork( HIVE_HARDFORK_0_20 ) )
   {
-    FC_ASSERT( fee_for_rc_adjustment.symbol == HIVE_SYMBOL, "Wrong account creation fee symbol" );
+    FC_ASSERT( fee_for_rc_adjustment.symbol == PXC_SYMBOL, "Wrong account creation fee symbol" );
     const auto& dgpo = db.get_dynamic_global_properties();
     rc_adjustment_from_fee = ( fee_for_rc_adjustment * dgpo.get_vesting_share_price() ).amount.value;
   }
@@ -305,7 +305,7 @@ void account_create_evaluator::do_apply( const account_create_operation& o )
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__2651 ) )
   {
     FC_TODO( "Move to validate() after HF20" );
-    FC_ASSERT( o.fee <= asset( HIVE_MAX_ACCOUNT_CREATION_FEE, HIVE_SYMBOL ), "Account creation fee cannot be too large" );
+    FC_ASSERT( o.fee <= asset( HIVE_MAX_ACCOUNT_CREATION_FEE, PXC_SYMBOL ), "Account creation fee cannot be too large" );
   }
 
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__1771 ) )
@@ -316,8 +316,8 @@ void account_create_evaluator::do_apply( const account_create_operation& o )
   }
   else if( !_db.has_hardfork( HIVE_HARDFORK_0_20__1761 ) && _db.has_hardfork( HIVE_HARDFORK_0_19__987 ) )
   {
-    FC_ASSERT( o.fee >= asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER, HIVE_SYMBOL ), "Insufficient Fee: ${f} required, ${p} provided.",
-            ("f", asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER, HIVE_SYMBOL ))
+    FC_ASSERT( o.fee >= asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER, PXC_SYMBOL ), "Insufficient Fee: ${f} required, ${p} provided.",
+            ("f", asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER, PXC_SYMBOL ))
             ("p", o.fee) );
   }
   else if( _db.has_hardfork( HIVE_HARDFORK_0_1 ) )
@@ -391,7 +391,7 @@ void account_create_with_delegation_evaluator::do_apply( const account_create_wi
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__2651 ) )
   {
     FC_TODO( "Move to validate() after HF20" );
-    FC_ASSERT( o.fee <= asset( HIVE_MAX_ACCOUNT_CREATION_FEE, HIVE_SYMBOL ), "Account creation fee cannot be too large" );
+    FC_ASSERT( o.fee <= asset( HIVE_MAX_ACCOUNT_CREATION_FEE, PXC_SYMBOL ), "Account creation fee cannot be too large" );
   }
 
   const auto& creator = _db.get_account( o.creator );
@@ -406,9 +406,9 @@ void account_create_with_delegation_evaluator::do_apply( const account_create_wi
           ( "creator.vesting_shares", creator.get_vesting() )
           ( "creator.delegated_vesting_shares", creator.get_delegated_vesting() )( "required", o.delegation ) );
 
-  auto target_delegation = asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER * HIVE_CREATE_ACCOUNT_DELEGATION_RATIO, HIVE_SYMBOL ) * props.get_vesting_share_price();
+  auto target_delegation = asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER * HIVE_CREATE_ACCOUNT_DELEGATION_RATIO, PXC_SYMBOL ) * props.get_vesting_share_price();
 
-  auto current_delegation = asset( o.fee.amount * HIVE_CREATE_ACCOUNT_DELEGATION_RATIO, HIVE_SYMBOL ) * props.get_vesting_share_price() + o.delegation;
+  auto current_delegation = asset( o.fee.amount * HIVE_CREATE_ACCOUNT_DELEGATION_RATIO, PXC_SYMBOL ) * props.get_vesting_share_price() + o.delegation;
 
   FC_ASSERT( current_delegation >= target_delegation, "Insufficient Delegation ${f} required, ${p} provided.",
           ("f", target_delegation )
@@ -723,7 +723,7 @@ struct comment_options_extension_visitor
     {
       for( const auto& a : va.votable_assets )
       {
-        if( a.first != HIVE_SYMBOL )
+        if( a.first != PXC_SYMBOL )
         {
           FC_ASSERT( remaining_asset_number > 0, "Comment votable assets number exceeds allowed limit ${ava}.",
                 ("ava", SMT_MAX_VOTABLE_ASSETS) );
@@ -966,7 +966,7 @@ void escrow_transfer_evaluator::do_apply( const escrow_transfer_operation& o )
 
     asset hive_spent = o.hive_amount;
     asset hbd_spent = o.hbd_amount;
-    if( o.fee.symbol == HIVE_SYMBOL )
+    if( o.fee.symbol == PXC_SYMBOL )
       hive_spent += o.fee;
     else
       hbd_spent += o.fee;
@@ -1134,7 +1134,7 @@ void escrow_release_evaluator::do_apply( const escrow_release_operation& o )
 
 void transfer_evaluator::do_apply( const transfer_operation& o )
 {
-  if ( _db.has_hardfork(HIVE_HARDFORK_1_24) && o.amount.symbol == HIVE_SYMBOL && _db.is_treasury( o.to ) ) {
+  if ( _db.has_hardfork(HIVE_HARDFORK_1_24) && o.amount.symbol == PXC_SYMBOL && _db.is_treasury( o.to ) ) {
     const auto &fhistory = _db.get_feed_history();
 
     FC_ASSERT(!fhistory.current_median_history.is_null(), "Cannot send HIVE to ${s} because there is no price feed.", ("s", o.to ));
@@ -1154,7 +1154,7 @@ void transfer_evaluator::do_apply( const transfer_operation& o )
     return;
   } else if( _db.has_hardfork( HIVE_HARDFORK_0_21__3343 ) )
   {
-    FC_ASSERT( o.amount.symbol == HBD_SYMBOL || !_db.is_treasury( o.to ), "Can only transfer HBD or HIVE to ${s}", ("s", o.to ) );
+    FC_ASSERT( o.amount.symbol == PXS_SYMBOL || !_db.is_treasury( o.to ), "Can only transfer HBD or HIVE to ${s}", ("s", o.to ) );
   }
 
   _db.adjust_balance( o.from, -o.amount );
@@ -1168,7 +1168,7 @@ void transfer_to_vesting_evaluator::do_apply( const transfer_to_vesting_operatio
 
   if( _db.has_hardfork( HIVE_HARDFORK_0_21__3343 ) )
   {
-    FC_ASSERT( o.amount.symbol == HBD_SYMBOL || !_db.is_treasury( o.to ),
+    FC_ASSERT( o.amount.symbol == PXS_SYMBOL || !_db.is_treasury( o.to ),
       "Can only transfer HBD to ${s}", ("s", o.to ) );
   }
 
@@ -2144,7 +2144,7 @@ void pow_apply( database& db, Operation o )
   if(itr == accounts_by_name.end())
   {
     const auto& new_account = create_account( db, o.get_worker_account(), o.work.worker, dgp.time, db.get_current_timestamp(),
-      true /*mined*/, asset( 0, HIVE_SYMBOL ) );
+      true /*mined*/, asset( 0, PXC_SYMBOL ) );
     // ^ empty recovery account parameter means highest voted witness at time of recovery
 
 #ifdef COLLECT_ACCOUNT_METADATA
@@ -2285,7 +2285,7 @@ void pow2_evaluator::do_apply( const pow2_operation& o )
   {
     FC_ASSERT( o.new_owner_key.valid(), "New owner key is not valid." );
     const auto& new_account = create_account( db, worker_account, *o.new_owner_key, dgp.time, _db.get_current_timestamp(),
-      true /*mined*/, asset( 0, HIVE_SYMBOL ) );
+      true /*mined*/, asset( 0, PXC_SYMBOL ) );
     // ^ empty recovery account parameter means highest voted witness at time of recovery
 
 #ifdef COLLECT_ACCOUNT_METADATA
@@ -2344,7 +2344,7 @@ void pow2_evaluator::do_apply( const pow2_operation& o )
 void feed_publish_evaluator::do_apply( const feed_publish_operation& o )
 {
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__409 ) )
-    FC_ASSERT( is_asset_type( o.exchange_rate.base, HBD_SYMBOL ) && is_asset_type( o.exchange_rate.quote, HIVE_SYMBOL ),
+    FC_ASSERT( is_asset_type( o.exchange_rate.base, PXS_SYMBOL ) && is_asset_type( o.exchange_rate.quote, PXC_SYMBOL ),
         "Price feed must be a HBD/HIVE price" );
 
   const auto& witness = _db.get_witness( o.publisher );
@@ -2393,7 +2393,7 @@ void collateralized_convert_evaluator::do_apply( const collateralized_convert_op
 
   //immediately create HBD - apply fee to current rolling minimum price
   auto converted_amount = multiply_with_fee( for_immediate_conversion, fhistory.current_min_history,
-    HIVE_COLLATERALIZED_CONVERSION_FEE, HIVE_SYMBOL );
+    HIVE_COLLATERALIZED_CONVERSION_FEE, PXC_SYMBOL );
   FC_ASSERT( converted_amount.amount > 0, "Amount of collateral too low - conversion gives no HBD" );
   _db.adjust_balance( owner, converted_amount );
 
@@ -2724,7 +2724,7 @@ void transfer_from_savings_evaluator::do_apply( const transfer_from_savings_oper
 
   if( _db.has_hardfork( HIVE_HARDFORK_0_21__3343 ) )
   {
-    FC_ASSERT( op.amount.symbol == HBD_SYMBOL || !_db.is_treasury( op.to ), "Can only transfer HBD to ${s}", ("s", op.to ) );
+    FC_ASSERT( op.amount.symbol == PXS_SYMBOL || !_db.is_treasury( op.to ), "Can only transfer HBD to ${s}", ("s", op.to ) );
   }
 
   FC_ASSERT( _db.get_savings_balance( from, op.amount.symbol ) >= op.amount );
@@ -2827,12 +2827,12 @@ void claim_reward_balance_evaluator::do_apply( const claim_reward_balance_operat
   FC_ASSERT( op.reward_vests <= acnt.get_vest_rewards(), "Cannot claim that much VESTS. Claim: ${c} Actual: ${a}",
     ("c", op.reward_vests)("a", acnt.get_vest_rewards() ) );
 
-  asset reward_vesting_hive_to_move = asset( 0, HIVE_SYMBOL );
+  asset reward_vesting_hive_to_move = asset( 0, PXC_SYMBOL );
   if( op.reward_vests == acnt.get_vest_rewards() )
     reward_vesting_hive_to_move = acnt.get_vest_rewards_as_hive();
   else
     reward_vesting_hive_to_move = asset( fc::uint128_to_uint64( ( uint128_t( op.reward_vests.amount.value ) * uint128_t( acnt.get_vest_rewards_as_hive().amount.value ) )
-      / uint128_t( acnt.get_vest_rewards().amount.value ) ), HIVE_SYMBOL );
+      / uint128_t( acnt.get_vest_rewards().amount.value ) ), PXC_SYMBOL );
 
   _db.adjust_reward_balance( acnt, -op.reward_hive );
   _db.adjust_reward_balance( acnt, -op.reward_hbd );
@@ -2901,12 +2901,12 @@ void claim_reward_balance2_evaluator::do_apply( const claim_reward_balance2_oper
         const auto& dgpo = _db.get_dynamic_global_properties();
         auto now = dgpo.time;
 
-        asset reward_vesting_hive_to_move = asset( 0, HIVE_SYMBOL );
+        asset reward_vesting_hive_to_move = asset( 0, PXC_SYMBOL );
         if( token == a->get_vest_rewards() )
           reward_vesting_hive_to_move = a->get_vest_rewards_as_hive();
         else
           reward_vesting_hive_to_move = asset( fc::uint128_to_uint64( ( uint128_t( token.amount.value ) * uint128_t( a->get_vest_rewards_as_hive().amount.value ) )
-            / uint128_t( a->get_vest_rewards().amount.value ) ), HIVE_SYMBOL );
+            / uint128_t( a->get_vest_rewards().amount.value ) ), PXC_SYMBOL );
 
         _db.rc.regenerate_rc_mana( *a, now );
         _db.modify( *a, [&]( account_object& a )
@@ -2928,11 +2928,11 @@ void claim_reward_balance2_evaluator::do_apply( const claim_reward_balance2_oper
 
         _db.adjust_proxied_witness_votes( *a, token.amount );
       }
-      else if( token.symbol == HIVE_SYMBOL || token.symbol == HBD_SYMBOL )
+      else if( token.symbol == PXC_SYMBOL || token.symbol == PXS_SYMBOL )
       {
-        FC_ASSERT( is_asset_type( token, HIVE_SYMBOL ) == false || token <= a->get_rewards(),
+        FC_ASSERT( is_asset_type( token, PXC_SYMBOL ) == false || token <= a->get_rewards(),
           "Cannot claim that much HIVE. Claim: ${c} Actual: ${a}", ( "c", token )( "a", a->get_rewards() ) );
-        FC_ASSERT( is_asset_type( token, HBD_SYMBOL ) == false || token <= a->get_hbd_rewards(),
+        FC_ASSERT( is_asset_type( token, PXS_SYMBOL ) == false || token <= a->get_hbd_rewards(),
           "Cannot claim that much HBD. Claim: ${c} Actual: ${a}", ( "c", token )( "a", a->get_hbd_rewards() ) );
         _db.adjust_reward_balance( *a, -token );
         _db.adjust_balance( *a, token );
@@ -3023,10 +3023,10 @@ FC_TODO("Update get_effective_vesting_shares when modifying this operation to su
 
   // HF 20 increase fee meaning by 30x, reduce these thresholds to compensate.
   auto min_delegation = _db.has_hardfork( HIVE_HARDFORK_0_20__1761 ) ?
-    asset( wso.median_props.account_creation_fee.amount / 3, HIVE_SYMBOL ) * gpo.get_vesting_share_price() :
-    asset( wso.median_props.account_creation_fee.amount * 10, HIVE_SYMBOL ) * gpo.get_vesting_share_price();
+    asset( wso.median_props.account_creation_fee.amount / 3, PXC_SYMBOL ) * gpo.get_vesting_share_price() :
+    asset( wso.median_props.account_creation_fee.amount * 10, PXC_SYMBOL ) * gpo.get_vesting_share_price();
   auto min_update = _db.has_hardfork( HIVE_HARDFORK_0_20__1761 ) ?
-    asset( wso.median_props.account_creation_fee.amount / 30, HIVE_SYMBOL ) * gpo.get_vesting_share_price() :
+    asset( wso.median_props.account_creation_fee.amount / 30, PXC_SYMBOL ) * gpo.get_vesting_share_price() :
     wso.median_props.account_creation_fee * gpo.get_vesting_share_price();
 
   // If delegation doesn't exist, create it
@@ -3268,7 +3268,7 @@ void recurrent_transfer_evaluator::do_apply( const recurrent_transfer_operation&
 void witness_block_approve_evaluator::do_apply(const witness_block_approve_operation& op)
 {
   // This transaction si /updait's handled in database::process_fast_confirm_transaction
-  // and never reaches the 
+  // and never reaches the
   FC_ASSERT(false, "This operation may not be included in a block");
 }
 

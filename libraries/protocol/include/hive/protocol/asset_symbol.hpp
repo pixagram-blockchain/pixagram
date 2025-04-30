@@ -4,53 +4,51 @@
 #include <hive/protocol/types_fwd.hpp>
 #include <hive/protocol/misc_utilities.hpp>
 
-#define HIVE_ASSET_SYMBOL_PRECISION_BITS     4
-#define HIVE_ASSET_CONTROL_BITS              1
-#define HIVE_NAI_SHIFT                       ( HIVE_ASSET_SYMBOL_PRECISION_BITS + HIVE_ASSET_CONTROL_BITS )
+#define PIXA_ASSET_SYMBOL_PRECISION_BITS     4
+#define PIXA_ASSET_CONTROL_BITS              1
+#define PIXA_NAI_SHIFT                       ( PIXA_ASSET_SYMBOL_PRECISION_BITS + PIXA_ASSET_CONTROL_BITS )
 #define SMT_MAX_NAI                          99999999
 #define SMT_MIN_NAI                          1
 #define SMT_MIN_NON_RESERVED_NAI             10000000
-#define HIVE_ASSET_SYMBOL_NAI_LENGTH         10
-#define HIVE_ASSET_SYMBOL_NAI_STRING_LENGTH  ( HIVE_ASSET_SYMBOL_NAI_LENGTH + 2 )
+#define PIXA_ASSET_SYMBOL_NAI_LENGTH         10
+#define PIXA_ASSET_SYMBOL_NAI_STRING_LENGTH  ( PIXA_ASSET_SYMBOL_NAI_LENGTH + 2 )
 #define SMT_MAX_NAI_POOL_COUNT               10
 #define SMT_MAX_NAI_GENERATION_TRIES         100
 
-#define HIVE_PRECISION_HBD    (3)
-#define HIVE_PRECISION_HIVE   (3)
-#define HIVE_PRECISION_VESTS  (6)
+#define PIXA_PRECISION_PXS    (3)
+#define PIXA_PRECISION_PXC   (3)
+#define PIXA_PRECISION_PXP  (6)
 
 // One's place is used for check digit, which means NAI 0-9 all have NAI data of 0 which is invalid
-// This space is safe to use because it would alwasys result in failure to convert from NAI
-#define HIVE_NAI_HBD    (1)
-#define HIVE_NAI_HIVE   (2)
-#define HIVE_NAI_VESTS  (3)
+// This space is safe to use because it would always result in failure to convert from NAI
+#define PIXA_NAI_PXS    (1)
+#define PIXA_NAI_PXC   (2)
+#define PIXA_NAI_VESTS  (3)
 
-#define HIVE_ASSET_NUM_HBD    (uint32_t(((SMT_MAX_NAI + HIVE_NAI_HBD)   << HIVE_NAI_SHIFT) | HIVE_PRECISION_HBD))
-#define HIVE_ASSET_NUM_HIVE   (uint32_t(((SMT_MAX_NAI + HIVE_NAI_HIVE)  << HIVE_NAI_SHIFT) | HIVE_PRECISION_HIVE))
-#define HIVE_ASSET_NUM_VESTS  (uint32_t(((SMT_MAX_NAI + HIVE_NAI_VESTS) << HIVE_NAI_SHIFT) | HIVE_PRECISION_VESTS))
+#define PIXA_ASSET_NUM_PXS    (uint32_t(((SMT_MAX_NAI + PIXA_NAI_PXS)   << PIXA_NAI_SHIFT) | PIXA_PRECISION_PXS))
+#define PIXA_ASSET_NUM_PXC   (uint32_t(((SMT_MAX_NAI + PIXA_NAI_PXC)  << PIXA_NAI_SHIFT) | PIXA_PRECISION_PXC))
+#define PIXA_ASSET_NUM_VESTS  (uint32_t(((SMT_MAX_NAI + PIXA_NAI_VESTS) << PIXA_NAI_SHIFT) | PIXA_PRECISION_PXP))
 
 #ifdef IS_TEST_NET
 
-#define VESTS_SYMBOL_U64    (uint64_t('V') | (uint64_t('E') << 8) | (uint64_t('S') << 16) | (uint64_t('T') << 24) | (uint64_t('S') << 32))
-#define OBSOLETE_SYMBOL_U64 (uint64_t('T') | (uint64_t('E') << 8) | (uint64_t('S') << 16) | (uint64_t('T') << 24) | (uint64_t('S') << 32))
-#define HIVE_SYMBOL_U64     OBSOLETE_SYMBOL_U64
-#define OBD_SYMBOL_U64      (uint64_t('T') | (uint64_t('B') << 8) | (uint64_t('D') << 16))
-#define HBD_SYMBOL_U64      OBD_SYMBOL_U64
+#define VESTS_SYMBOL_U64    (uint64_t('P') | (uint64_t('X') << 8) | (uint64_t('P') << 16) | (uint64_t('T') << 24))
+#define PXC_SYMBOL_U64      (uint64_t('P') | (uint64_t('X') << 8) | (uint64_t('C') << 16) | (uint64_t('T') << 24))
+#define OBSOLETE_SYMBOL_U64 PXC_SYMBOL_U64
+#define PXS_SYMBOL_U64      (uint64_t('P') | (uint64_t('X') << 8) | (uint64_t('S') << 16) | (uint64_t('T') << 24))
 #else
 
-#define VESTS_SYMBOL_U64    (uint64_t('V') | (uint64_t('E') << 8) | (uint64_t('S') << 16) | (uint64_t('T') << 24) | (uint64_t('S') << 32))
-#define OBSOLETE_SYMBOL_U64 (uint64_t('S') | (uint64_t('T') << 8) | (uint64_t('E') << 16) | (uint64_t('E') << 24) | (uint64_t('M') << 32))
-#define HIVE_SYMBOL_U64     (uint64_t('H') | (uint64_t('I') << 8) | (uint64_t('V') << 16) | (uint64_t('E') << 24))
-#define OBD_SYMBOL_U64      (uint64_t('S') | (uint64_t('B') << 8) | (uint64_t('D') << 16))
-#define HBD_SYMBOL_U64      (uint64_t('H') | (uint64_t('B') << 8) | (uint64_t('D') << 16))
+#define VESTS_SYMBOL_U64    (uint64_t('P') | (uint64_t('X') << 8) | (uint64_t('P') << 16))
+#define PXC_SYMBOL_U64      (uint64_t('P') | (uint64_t('X') << 8) | (uint64_t('C') << 16))
+#define OBSOLETE_SYMBOL_U64 PXC_SYMBOL_U64
+#define PXS_SYMBOL_U64      (uint64_t('P') | (uint64_t('X') << 8) | (uint64_t('S') << 16))
 
 #endif
 
 #define VESTS_SYMBOL_SER    (uint64_t(6) | (VESTS_SYMBOL_U64 << 8)) ///< VESTS|VESTS with 6 digits of precision
-#define OBSOLETE_SYMBOL_SER (uint64_t(3) | (OBSOLETE_SYMBOL_U64 << 8)) ///< STEEM|TESTS with 3 digits of precision
-#define OBD_SYMBOL_SER      (uint64_t(3) | (OBD_SYMBOL_U64 << 8)) ///< SBD|TBD with 3 digits of precision
+#define OBSOLETE_SYMBOL_SER (uint64_t(3) | (PXC_SYMBOL_U64 << 8)) ///< STEEM|TESTS with 3 digits of precision
+#define OBD_SYMBOL_SER      (uint64_t(3) | (PXS_SYMBOL_U64 << 8)) ///< SBD|TBD with 3 digits of precision
 
-#define HIVE_ASSET_MAX_DECIMALS  12
+#define PIXA_ASSET_MAX_DECIMALS  12
 
 #define SMT_ASSET_NUM_PRECISION_MASK   0xF
 #define SMT_ASSET_NUM_CONTROL_MASK     0x10
@@ -73,7 +71,7 @@ class asset_symbol_type
     explicit operator uint32_t() { return to_nai(); }
 
     static asset_symbol_type from_string( const std::string& str );
-    // buf must have space for HIVE_ASSET_SYMBOL_NAI_STRING_LENGTH
+    // buf must have space for PIXA_ASSET_SYMBOL_NAI_STRING_LENGTH
     static asset_symbol_type from_nai_string( const char* buf, uint8_t decimal_places );
     static asset_symbol_type from_asset_num( uint32_t asset_num )
     {   asset_symbol_type result;   result.asset_num = asset_num;   return result;   }
@@ -87,7 +85,7 @@ class asset_symbol_type
     void to_nai_string( char* buf )const;
     std::string to_nai_string()const
     {
-      char buf[ HIVE_ASSET_SYMBOL_NAI_STRING_LENGTH ];
+      char buf[ PIXA_ASSET_SYMBOL_NAI_STRING_LENGTH ];
       to_nai_string( buf );
       return std::string( buf );
     }
@@ -107,7 +105,7 @@ class asset_symbol_type
       * \warning checking that it's SMT symbol is caller responsibility.
       */
     uint32_t get_stripped_precision_smt_num() const
-    { 
+    {
       return asset_num & ~( SMT_ASSET_NUM_PRECISION_MASK );
     }
 
@@ -134,9 +132,9 @@ class asset_symbol_type
 
 } } // hive::protocol
 
-#define VESTS_SYMBOL  (hive::protocol::asset_symbol_type::from_asset_num( HIVE_ASSET_NUM_VESTS ) )
-#define HIVE_SYMBOL   (hive::protocol::asset_symbol_type::from_asset_num( HIVE_ASSET_NUM_HIVE ) )
-#define HBD_SYMBOL    (hive::protocol::asset_symbol_type::from_asset_num( HIVE_ASSET_NUM_HBD ) )
+#define VESTS_SYMBOL  (hive::protocol::asset_symbol_type::from_asset_num( PIXA_ASSET_NUM_VESTS ) )
+#define PXC_SYMBOL   (hive::protocol::asset_symbol_type::from_asset_num( PIXA_ASSET_NUM_PXC ) )
+#define PXS_SYMBOL    (hive::protocol::asset_symbol_type::from_asset_num( PIXA_ASSET_NUM_PXS ) )
 
 FC_REFLECT(hive::protocol::asset_symbol_type, (asset_num))
 
@@ -163,13 +161,13 @@ inline void pack( Stream& s, const hive::protocol::asset_symbol_type& sym )
         uint64_t ser = 0;
         switch( sym.asset_num )
         {
-          case HIVE_ASSET_NUM_HIVE:
+          case PIXA_ASSET_NUM_PXC:
             ser = OBSOLETE_SYMBOL_SER;
             break;
-          case HIVE_ASSET_NUM_HBD:
+          case PIXA_ASSET_NUM_PXS:
             ser = OBD_SYMBOL_SER;
             break;
-          case HIVE_ASSET_NUM_VESTS:
+          case PIXA_ASSET_NUM_VESTS:
             ser = VESTS_SYMBOL_SER;
             break;
           default:
@@ -199,17 +197,17 @@ inline void unpack( Stream& s, hive::protocol::asset_symbol_type& sym, uint32_t,
     case OBSOLETE_SYMBOL_SER & 0xFFFFFFFF:
       s.read( ((char*) &ser)+4, 4 );
       FC_ASSERT( ser == OBSOLETE_SYMBOL_SER, "invalid asset bits" );
-      sym.asset_num = HIVE_ASSET_NUM_HIVE;
+      sym.asset_num = PIXA_ASSET_NUM_PXC;
       break;
     case OBD_SYMBOL_SER & 0xFFFFFFFF:
       s.read( ((char*) &ser)+4, 4 );
       FC_ASSERT( ser == OBD_SYMBOL_SER, "invalid asset bits" );
-      sym.asset_num = HIVE_ASSET_NUM_HBD;
+      sym.asset_num = PIXA_ASSET_NUM_PXS;
       break;
     case VESTS_SYMBOL_SER & 0xFFFFFFFF:
       s.read( ((char*) &ser)+4, 4 );
       FC_ASSERT( ser == VESTS_SYMBOL_SER, "invalid asset bits" );
-      sym.asset_num = HIVE_ASSET_NUM_VESTS;
+      sym.asset_num = PIXA_ASSET_NUM_VESTS;
       break;
     default:
       sym.asset_num = uint32_t( ser );
@@ -247,8 +245,8 @@ inline void from_variant( const fc::variant& var, hive::protocol::asset_symbol_t
     auto decimals = o.find( ASSET_SYMBOL_DECIMALS_KEY );
     FC_ASSERT( decimals != o.end(), "Expected key '${key}'.", ("key", ASSET_SYMBOL_DECIMALS_KEY) );
     FC_ASSERT( decimals->value().is_uint64(), "Expected an unsigned integer type for value '${key}'.", ("key", ASSET_SYMBOL_DECIMALS_KEY) );
-    FC_ASSERT( decimals->value().as_uint64() <= HIVE_ASSET_MAX_DECIMALS,
-      "Expected decimals to be less than or equal to ${num}", ("num", HIVE_ASSET_MAX_DECIMALS) );
+    FC_ASSERT( decimals->value().as_uint64() <= PIXA_ASSET_MAX_DECIMALS,
+      "Expected decimals to be less than or equal to ${num}", ("num", PIXA_ASSET_MAX_DECIMALS) );
 
     sym = asset_symbol_type::from_nai_string( nai->value().as_string().c_str(), decimals->value().as< uint8_t >() );
   } FC_CAPTURE_AND_RETHROW()

@@ -712,7 +712,7 @@ struct impacted_balance_collector
   {
     asset hive_spent = o.hive_amount;
     asset hbd_spent = o.hbd_amount;
-    if(o.fee.symbol == HIVE_SYMBOL)
+    if(o.fee.symbol == PXC_SYMBOL)
       hive_spent += o.fee;
     else
       hbd_spent += o.fee;

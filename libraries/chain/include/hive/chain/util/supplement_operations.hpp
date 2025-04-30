@@ -65,7 +65,7 @@ namespace hive
             if (!hist.current_median_history.is_null())
               pot = pot * hist.current_median_history;
             else
-              pot = asset(0, HBD_SYMBOL);
+              pot = asset(0, PXS_SYMBOL);
 
             u256 r2 = chain::util::to256(vshares);
             r2 *= pot.amount.value;

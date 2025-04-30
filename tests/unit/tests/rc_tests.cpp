@@ -275,7 +275,7 @@ BOOST_AUTO_TEST_CASE( rc_usage_buckets )
     for( int i = 0; i < HIVE_RC_NUM_RESOURCE_TYPES; ++i )
       global_usage[i] -= bucket_usage[i];
     check_eq( global_usage, pools.get_usage() );
-    
+
     generate_blocks( get_active_bucket().get_timestamp() + fc::seconds( HIVE_RC_BUCKET_TIME_LENGTH - HIVE_BLOCK_INTERVAL ) );
 
     market_bytes_share = pools.count_share( resource_market_bytes );
@@ -328,7 +328,7 @@ BOOST_AUTO_TEST_CASE( rc_single_recover_account )
     configuration_data.allow_not_enough_rc = false;
 
     ACTORS( (agent)(victim)(thief) )
-    generate_block(); 
+    generate_block();
     vest( "agent", ASSET( "1000.000 TESTS" ) );
     issue_funds( "victim", ASSET( "1.000 TESTS" ) );
 
@@ -539,7 +539,7 @@ BOOST_AUTO_TEST_CASE( rc_many_recover_accounts )
     BOOST_REQUIRE_EQUAL( pre_tx_thief3_mana, thief3_rc.rc_manabar.current_mana );
     //remove transfer from tx
     tx.operations.pop_back();
-    
+
     //now that transfer was removed it used to work ok despite total lack of RC mana, however
     //rc_multisig_recover_account test showed the dangers of such approach, therefore it was blocked
     //now there can be only one subsidized operation in tx and with no more than allowed limit of
@@ -750,7 +750,7 @@ BOOST_AUTO_TEST_CASE( rc_multisig_recover_account )
       BOOST_TEST_MESSAGE( "victim notices a problem and asks agent for recovery" );
       request_account_recovery( "agent", "victim", alternative_auth, agent_private_key );
       generate_block();
-      
+
       BOOST_TEST_MESSAGE( "victim gets account back" );
       tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
       recover_account_operation recover;
@@ -1163,7 +1163,7 @@ BOOST_AUTO_TEST_CASE( rc_differential_usage_operations )
     witness.props.account_creation_fee = legacy_hive_asset::from_amount( HIVE_MIN_ACCOUNT_CREATION_FEE );
     witness.props.maximum_block_size = HIVE_MIN_BLOCK_SIZE_LIMIT * 2;
     witness.props.hbd_interest_rate = 0;
-    witness.fee = asset( 0, HIVE_SYMBOL );
+    witness.fee = asset( 0, PXC_SYMBOL );
     push_transaction( witness, alice_active_key );
     tx_usage = db->rc.get_tx_info().usage;
     //when witness is created there is no initial state to give discount
@@ -1510,7 +1510,7 @@ BOOST_AUTO_TEST_CASE( rc_differential_usage_many_ops )
     witness.props.account_creation_fee = legacy_hive_asset::from_amount( HIVE_MIN_ACCOUNT_CREATION_FEE );
     witness.props.maximum_block_size = HIVE_MIN_BLOCK_SIZE_LIMIT * 2;
     witness.props.hbd_interest_rate = 0;
-    witness.fee = asset( 0, HIVE_SYMBOL );
+    witness.fee = asset( 0, PXC_SYMBOL );
     tx.operations.push_back( witness );
     witness.url = "https://alice.has.cat";
     tx.operations.push_back( witness );
@@ -1526,7 +1526,7 @@ BOOST_AUTO_TEST_CASE( rc_differential_usage_many_ops )
     witness.props.account_creation_fee = legacy_hive_asset::from_amount( HIVE_MAX_ACCOUNT_CREATION_FEE / 2 );
     witness.props.maximum_block_size = HIVE_MAX_BLOCK_SIZE;
     witness.props.hbd_interest_rate = 30 * HIVE_1_PERCENT;
-    witness.fee = asset( 100, HIVE_SYMBOL );
+    witness.fee = asset( 100, PXC_SYMBOL );
     push_transaction( witness, carol_private_key );
     auto carol_state_usage = db->rc.get_block_info().usage[ resource_state_bytes ];
     generate_block();

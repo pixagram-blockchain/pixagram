@@ -186,7 +186,7 @@ namespace hive { namespace protocol {
     void validate() const
     {
       FC_ASSERT(votable_assets.size() <= SMT_MAX_VOTABLE_ASSETS, "Too much votable assets specified");
-      FC_ASSERT(is_allowed(HIVE_SYMBOL) == false,
+      FC_ASSERT(is_allowed(PXC_SYMBOL) == false,
         "HIVE can not be explicitly specified as one of allowed_vote_assets");
     }
 
@@ -215,7 +215,7 @@ namespace hive { namespace protocol {
     account_name_type author;
     string            permlink;
 
-    asset             max_accepted_payout    = asset( 1000000000, HBD_SYMBOL ); /// HBD value of the maximum payout this post will receive
+    asset             max_accepted_payout    = asset( 1000000000, PXS_SYMBOL ); /// HBD value of the maximum payout this post will receive
     uint16_t          percent_hbd            = HIVE_100_PERCENT; /// the percent of HBD to key, unkept amounts will be received in form of VESTS
     bool              allow_votes            = true; /// allows a post to receive votes
     bool              allow_curation_rewards = true; /// allows voters to recieve curation rewards. Rewards return to reward fund.
@@ -321,8 +321,8 @@ namespace hive { namespace protocol {
     account_name_type agent;
     uint32_t          escrow_id = 30;
 
-    asset             hbd_amount = asset( 0, HBD_SYMBOL );
-    asset             hive_amount = asset( 0, HIVE_SYMBOL );
+    asset             hbd_amount = asset( 0, PXS_SYMBOL );
+    asset             hive_amount = asset( 0, PXC_SYMBOL );
     asset             fee;
 
     time_point_sec    ratification_deadline;
@@ -393,8 +393,8 @@ namespace hive { namespace protocol {
     account_name_type receiver; ///< the account that should receive funds (might be from, might be to)
 
     uint32_t          escrow_id = 30;
-    asset             hbd_amount = asset( 0, HBD_SYMBOL ); ///< the amount of HBD to release
-    asset             hive_amount = asset( 0, HIVE_SYMBOL ); ///< the amount of HIVE to release
+    asset             hbd_amount = asset( 0, PXS_SYMBOL ); ///< the amount of HBD to release
+    asset             hive_amount = asset( 0, PXC_SYMBOL ); ///< the amount of HIVE to release
 
     void validate()const;
     void get_required_active_authorities( flat_set<account_name_type>& a )const{ a.insert(who); }

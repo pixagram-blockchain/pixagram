@@ -46,10 +46,10 @@ DEFINE_API_IMPL( market_history_api_impl, get_ticker )
 
     if( itr != bucket_idx.end() )
     {
-      auto open = ASSET_TO_REAL( asset( itr->non_hive.open, HBD_SYMBOL ) ) / ASSET_TO_REAL( asset( itr->hive.open, HIVE_SYMBOL ) );
+      auto open = ASSET_TO_REAL( asset( itr->non_hive.open, PXS_SYMBOL ) ) / ASSET_TO_REAL( asset( itr->hive.open, PXC_SYMBOL ) );
       // actually we can get closing price from bucket of any size (they have it all set to the same value)
       auto ritr = bucket_idx.rbegin();
-      result.latest = ASSET_TO_REAL( asset( ritr->non_hive.close, HBD_SYMBOL ) ) / ASSET_TO_REAL( asset( ritr->hive.close, HIVE_SYMBOL ) );
+      result.latest = ASSET_TO_REAL( asset( ritr->non_hive.close, PXS_SYMBOL ) ) / ASSET_TO_REAL( asset( ritr->hive.close, PXC_SYMBOL ) );
       result.percent_change = ( ( result.latest - open ) / open ) * 100;
     }
   }
@@ -93,31 +93,31 @@ DEFINE_API_IMPL( market_history_api_impl, get_order_book )
   FC_ASSERT( 0 < args.limit && args.limit <= 500 );
 
   const auto& order_idx = _db.get_index< chain::limit_order_index, chain::by_price >();
-  auto itr = order_idx.lower_bound( price::max( HBD_SYMBOL, HIVE_SYMBOL ) );
+  auto itr = order_idx.lower_bound( price::max( PXS_SYMBOL, PXC_SYMBOL ) );
 
   get_order_book_return result;
 
-  while( itr != order_idx.end() && itr->sell_price.base.symbol == HBD_SYMBOL && result.bids.size() < args.limit )
+  while( itr != order_idx.end() && itr->sell_price.base.symbol == PXS_SYMBOL && result.bids.size() < args.limit )
   {
     order cur;
     cur.order_price = itr->sell_price;
     cur.real_price = ASSET_TO_REAL( itr->sell_price.base ) / ASSET_TO_REAL( itr->sell_price.quote );
-    cur.hive = ( asset( itr->for_sale, HBD_SYMBOL ) * itr->sell_price ).amount;
+    cur.hive = ( asset( itr->for_sale, PXS_SYMBOL ) * itr->sell_price ).amount;
     cur.hbd = itr->for_sale;
     cur.created = itr->created;
     result.bids.push_back( cur );
     ++itr;
   }
 
-  itr = order_idx.lower_bound( price::max( HIVE_SYMBOL, HBD_SYMBOL ) );
+  itr = order_idx.lower_bound( price::max( PXC_SYMBOL, PXS_SYMBOL ) );
 
-  while( itr != order_idx.end() && itr->sell_price.base.symbol == HIVE_SYMBOL && result.asks.size() < args.limit )
+  while( itr != order_idx.end() && itr->sell_price.base.symbol == PXC_SYMBOL && result.asks.size() < args.limit )
   {
     order cur;
     cur.order_price = itr->sell_price;
     cur.real_price = ASSET_TO_REAL( itr->sell_price.quote ) / ASSET_TO_REAL( itr->sell_price.base );
     cur.hive = itr->for_sale;
-    cur.hbd = ( asset( itr->for_sale, HIVE_SYMBOL ) * itr->sell_price ).amount;
+    cur.hbd = ( asset( itr->for_sale, PXC_SYMBOL ) * itr->sell_price ).amount;
     cur.created = itr->created;
     result.asks.push_back( cur );
     ++itr;

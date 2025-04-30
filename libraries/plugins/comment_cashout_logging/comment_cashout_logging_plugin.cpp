@@ -23,11 +23,11 @@ class comment_cashout_logging_plugin_impl
 {
    public:
       comment_cashout_logging_plugin_impl(const std::string &path, appbase::application& app ) : _db(app.get_plugin<hive::plugins::chain::chain_plugin>().db()),
-        _log_dir_path(path) 
+        _log_dir_path(path)
       {
       }
 
-      virtual ~comment_cashout_logging_plugin_impl() 
+      virtual ~comment_cashout_logging_plugin_impl()
       {
         if (_log_file.is_open())
         {
@@ -74,18 +74,20 @@ std::string asset_num_to_string(uint32_t asset_num)
   switch( asset_num)
   {
 #ifdef IS_TEST_NET
-    case HIVE_ASSET_NUM_HIVE:
-      return "TESTS";
-    case HIVE_ASSET_NUM_HBD:
-      return "TBD";
+    case PIXA_ASSET_NUM_PXC:
+      return "PXCT";
+    case PIXA_ASSET_NUM_PXS:
+      return "PXST";
+    case PIXA_ASSET_NUM_VESTS:
+      return "PXPT";
 #else
-    case HIVE_ASSET_NUM_HIVE:
-      return "HIVE";
-    case HIVE_ASSET_NUM_HBD:
-      return "HBD";
+    case PIXA_ASSET_NUM_PXC:
+      return "PXC";
+    case PIXA_ASSET_NUM_PXS:
+      return "PXS";
+    case PIXA_ASSET_NUM_VESTS:
+      return "PXP";
 #endif
-    case HIVE_ASSET_NUM_VESTS:
-      return "VESTS";
     default:
       return "UNKN";
   }
@@ -133,28 +135,28 @@ struct operation_visitor
   void operator()(const claim_reward_balance_operation& op) const
   {
     _log_file << "claim_reward_balance_operation" << ";"
-       << _db.head_block_num() << ";" 
-       << static_cast<std::string>(op.account) << ";" 
-       << asset_to_string(op.reward_hive) << ";" 
-       << asset_to_string(op.reward_hbd) << ";" 
+       << _db.head_block_num() << ";"
+       << static_cast<std::string>(op.account) << ";"
+       << asset_to_string(op.reward_hive) << ";"
+       << asset_to_string(op.reward_hbd) << ";"
        << asset_to_string(op.reward_vests) << "\n";
   }
 
   void operator()(const author_reward_operation &op) const
   {
-    _log_file << "author_reward_operation" << ";" 
-      << _db.head_block_num() << ";" 
+    _log_file << "author_reward_operation" << ";"
+      << _db.head_block_num() << ";"
       << static_cast<std::string>(op.author) << ";"
-      << op.permlink << ";" 
-      << asset_to_string(op.hbd_payout) << ";" 
-      << asset_to_string(op.hive_payout) << ";" 
+      << op.permlink << ";"
+      << asset_to_string(op.hbd_payout) << ";"
+      << asset_to_string(op.hive_payout) << ";"
       << asset_to_string(op.vesting_payout)
       << "\n";
   }
 
   void operator()(const curation_reward_operation& op) const
   {
-    _log_file << "curation_reward_operation" << ";" 
+    _log_file << "curation_reward_operation" << ";"
       << _db.head_block_num() << ";"
       << static_cast<std::string>(op.curator) << ";"
       << asset_to_string(op.reward) << ";"
@@ -165,9 +167,9 @@ struct operation_visitor
 
   void operator()(const comment_reward_operation& op) const
   {
-    _log_file << "comment_reward_operation" << ";" 
-      << _db.head_block_num() << ";" 
-      << static_cast<std::string>(op.author) << ";" 
+    _log_file << "comment_reward_operation" << ";"
+      << _db.head_block_num() << ";"
+      << static_cast<std::string>(op.author) << ";"
       << op.permlink << ";"
       << asset_to_string(op.payout)
       << "\n";
@@ -175,13 +177,13 @@ struct operation_visitor
 
   void operator()(const comment_benefactor_reward_operation& op) const
   {
-    _log_file << "comment_benefactor_reward_operation" << ";" 
-      << _db.head_block_num() << ";" 
-      << static_cast<std::string>(op.benefactor) << ";" 
-      << static_cast<std::string>(op.author) << ";" 
+    _log_file << "comment_benefactor_reward_operation" << ";"
+      << _db.head_block_num() << ";"
+      << static_cast<std::string>(op.benefactor) << ";"
+      << static_cast<std::string>(op.author) << ";"
       << op.permlink << ";"
-      << asset_to_string(op.hbd_payout) << ";" 
-      << asset_to_string(op.hive_payout) << ";" 
+      << asset_to_string(op.hbd_payout) << ";"
+      << asset_to_string(op.hive_payout) << ";"
       << asset_to_string(op.vesting_payout)
       << "\n";
   }
@@ -189,9 +191,9 @@ struct operation_visitor
 
 void comment_cashout_logging_plugin_impl::on_pre_apply_operation(const operation_notification& note)
 {
-  
+
   const uint64_t block_no = _db.head_block_num();
-  
+
   if (!_log_file.is_open())
   {
     bool changed;
@@ -208,7 +210,7 @@ void comment_cashout_logging_plugin_impl::on_pre_apply_operation(const operation
       _log_file.open(file_name);
     }
   }
-  
+
   if (_starting_block.valid() && _ending_block.valid())
   {
     if (block_no >= *_starting_block && block_no <= *_ending_block)

@@ -259,7 +259,7 @@ void debug_node_plugin::calculate_modifiers_according_to_new_price(const hive::p
   const hive::protocol::HIVE_asset& total_hive, const hive::protocol::VEST_asset& total_vests,
   hive::protocol::HIVE_asset& hive_modifier, hive::protocol::VEST_asset& vest_modifier ) const
 {
-  FC_ASSERT(new_price.base.symbol == HIVE_SYMBOL);
+  FC_ASSERT(new_price.base.symbol == PXC_SYMBOL);
   FC_ASSERT(new_price.quote.symbol == VESTS_SYMBOL);
 
   hive_modifier = hive::protocol::HIVE_asset( 0 );
@@ -304,7 +304,7 @@ void debug_node_plugin::debug_set_vest_price( const hive::protocol::price& new_p
     const hive::chain::account_object& miner_account = db.get_account( HIVE_INIT_MINER_NAME );
     auto _update_initminer = [ &db, &vest_modifier, &miner_account ]()
     {
-      /// If we increased vests pool, we need to put them to initminer account to avoid validate_invariants failure 
+      /// If we increased vests pool, we need to put them to initminer account to avoid validate_invariants failure
       db.modify( miner_account, [ &vest_modifier ]( hive::chain::account_object& account )
       {
         account.vesting_shares += vest_modifier;

@@ -58,13 +58,13 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
     ISSUE_FUNDS( "alice", asset( 25522, any_smt_symbol ) );
     asset alice_smt = db->get_balance( alice_account, any_smt_symbol );
 
-    fund( "alice", asset( alice_smt.amount, HIVE_SYMBOL ) );
+    fund( "alice", asset( alice_smt.amount, PXC_SYMBOL ) );
     generate_block();
-    fund( "bob", asset( alice_smt.amount, HIVE_SYMBOL ) );
+    fund( "bob", asset( alice_smt.amount, PXC_SYMBOL ) );
     generate_block();
-    fund( "sam", asset( alice_smt.amount, HIVE_SYMBOL ) );
+    fund( "sam", asset( alice_smt.amount, PXC_SYMBOL ) );
     generate_block();
-    fund( "dave", asset( alice_smt.amount, HIVE_SYMBOL ) );
+    fund( "dave", asset( alice_smt.amount, PXC_SYMBOL ) );
     generate_block();
 
     int64_t alice_smt_volume = 0;
@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
     BOOST_TEST_MESSAGE( "Creating Limit Order for SMT that will stay on the books for 60 minutes." );
 
     op.owner = "sam";
-    op.amount_to_sell = asset( ( alice_smt.amount.value / 20 ), HIVE_SYMBOL );
+    op.amount_to_sell = asset( ( alice_smt.amount.value / 20 ), PXC_SYMBOL );
     op.min_to_receive = asset( ( alice_smt.amount.value / 20 ), any_smt_symbol );
     op.orderid = 3;
 
@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
 
     op.owner = "bob";
     op.orderid = 4;
-    op.amount_to_sell = asset( ( alice_smt.amount.value / 10 ) * 3 - alice_smt.amount.value / 20, HIVE_SYMBOL );
+    op.amount_to_sell = asset( ( alice_smt.amount.value / 10 ) * 3 - alice_smt.amount.value / 20, PXC_SYMBOL );
     op.min_to_receive = asset( ( alice_smt.amount.value / 10 ) * 3 - alice_smt.amount.value / 20, any_smt_symbol );
 
     tx.operations.clear();
@@ -183,7 +183,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
     op.owner = "alice";
     op.orderid = 5;
     op.amount_to_sell = asset( ( alice_smt.amount.value / 10 ) * 3, any_smt_symbol );
-    op.min_to_receive = asset( ( alice_smt.amount.value / 10 ) * 3, HIVE_SYMBOL );
+    op.min_to_receive = asset( ( alice_smt.amount.value / 10 ) * 3, PXC_SYMBOL );
 
     tx.operations.clear();
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
     fill_order_op = ops[1].get< fill_order_operation >();
     BOOST_REQUIRE( fill_order_op.open_owner == "bob" );
     BOOST_REQUIRE( fill_order_op.open_orderid == 4 );
-    BOOST_REQUIRE( fill_order_op.open_pays.amount.value == asset( ( alice_smt.amount.value / 10 ) * 3 - alice_smt.amount.value / 20, HIVE_SYMBOL ).amount.value );
+    BOOST_REQUIRE( fill_order_op.open_pays.amount.value == asset( ( alice_smt.amount.value / 10 ) * 3 - alice_smt.amount.value / 20, PXC_SYMBOL ).amount.value );
     BOOST_REQUIRE( fill_order_op.current_owner == "alice" );
     BOOST_REQUIRE( fill_order_op.current_orderid == 5 );
     BOOST_REQUIRE( fill_order_op.current_pays.amount.value == asset( ( alice_smt.amount.value / 10 ) * 3 - alice_smt.amount.value / 20, any_smt_symbol ).amount.value );
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
     fill_order_op = ops[2].get< fill_order_operation >();
     BOOST_REQUIRE( fill_order_op.open_owner == "sam" );
     BOOST_REQUIRE( fill_order_op.open_orderid == 3 );
-    BOOST_REQUIRE( fill_order_op.open_pays.amount.value == asset( alice_smt.amount.value / 20, HIVE_SYMBOL ).amount.value );
+    BOOST_REQUIRE( fill_order_op.open_pays.amount.value == asset( alice_smt.amount.value / 20, PXC_SYMBOL ).amount.value );
     BOOST_REQUIRE( fill_order_op.current_owner == "alice" );
     BOOST_REQUIRE( fill_order_op.current_orderid == 5 );
     BOOST_REQUIRE( fill_order_op.current_pays.amount.value == asset( alice_smt.amount.value / 20, any_smt_symbol ).amount.value );
@@ -240,7 +240,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
 
     op.orderid = 6;
     op.amount_to_sell = asset( alice_smt.amount.value / 20 * 2, any_smt_symbol );
-    op.min_to_receive = asset( alice_smt.amount.value / 20 * 2, HIVE_SYMBOL );
+    op.min_to_receive = asset( alice_smt.amount.value / 20 * 2, PXC_SYMBOL );
 
     tx.operations.clear();
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
@@ -251,7 +251,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
 
     op.owner = "bob";
     op.orderid = 7;
-    op.amount_to_sell = asset( alice_smt.amount.value / 20, HIVE_SYMBOL );
+    op.amount_to_sell = asset( alice_smt.amount.value / 20, PXC_SYMBOL );
     op.min_to_receive = asset( alice_smt.amount.value / 20, any_smt_symbol );
 
     tx.operations.clear();
@@ -269,7 +269,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
     BOOST_REQUIRE( fill_order_op.open_pays.amount.value == asset( alice_smt.amount.value / 20, any_smt_symbol ).amount.value );
     BOOST_REQUIRE( fill_order_op.current_owner == "bob" );
     BOOST_REQUIRE( fill_order_op.current_orderid == 7 );
-    BOOST_REQUIRE( fill_order_op.current_pays.amount.value == asset( alice_smt.amount.value / 20, HIVE_SYMBOL ).amount.value );
+    BOOST_REQUIRE( fill_order_op.current_pays.amount.value == asset( alice_smt.amount.value / 20, PXC_SYMBOL ).amount.value );
 
     reward = liquidity_idx.find( get_account_id( "alice" ) );
     BOOST_REQUIRE( reward == liquidity_idx.end() );
@@ -316,7 +316,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
     BOOST_REQUIRE( fill_order_op.open_pays.amount.value == asset( alice_smt.amount.value / 20, any_smt_symbol ).amount.value );
     BOOST_REQUIRE( fill_order_op.current_owner == "sam" );
     BOOST_REQUIRE( fill_order_op.current_orderid == 8 );
-    BOOST_REQUIRE( fill_order_op.current_pays.amount.value == asset( alice_smt.amount.value / 20, HIVE_SYMBOL ).amount.value );
+    BOOST_REQUIRE( fill_order_op.current_pays.amount.value == asset( alice_smt.amount.value / 20, PXC_SYMBOL ).amount.value );
 
     reward = liquidity_idx.find( get_account_id( "alice" ) );
     BOOST_REQUIRE( reward == liquidity_idx.end() );
@@ -352,7 +352,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
     push_transaction( tx, alice_private_key );
 
     op.owner = "alice";
-    op.amount_to_sell = asset( 8 * ( alice_smt.amount.value / 20 ), HIVE_SYMBOL );
+    op.amount_to_sell = asset( 8 * ( alice_smt.amount.value / 20 ), PXC_SYMBOL );
     op.min_to_receive = asset( op.amount_to_sell.amount, any_smt_symbol );
     op.orderid = 9;
     tx.operations.clear();
@@ -363,7 +363,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
 
     op.owner = "dave";
     op.amount_to_sell = asset( 7 * ( alice_smt.amount.value / 20 ), any_smt_symbol );;
-    op.min_to_receive = asset( op.amount_to_sell.amount, HIVE_SYMBOL );
+    op.min_to_receive = asset( op.amount_to_sell.amount, PXC_SYMBOL );
     op.orderid = 10;
     tx.operations.clear();
     tx.operations.push_back( op );
@@ -477,7 +477,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
     op.owner = "bob";
     op.orderid = 12;
     op.amount_to_sell = asset( 3 * ( alice_smt.amount / 40 ), any_smt_symbol );
-    op.min_to_receive = asset( op.amount_to_sell.amount, HIVE_SYMBOL );
+    op.min_to_receive = asset( op.amount_to_sell.amount, PXC_SYMBOL );
     tx.operations.clear();
     tx.operations.push_back( op );
     push_transaction( tx, bob_private_key );
@@ -612,7 +612,7 @@ BOOST_AUTO_TEST_CASE( smt_liquidity_rewards )
     op.owner = "alice";
     op.orderid = 15;
     op.amount_to_sell.symbol = any_smt_symbol;
-    op.min_to_receive.symbol = HIVE_SYMBOL;
+    op.min_to_receive.symbol = PXC_SYMBOL;
     tx.operations.clear();
     tx.operations.push_back( op );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );

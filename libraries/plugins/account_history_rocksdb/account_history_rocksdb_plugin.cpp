@@ -907,20 +907,20 @@ private:
 
   struct saved_balances
   {
-    asset hive_balance = asset(0, HIVE_SYMBOL);
-    asset savings_hive_balance = asset(0, HIVE_SYMBOL);
+    asset hive_balance = asset(0, PXC_SYMBOL);
+    asset savings_hive_balance = asset(0, PXC_SYMBOL);
 
-    asset hbd_balance = asset(0, HBD_SYMBOL);
-    asset savings_hbd_balance = asset(0, HBD_SYMBOL);
+    asset hbd_balance = asset(0, PXS_SYMBOL);
+    asset savings_hbd_balance = asset(0, PXS_SYMBOL);
 
     asset vesting_shares = asset(0, VESTS_SYMBOL);
     asset delegated_vesting_shares = asset(0, VESTS_SYMBOL);
     asset received_vesting_shares = asset(0, VESTS_SYMBOL);
 
-    asset reward_hbd_balance = asset(0, HBD_SYMBOL);
-    asset reward_hive_balance = asset(0, HIVE_SYMBOL);
+    asset reward_hbd_balance = asset(0, PXS_SYMBOL);
+    asset reward_hive_balance = asset(0, PXC_SYMBOL);
     asset reward_vesting_balance = asset(0, VESTS_SYMBOL);
-    asset reward_vesting_hive_balance = asset(0, HIVE_SYMBOL);
+    asset reward_vesting_hive_balance = asset(0, PXC_SYMBOL);
   };
   optional<string>                 _balance_csv_filename;
   std::ofstream                    _balance_csv_file;

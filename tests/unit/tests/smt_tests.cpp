@@ -163,7 +163,7 @@ BOOST_AUTO_TEST_CASE( comment_votable_assers_validate )
       allowed_vote_assets ava;
       const auto& smt = smts.front();
       ava.add_votable_asset(smt, share_type(20), false);
-      ava.add_votable_asset(HIVE_SYMBOL, share_type(20), true);
+      ava.add_votable_asset(PXC_SYMBOL, share_type(20), true);
       op.extensions.insert( ava );
       HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
     }
@@ -177,17 +177,17 @@ BOOST_AUTO_TEST_CASE( asset_symbol_vesting_methods )
   {
     BOOST_TEST_MESSAGE( "Test asset_symbol vesting methods" );
 
-    asset_symbol_type Hive = HIVE_SYMBOL;
+    asset_symbol_type Hive = PXC_SYMBOL;
     FC_ASSERT( Hive.is_vesting() == false );
     FC_ASSERT( Hive.get_paired_symbol() == VESTS_SYMBOL );
 
     asset_symbol_type Vests = VESTS_SYMBOL;
     FC_ASSERT( Vests.is_vesting() );
-    FC_ASSERT( Vests.get_paired_symbol() == HIVE_SYMBOL );
+    FC_ASSERT( Vests.get_paired_symbol() == PXC_SYMBOL );
 
-    asset_symbol_type Hbd = HBD_SYMBOL;
+    asset_symbol_type Hbd = PXS_SYMBOL;
     FC_ASSERT( Hbd.is_vesting() == false );
-    FC_ASSERT( Hbd.get_paired_symbol() == HBD_SYMBOL );
+    FC_ASSERT( Hbd.get_paired_symbol() == PXS_SYMBOL );
 
     ACTORS( (alice) )
     generate_block();
@@ -576,27 +576,27 @@ BOOST_AUTO_TEST_CASE( smt_create_apply )
     BOOST_TEST_MESSAGE( " -- SMT create with insufficient HBD balance" );
     generate_block();
     // Declare fee in HBD/TBD though alice has none.
-    op.smt_creation_fee = asset( test_amount, HBD_SYMBOL );
+    op.smt_creation_fee = asset( test_amount, PXS_SYMBOL );
     // Throw due to insufficient balance of HBD/TBD.
     FAIL_WITH_OP(op, alice_private_key, fc::assert_exception);
 
     BOOST_TEST_MESSAGE( " -- SMT create with insufficient HIVE balance" );
     // Fund with HBD and set fee with HIVE.
-    fund( "alice", asset( test_amount, HBD_SYMBOL ) );
+    fund( "alice", asset( test_amount, PXS_SYMBOL ) );
     // Declare fee in HIVE though alice has none.
-    op.smt_creation_fee = asset( test_amount, HIVE_SYMBOL );
+    op.smt_creation_fee = asset( test_amount, PXC_SYMBOL );
     // Throw due to insufficient balance of HIVE.
     FAIL_WITH_OP(op, alice_private_key, fc::assert_exception);
 
     BOOST_TEST_MESSAGE( " -- SMT create with available funds" );
     // Push valid operation.
-    op.smt_creation_fee = asset( test_amount, HBD_SYMBOL );
+    op.smt_creation_fee = asset( test_amount, PXS_SYMBOL );
     PUSH_OP( op, alice_private_key );
 
     generate_block();
     // Fund again for alice to have some since previous funds were consumed
-    fund( "alice", asset( test_amount, HIVE_SYMBOL ) );
-    fund( "alice", asset( test_amount, HBD_SYMBOL ) );
+    fund( "alice", asset( test_amount, PXC_SYMBOL ) );
+    fund( "alice", asset( test_amount, PXS_SYMBOL ) );
 
     BOOST_TEST_MESSAGE( " -- SMT cannot be created twice even with different precision" );
     create_conflicting_smt(op.symbol, "alice", alice_private_key);
@@ -622,15 +622,15 @@ BOOST_AUTO_TEST_CASE( smt_create_apply )
 
     BOOST_TEST_MESSAGE( " -- Check that we cannot create an SMT with an insufficent HIVE creation fee" );
     // Check too low fee in HIVE.
-    fund( "bob", asset( too_low_fee_amount, HIVE_SYMBOL ) );
+    fund( "bob", asset( too_low_fee_amount, PXC_SYMBOL ) );
     generate_block();
-    op.smt_creation_fee = asset( too_low_fee_amount, HIVE_SYMBOL );
+    op.smt_creation_fee = asset( too_low_fee_amount, PXC_SYMBOL );
     FAIL_WITH_OP(op, bob_private_key, fc::assert_exception);
 
     BOOST_TEST_MESSAGE( " -- Check that we cannot create an SMT with an insufficent HBD creation fee" );
     // Check too low fee in HBD.
-    fund( "bob", asset( too_low_fee_amount, HBD_SYMBOL ) );
-    op.smt_creation_fee = asset( too_low_fee_amount, HBD_SYMBOL );
+    fund( "bob", asset( too_low_fee_amount, PXS_SYMBOL ) );
+    op.smt_creation_fee = asset( too_low_fee_amount, PXS_SYMBOL );
     FAIL_WITH_OP(op, bob_private_key, fc::assert_exception);
 
     validate_database();

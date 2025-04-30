@@ -77,7 +77,7 @@ condenser_api_fixture::~condenser_api_fixture()
 void condenser_api_fixture::hf1_scenario( check_point_tester_t check_point_tester )
 {
   generate_block(); // block 1
-  
+
   // Set first hardfork to test virtual operations that happen only there.
   db->set_hardfork( HIVE_HARDFORK_0_1 );
   generate_block(); // block 2
@@ -89,7 +89,7 @@ void condenser_api_fixture::hf8_scenario( check_point_tester_t check_point_teste
 {
   db->set_hardfork( HIVE_HARDFORK_0_8 );
   generate_block(); // block 1
-  
+
   ACTORS( (hf8alice)(hf8ben) );
   generate_block();
 
@@ -131,7 +131,7 @@ void condenser_api_fixture::hf13_scenario( check_point_tester_t check_point_1_te
   db->set_hardfork( HIVE_HARDFORK_0_13 );
   vest( HIVE_INIT_MINER_NAME, ASSET( "1000.000 TESTS" ) );
   generate_block();
-  
+
   PREP_ACTOR( dan0ah )
   create_with_pow2( "dan0ah", dan0ah_public_key, dan0ah_private_key );
   witness_plugin->add_signing_key( dan0ah_private_key );
@@ -163,7 +163,7 @@ void condenser_api_fixture::hf19_scenario( check_point_tester_t check_point_test
 
   ACTORS( (alice19ah)(ben19ah) );
   generate_block();
-  
+
   witness_create( "alice19ah", alice19ah_private_key, "foo.bar", alice19ah_private_key.get_public_key(), 1000 );
   witness_plugin->add_signing_key( alice19ah_private_key );
   witness_create( "ben19ah", ben19ah_private_key, "foo.bar", ben19ah_private_key.get_public_key(), 1000 );
@@ -216,7 +216,7 @@ void condenser_api_fixture::comment_and_reward_scenario( check_point_tester_t ch
 {
   db->set_hardfork( HIVE_HARDFORK_1_28 );
   generate_block();
-  
+
   ACTORS( (dan0ah)(edgar0ah) );
 
   beneficiary_route_type beneficiary( account_name_type( "dan0ah" ), HIVE_1_PERCENT*50 );
@@ -286,7 +286,7 @@ void condenser_api_fixture::vesting_scenario( check_point_tester_t check_point_t
   withdraw_vesting( "alice4ah", asset( 123, VESTS_SYMBOL ), alice4ah_private_key );
   // Now decrease delegation to trigger return_vesting_delegation_operation
   delegate_vest( "alice4ah", "carol4ah", asset(2, VESTS_SYMBOL), alice4ah_private_key );
-  
+
   // Now all the operations mentioned above can be checked. The immediate ones will appear in 5th block.
   // The delayed ones will appear in blocks, which number depends of test configuration.
   // In standard configuration of this fixture they are 8th (fill_vesting_withdraw_operation) & 9th (return_vesting_delegation_operation) blocks.
@@ -300,7 +300,7 @@ void condenser_api_fixture::witness_scenario( check_point_tester_t check_point_t
 
   ACTORS( (alice5ah)(ben5ah)(carol5ah) );
   generate_block();
-  
+
   witness_create( "alice5ah", alice5ah_private_key, "foo.bar", alice5ah_private_key.get_public_key(), 1000 );
   witness_plugin->add_signing_key( alice5ah_private_key );
   witness_feed_publish( "alice5ah", price( ASSET( "1.000 TBD" ), ASSET( "1.000 TESTS" ) ), alice5ah_private_key );
@@ -334,7 +334,7 @@ void condenser_api_fixture::escrow_and_savings_scenario( check_point_tester_t ch
   issue_funds( "alice6ah", ASSET( "1.111 TESTS" ) );
   issue_funds( "alice6ah", ASSET( "2.121 TBD" ) );
   generate_block();
-  
+
   escrow_transfer( "alice6ah", "ben6ah", "carol6ah", ASSET( "0.071 TESTS" ), ASSET( "0.000 TBD" ), ASSET( "0.001 TESTS" ), "",
                   fc::seconds( HIVE_BLOCK_INTERVAL * 10 ), fc::seconds( HIVE_BLOCK_INTERVAL * 20 ), 30, alice6ah_private_key );
   escrow_transfer( "alice6ah", "ben6ah", "carol6ah", ASSET( "0.000 TESTS" ), ASSET( "0.007 TBD" ), ASSET( "0.001 TESTS" ), "{\"go\":\"now\"}",
@@ -374,14 +374,14 @@ void condenser_api_fixture::proposal_scenario( check_point_tester_t check_point_
 
   // Create the proposal for the first time to be updated and removed.
   post_comment("alice7ah", "permlink0", "title", "body", "test", alice7ah_post_key);
-  int64_t proposal_id = 
-  create_proposal( "alice7ah", "ben7ah", "0" /*subject*/, "permlink0", db->head_block_time() - fc::days( 1 ), 
-                    db->head_block_time() + fc::days( 2 ), asset( 100, HBD_SYMBOL ), alice7ah_private_key );
+  int64_t proposal_id =
+  create_proposal( "alice7ah", "ben7ah", "0" /*subject*/, "permlink0", db->head_block_time() - fc::days( 1 ),
+                    db->head_block_time() + fc::days( 2 ), asset( 100, PXS_SYMBOL ), alice7ah_private_key );
   const proposal_object* proposal = find_proposal( proposal_id );
   std::string subject( proposal->subject );
   std::string permlink( proposal->permlink );
   BOOST_REQUIRE_NE( proposal, nullptr );
-  update_proposal( proposal_id, "alice7ah", asset( 80, HBD_SYMBOL ), "new subject", proposal->permlink, alice7ah_private_key);
+  update_proposal( proposal_id, "alice7ah", asset( 80, PXS_SYMBOL ), "new subject", proposal->permlink, alice7ah_private_key);
   vote_proposal( "carol7ah", { proposal_id }, false/*approve*/, carol7ah_private_key);
   remove_proposal( "alice7ah", { proposal_id }, alice7ah_private_key );
 
@@ -389,7 +389,7 @@ void condenser_api_fixture::proposal_scenario( check_point_tester_t check_point_
 
   // Create the same proposal again to be paid from treasury.
   proposal_id = create_proposal( "alice7ah", "ben7ah", subject, permlink, db->head_block_time() - fc::days( 1 ),
-    db->head_block_time() + fc::days( 2 ), asset( 100, HBD_SYMBOL ), alice7ah_private_key );
+    db->head_block_time() + fc::days( 2 ), asset( 100, PXS_SYMBOL ), alice7ah_private_key );
   vote_proposal( "carol7ah", { proposal_id }, true/*approve*/, carol7ah_private_key);
 
   // All operations related to first proposal can be checked now in 5th block except dhf_funding_operation (2nd block),
@@ -471,7 +471,7 @@ void condenser_api_fixture::recurrent_transfer_scenario( check_point_tester_t ch
   recurrent_transfer( "ben10ah", "alice10ah", ASSET( "7.713 TBD" ), "", 2, 4, ben10ah_private_key );
   recurrent_transfer( "ben10ah", "alice10ah", ASSET( "0.000 TBD" ), "", 3, 7, ben10ah_private_key );
 
-  // The operations mentioned above can be checked now in 5th block, except 
+  // The operations mentioned above can be checked now in 5th block, except
   // failed_recurrent_transfer_operation - its block number depends on test configuration.
   // In standard configuration of this fixture it's 1204th block.
   check_point_tester( std::numeric_limits<uint32_t>::max() ); // <- no limit to max number of block generated inside.

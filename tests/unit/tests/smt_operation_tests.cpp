@@ -172,7 +172,7 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
     HIVE_REQUIRE_THROW( push_transaction( tx, bob_private_key ), fc::exception );
 
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "bob", op.orderid ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
     validate_database();
 
@@ -185,7 +185,7 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
     HIVE_REQUIRE_THROW( push_transaction( tx, alice_private_key ), fc::exception );
 
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", op.orderid ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
     validate_database();
 
@@ -198,7 +198,7 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
     HIVE_REQUIRE_THROW( push_transaction( tx, alice_private_key ), fc::exception );
 
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", op.orderid ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
     validate_database();
 
@@ -227,9 +227,9 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == op.amount_to_sell.amount );
     BOOST_REQUIRE( limit_order->sell_price == price( op.amount_to_sell, op.min_to_receive ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test failure creating limit order with duplicate id" );
@@ -245,9 +245,9 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == 10000 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "10.000 TESTS" ), op.min_to_receive ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test sucess killing an order that will not be filled" );
@@ -260,7 +260,7 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
 
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", op.orderid ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     validate_database();
 
     // BOOST_TEST_MESSAGE( "--- Test having a partial match to limit order" );
@@ -290,12 +290,12 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == 5000 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "10.000 TESTS" ), asset( 15000, alice_symbol ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "bob", op.orderid ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     BOOST_REQUIRE( fill_order_op.open_owner == "alice" );
     BOOST_REQUIRE( fill_order_op.open_orderid == 1 );
     BOOST_REQUIRE( fill_order_op.open_pays.amount.value == ASSET( "5.000 TESTS").amount.value );
@@ -322,12 +322,12 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == 1 );
     BOOST_REQUIRE( limit_order->for_sale.value == 7500 );
     BOOST_REQUIRE( limit_order->sell_price == price( asset( 15000, alice_symbol ), ASSET( "10.000 TESTS" ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 1 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test filling an existing order and new order fully" );
@@ -347,9 +347,9 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 3 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "bob", 1 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test filling limit order with better order when partial order is better." );
@@ -382,11 +382,11 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == 4 );
     BOOST_REQUIRE( limit_order->for_sale.value == 1000 );
     BOOST_REQUIRE( limit_order->sell_price == price( asset( 12000, alice_symbol ), ASSET( "10.000 TESTS" ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     validate_database();
 
     limit_order_cancel_operation can;
@@ -430,11 +430,11 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create_apply )
     BOOST_REQUIRE( limit_order->orderid == 5 );
     BOOST_REQUIRE( limit_order->for_sale.value == 9091 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "20.000 TESTS" ), asset( 22000, alice_symbol ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     validate_database();
   }
   FC_LOG_AND_RETHROW()
@@ -549,13 +549,13 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_cancel_apply )
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 5 ) ) != limit_order_idx.end() );
 
     tx.operations.clear();
-    
+
     tx.operations.push_back( op );
     push_transaction( tx, alice_private_key );
 
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 5 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
   }
   FC_LOG_AND_RETHROW()
 }
@@ -608,7 +608,7 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
     HIVE_REQUIRE_THROW( push_transaction( tx, bob_private_key ), fc::exception );
 
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "bob", op.orderid ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
     validate_database();
 
@@ -622,7 +622,7 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
     HIVE_REQUIRE_THROW( push_transaction( tx, alice_private_key ), fc::exception );
 
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", op.orderid ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
     validate_database();
 
@@ -635,7 +635,7 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
     HIVE_REQUIRE_THROW( push_transaction( tx, alice_private_key ), fc::exception );
 
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", op.orderid ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
     validate_database();
 
@@ -664,9 +664,9 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == op.amount_to_sell.amount );
     BOOST_REQUIRE( limit_order->sell_price == op.exchange_rate );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test failure creating limit order with duplicate id" );
@@ -682,9 +682,9 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == 10000 );
     BOOST_REQUIRE( limit_order->sell_price == op.exchange_rate );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test sucess killing an order that will not be filled" );
@@ -697,7 +697,7 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
 
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", op.orderid ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     validate_database();
 
     // BOOST_TEST_MESSAGE( "--- Test having a partial match to limit order" );
@@ -727,12 +727,12 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == op.orderid );
     BOOST_REQUIRE( limit_order->for_sale == 5000 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "2.000 TESTS" ), asset( 3000, alice_symbol ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "bob", op.orderid ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     BOOST_REQUIRE( fill_order_op.open_owner == "alice" );
     BOOST_REQUIRE( fill_order_op.open_orderid == 1 );
     BOOST_REQUIRE( fill_order_op.open_pays.amount.value == ASSET( "5.000 TESTS").amount.value );
@@ -759,12 +759,12 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == 1 );
     BOOST_REQUIRE( limit_order->for_sale.value == 7500 );
     BOOST_REQUIRE( limit_order->sell_price == price( asset( 3000, alice_symbol ), ASSET( "2.000 TESTS" ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 1 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test filling an existing order and new order fully" );
@@ -784,9 +784,9 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 3 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "bob", 1 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test filling limit order with better order when partial order is better." );
@@ -819,11 +819,11 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == 4 );
     BOOST_REQUIRE( limit_order->for_sale.value == 1000 );
     BOOST_REQUIRE( limit_order->sell_price == op.exchange_rate );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     validate_database();
 
     limit_order_cancel_operation can;
@@ -867,11 +867,11 @@ BOOST_AUTO_TEST_CASE( smt_limit_order_create2_apply )
     BOOST_REQUIRE( limit_order->orderid == 5 );
     BOOST_REQUIRE( limit_order->for_sale.value == 9091 );
     BOOST_REQUIRE( limit_order->sell_price == price( ASSET( "1.000 TESTS" ), asset( 1100, alice_symbol ) ) );
-    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, HIVE_SYMBOL ) );
+    BOOST_REQUIRE( limit_order->get_market() == std::make_pair( alice_symbol, PXC_SYMBOL ) );
     BOOST_REQUIRE( db->get_balance( alice_account, alice_symbol ).amount.value == alice_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( alice_account, HIVE_SYMBOL ).amount.value == alice_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( alice_account, PXC_SYMBOL ).amount.value == alice_balance.amount.value );
     BOOST_REQUIRE( db->get_balance( bob_account, alice_symbol ).amount.value == bob_smt_balance.amount.value );
-    BOOST_REQUIRE( db->get_balance( bob_account, HIVE_SYMBOL ).amount.value == bob_balance.amount.value );
+    BOOST_REQUIRE( db->get_balance( bob_account, PXC_SYMBOL ).amount.value == bob_balance.amount.value );
     validate_database();
   }
   FC_LOG_AND_RETHROW()
@@ -1323,11 +1323,11 @@ BOOST_AUTO_TEST_CASE( smt_create_validate )
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
 
     BOOST_TEST_MESSAGE( " -- Invalid SMT creation symbol: HIVE cannot be an SMT" );
-    op.symbol = HIVE_SYMBOL;
+    op.symbol = PXC_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
 
     BOOST_TEST_MESSAGE( " -- Invalid SMT creation symbol: HBD cannot be an SMT" );
-    op.symbol = HBD_SYMBOL;
+    op.symbol = PXS_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
 
     BOOST_TEST_MESSAGE( " -- Invalid SMT creation symbol: VESTS cannot be an SMT" );
@@ -1440,7 +1440,7 @@ BOOST_AUTO_TEST_CASE( smt_create_with_hive_funds )
     // This test expects 1.000 TBD smt_creation_fee
     db->modify( db->get_dynamic_global_properties(), [&] ( dynamic_global_property_object& dgpo )
     {
-      dgpo.smt_creation_fee = asset( 1000, HBD_SYMBOL );
+      dgpo.smt_creation_fee = asset( 1000, PXS_SYMBOL );
     } );
 
     set_price_feed( price( ASSET( "1.000 TBD" ), ASSET( "1.000 TESTS" ) ) );
@@ -1481,7 +1481,7 @@ BOOST_AUTO_TEST_CASE( smt_create_with_hbd_funds )
     // This test expects 1.000 TBD smt_creation_fee
     db->modify( db->get_dynamic_global_properties(), [&] ( dynamic_global_property_object& dgpo )
     {
-      dgpo.smt_creation_fee = asset( 1000, HBD_SYMBOL );
+      dgpo.smt_creation_fee = asset( 1000, PXS_SYMBOL );
     } );
 
     set_price_feed( price( ASSET( "1.000 TBD" ), ASSET( "1.000 TESTS" ) ) );
@@ -1550,7 +1550,7 @@ BOOST_AUTO_TEST_CASE( smt_creation_fee_test )
 
     // This ensures that our actual smt_creation_fee is sane in production (either HIVE or HBD)
     const dynamic_global_property_object& dgpo = db->get_dynamic_global_properties();
-    FC_ASSERT( dgpo.smt_creation_fee.symbol == HIVE_SYMBOL || dgpo.smt_creation_fee.symbol == HBD_SYMBOL,
+    FC_ASSERT( dgpo.smt_creation_fee.symbol == PXC_SYMBOL || dgpo.smt_creation_fee.symbol == PXS_SYMBOL,
             "Unexpected symbol for the SMT creation fee on the dynamic global properties object: ${s}", ("s", dgpo.smt_creation_fee.symbol) );
 
     FC_ASSERT( dgpo.smt_creation_fee.amount > 0, "Expected positive smt_creation_fee." );
@@ -1564,12 +1564,12 @@ BOOST_AUTO_TEST_CASE( smt_creation_fee_test )
       if ( !i ) // First pass
         db->modify( dgpo, [&] ( dynamic_global_property_object& dgpo )
         {
-          dgpo.smt_creation_fee = asset( 2000, HIVE_SYMBOL );
+          dgpo.smt_creation_fee = asset( 2000, PXC_SYMBOL );
         } );
       else // Second pass
         db->modify( dgpo, [&] ( dynamic_global_property_object& dgpo )
         {
-          dgpo.smt_creation_fee = asset( 1000, HBD_SYMBOL );
+          dgpo.smt_creation_fee = asset( 1000, PXS_SYMBOL );
         } );
 
       BOOST_TEST_MESSAGE( " -- Invalid creation fee, 0.001 TESTS short" );
@@ -1867,21 +1867,21 @@ BOOST_AUTO_TEST_CASE( smt_setup_emissions_validate )
     op.validate();
 
     BOOST_TEST_MESSAGE( " -- Invalid token symbol" );
-    op.symbol = HIVE_SYMBOL;
-    op.lep_abs_amount = asset( 0, HIVE_SYMBOL );
-    op.rep_abs_amount = asset( 0, HIVE_SYMBOL );
+    op.symbol = PXC_SYMBOL;
+    op.lep_abs_amount = asset( 0, PXC_SYMBOL );
+    op.rep_abs_amount = asset( 0, PXC_SYMBOL );
     HIVE_REQUIRE_THROW( op.validate(), fc::exception );
     op.symbol = alice_symbol;
     op.lep_abs_amount = asset( 0, alice_symbol );
     op.rep_abs_amount = asset( 0, alice_symbol );
 
     BOOST_TEST_MESSAGE( " -- Mismatching right endpoint token" );
-    op.rep_abs_amount = asset( 0, HIVE_SYMBOL );
+    op.rep_abs_amount = asset( 0, PXC_SYMBOL );
     HIVE_REQUIRE_THROW( op.validate(), fc::exception );
     op.rep_abs_amount = asset( 0, alice_symbol );
 
     BOOST_TEST_MESSAGE( " -- Mismatching left endpoint token" );
-    op.lep_abs_amount = asset( 0, HIVE_SYMBOL );
+    op.lep_abs_amount = asset( 0, PXC_SYMBOL );
     HIVE_REQUIRE_THROW( op.validate(), fc::exception );
     op.lep_abs_amount = asset( 0, alice_symbol );
 
@@ -2105,11 +2105,11 @@ BOOST_AUTO_TEST_CASE( set_setup_parameters_validate )
 
     op.validate();
 
-    op.symbol = HIVE_SYMBOL;
+    op.symbol = PXC_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception ); // Invalid symbol
     op.symbol = VESTS_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception ); // Invalid symbol
-    op.symbol = HBD_SYMBOL;
+    op.symbol = PXS_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception ); // Invalid symbol
     op.symbol = alice_symbol;
 
@@ -2254,11 +2254,11 @@ BOOST_AUTO_TEST_CASE( smt_set_runtime_parameters_validate )
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
 
     BOOST_TEST_MESSAGE( "--- Invalid SMT creation symbol: HIVE cannot be an SMT" );
-    op.symbol = HIVE_SYMBOL;
+    op.symbol = PXC_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
 
     BOOST_TEST_MESSAGE( "--- Invalid SMT creation symbol: HBD cannot be an SMT" );
-    op.symbol = HBD_SYMBOL;
+    op.symbol = PXS_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
 
     BOOST_TEST_MESSAGE( "--- Invalid SMT creation symbol: VESTS cannot be an SMT" );
@@ -2619,7 +2619,7 @@ BOOST_AUTO_TEST_CASE( smt_contribute_validate )
 
     smt_contribute_operation op;
     op.contributor = "alice";
-    op.contribution = asset( 1000, HIVE_SYMBOL );
+    op.contribution = asset( 1000, PXC_SYMBOL );
     op.contribution_id = 1;
     op.symbol = new_symbol;
     op.validate();
@@ -2630,32 +2630,32 @@ BOOST_AUTO_TEST_CASE( smt_contribute_validate )
     op.contributor = "alice";
 
     BOOST_TEST_MESSAGE( " -- Failure on negative contribution" );
-    op.contribution = asset( -1, HIVE_SYMBOL );
+    op.contribution = asset( -1, PXC_SYMBOL );
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
-    op.contribution = asset( 1000, HIVE_SYMBOL );
+    op.contribution = asset( 1000, PXC_SYMBOL );
 
     BOOST_TEST_MESSAGE( " -- Failure on no contribution" );
-    op.contribution = asset( 0, HIVE_SYMBOL );
+    op.contribution = asset( 0, PXC_SYMBOL );
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
-    op.contribution = asset( 1000, HIVE_SYMBOL );
+    op.contribution = asset( 1000, PXC_SYMBOL );
 
     BOOST_TEST_MESSAGE( " -- Failure on VESTS contribution" );
     op.contribution = asset( 1000, VESTS_SYMBOL );
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
-    op.contribution = asset( 1000, HIVE_SYMBOL );
+    op.contribution = asset( 1000, PXC_SYMBOL );
 
     BOOST_TEST_MESSAGE( " -- Failure on HBD contribution" );
-    op.contribution = asset( 1000, HBD_SYMBOL );
+    op.contribution = asset( 1000, PXS_SYMBOL );
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
-    op.contribution = asset( 1000, HIVE_SYMBOL );
+    op.contribution = asset( 1000, PXC_SYMBOL );
 
     BOOST_TEST_MESSAGE( " -- Failure on SMT contribution" );
     op.contribution = asset( 1000, new_symbol );
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
-    op.contribution = asset( 1000, HIVE_SYMBOL );
+    op.contribution = asset( 1000, PXC_SYMBOL );
 
     BOOST_TEST_MESSAGE( " -- Failure on contribution to HIVE" );
-    op.symbol = HIVE_SYMBOL;
+    op.symbol = PXC_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
     op.symbol = new_symbol;
 
@@ -2665,7 +2665,7 @@ BOOST_AUTO_TEST_CASE( smt_contribute_validate )
     op.symbol = new_symbol;
 
     BOOST_TEST_MESSAGE( " -- Failure on contribution to HBD" );
-    op.symbol = HBD_SYMBOL;
+    op.symbol = PXS_SYMBOL;
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
     op.symbol = new_symbol;
 
@@ -2685,9 +2685,9 @@ BOOST_AUTO_TEST_CASE( smt_contribute_apply )
 
     generate_block();
 
-    auto alice_asset_accumulator = asset( 0, HIVE_SYMBOL );
-    auto bob_asset_accumulator = asset( 0, HIVE_SYMBOL );
-    auto sam_asset_accumulator = asset( 0, HIVE_SYMBOL );
+    auto alice_asset_accumulator = asset( 0, PXC_SYMBOL );
+    auto bob_asset_accumulator = asset( 0, PXC_SYMBOL );
+    auto sam_asset_accumulator = asset( 0, PXC_SYMBOL );
 
     auto alice_contribution_counter = 0;
     auto bob_contribution_counter = 0;
@@ -2711,19 +2711,19 @@ BOOST_AUTO_TEST_CASE( smt_contribute_apply )
 
     smt_contribute_operation bob_op;
     bob_op.contributor = "bob";
-    bob_op.contribution = asset( 1000, HIVE_SYMBOL );
+    bob_op.contribution = asset( 1000, PXC_SYMBOL );
     bob_op.contribution_id = bob_contribution_counter;
     bob_op.symbol = alice_symbol;
 
     smt_contribute_operation alice_op;
     alice_op.contributor = "alice";
-    alice_op.contribution = asset( 2000, HIVE_SYMBOL );
+    alice_op.contribution = asset( 2000, PXC_SYMBOL );
     alice_op.contribution_id = alice_contribution_counter;
     alice_op.symbol = alice_symbol;
 
     smt_contribute_operation sam_op;
     sam_op.contributor = "sam";
-    sam_op.contribution = asset( 3000, HIVE_SYMBOL );
+    sam_op.contribution = asset( 3000, PXC_SYMBOL );
     sam_op.contribution_id = sam_contribution_counter;
     sam_op.symbol = alice_symbol;
 
@@ -2844,9 +2844,9 @@ BOOST_AUTO_TEST_CASE( smt_contribute_apply )
     sam_op.contribution_id = sam_contribution_counter;
     FAIL_WITH_OP( sam_op, sam_private_key, fc::assert_exception );
 
-    auto alices_contributions = asset( 0, HIVE_SYMBOL );
-    auto bobs_contributions = asset( 0, HIVE_SYMBOL );
-    auto sams_contributions = asset( 0, HIVE_SYMBOL );
+    auto alices_contributions = asset( 0, PXC_SYMBOL );
+    auto bobs_contributions = asset( 0, PXC_SYMBOL );
+    auto sams_contributions = asset( 0, PXC_SYMBOL );
 
     auto alices_num_contributions = 0;
     auto bobs_num_contributions = 0;
@@ -2889,9 +2889,9 @@ BOOST_AUTO_TEST_CASE( smt_contribute_apply )
     BOOST_REQUIRE( sams_num_contributions == sam_contribution_counter );
 
     BOOST_TEST_MESSAGE( " -- Checking account balances" );
-    BOOST_REQUIRE( db->get_balance( "alice", HIVE_SYMBOL ) == ASSET( "1000.000 TESTS" ) - alice_asset_accumulator );
-    BOOST_REQUIRE( db->get_balance( "bob", HIVE_SYMBOL ) == ASSET( "1000.000 TESTS" ) - bob_asset_accumulator );
-    BOOST_REQUIRE( db->get_balance( "sam", HIVE_SYMBOL ) == ASSET( "1000.000 TESTS" ) - sam_asset_accumulator );
+    BOOST_REQUIRE( db->get_balance( "alice", PXC_SYMBOL ) == ASSET( "1000.000 TESTS" ) - alice_asset_accumulator );
+    BOOST_REQUIRE( db->get_balance( "bob", PXC_SYMBOL ) == ASSET( "1000.000 TESTS" ) - bob_asset_accumulator );
+    BOOST_REQUIRE( db->get_balance( "sam", PXC_SYMBOL ) == ASSET( "1000.000 TESTS" ) - sam_asset_accumulator );
 
     BOOST_TEST_MESSAGE( " -- Checking ICO total contributions" );
     const auto* ico_obj = db->find< smt_ico_object, by_symbol >( alice_symbol );

@@ -45,7 +45,7 @@ void new_chain_banner( const chain::database& db )
     "********************************\n"
     "*                              *\n"
     "*   ------- NEW CHAIN ------   *\n"
-    "*   -   Welcome to Hive!   -   *\n"
+    "*   - Welcome to Pixagram! -   *\n"
     "*   ------------------------   *\n"
     "*                              *\n"
     "********************************\n");
@@ -272,7 +272,7 @@ class witness_plugin_impl
 
   void witness_plugin_impl::on_finish_push_block( const block_notification& note )
   {
-    // Broadcast a transaction to let the other witnesses know we've accepted this block for fast 
+    // Broadcast a transaction to let the other witnesses know we've accepted this block for fast
     // confirmation.
     // I think it's called multiple times during a fork switch, which isn't what we want, so
     // only generate this transaction if our head block number has increased

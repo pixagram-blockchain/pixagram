@@ -125,7 +125,7 @@ public:
   time_point_sec                launch_time;
   share_type                    hive_units_soft_cap = -1;
   share_type                    hive_units_hard_cap = -1;
-  protocol::asset               contributed = protocol::asset( 0, HIVE_SYMBOL );
+  protocol::asset               contributed = protocol::asset( 0, PXC_SYMBOL );
 
   CHAINBASE_UNPACK_CONSTRUCTOR(smt_ico_object);
 };
