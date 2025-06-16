@@ -42,7 +42,7 @@ void test_get_transaction( const condenser_api_fixture& caf, uint32_t block_num,
     // Call condenser get_transaction and verify results against expected pattern.
     const auto cn_trx = caf.condenser_api->get_transaction( condenser_api::get_transaction_args(1, fc::variant(tx_hash)) );
     // Call account history get_transaction and verify results against expected pattern.
-    const account_history::annotated_signed_transaction ah_trx = 
+    const account_history::annotated_signed_transaction ah_trx =
       caf.account_history_api->get_transaction( {tx_hash, false /*include_reversible*/} );
 
     ilog("ah trx: ${ah_trx}", (ah_trx));
@@ -128,7 +128,6 @@ BOOST_AUTO_TEST_CASE( get_transaction_0234 )
 
   BOOST_TEST_MESSAGE( "testing get_transaction with different number of operations in transactions" );
 
-  db->set_hardfork( HIVE_HARDFORK_1_27 );
   generate_block();
 
   ACTORS( (alice2trx)(bob2trx) );
@@ -143,7 +142,7 @@ BOOST_AUTO_TEST_CASE( get_transaction_0234 )
   BOOST_REQUIRE_THROW( push_transaction( tx, alice2trx_private_key ), fc::assert_exception ); // see transaction::validate
 
   // Prepare operations that will be used in transactions
-  
+
   transfer_operation transfer_op;
   transfer_op.from = "alice2trx";
   transfer_op.to = "bob2trx";

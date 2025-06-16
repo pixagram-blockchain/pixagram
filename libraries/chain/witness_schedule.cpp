@@ -17,8 +17,7 @@ using hive::chain::util::rd_validate_user_params;
 
 void reset_virtual_schedule_time( database& db )
 { try {
-  const witness_schedule_object& wso = db.has_hardfork(HIVE_HARDFORK_1_27_FIX_TIMESHARE_WITNESS_SCHEDULING) ?
-                                       db.get_witness_schedule_object_for_irreversibility() : db.get_witness_schedule_object();
+  const witness_schedule_object& wso = db.get_witness_schedule_object_for_irreversibility();
   db.modify( wso, [&](witness_schedule_object& o )
   {
     o.current_virtual_time = fc::uint128(); // reset it 0

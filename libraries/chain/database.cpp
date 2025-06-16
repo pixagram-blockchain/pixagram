@@ -1268,8 +1268,7 @@ void database::adjust_witness_votes( const account_object& a, const share_type& 
 
 void database::adjust_witness_vote( const witness_object& witness, share_type delta )
 {
-  const witness_schedule_object& wso = has_hardfork(HIVE_HARDFORK_1_27_FIX_TIMESHARE_WITNESS_SCHEDULING) ?
-                                       get_witness_schedule_object_for_irreversibility() : get_witness_schedule_object();
+  const witness_schedule_object& wso = get_witness_schedule_object_for_irreversibility();
   modify( witness, [&]( witness_object& w )
   {
     auto delta_pos = w.votes.value * (wso.current_virtual_time - w.virtual_last_update);
@@ -5689,9 +5688,6 @@ void database::init_hardforks()
   FC_ASSERT( HIVE_HARDFORK_1_26 == 26, "Invalid hardfork configuration" );
   _hardfork_versions.times[ HIVE_HARDFORK_1_26 ] = fc::time_point_sec( HIVE_HARDFORK_1_26_TIME );
   _hardfork_versions.versions[ HIVE_HARDFORK_1_26 ] = HIVE_HARDFORK_1_26_VERSION;
-  FC_ASSERT( HIVE_HARDFORK_1_27 == 27, "Invalid hardfork configuration" );
-  _hardfork_versions.times[ HIVE_HARDFORK_1_27 ] = fc::time_point_sec( HIVE_HARDFORK_1_27_TIME );
-  _hardfork_versions.versions[ HIVE_HARDFORK_1_27 ] = HIVE_HARDFORK_1_27_VERSION;
 }
 
 void database::process_hardforks()
