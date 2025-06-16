@@ -104,9 +104,9 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_DELAYED_VOTING_TOTAL_INTERVAL_SECONDS (configuration_data.get_hive_delayed_voting_total_interval_seconds())
 #define HIVE_DELAYED_VOTING_INTERVAL_SECONDS       (configuration_data.get_hive_delayed_voting_interval_seconds())  /// We want to have at most 30 entries in the account's delayed voting collection (similary to mainnet)
 
-#define HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF25 (configuration_data.get_hive_reverse_auction_window_seconds())
-#define HIVE_EARLY_VOTING_SECONDS_HF25           (configuration_data.get_hive_early_voting_seconds())
-#define HIVE_MID_VOTING_SECONDS_HF25             (configuration_data.get_hive_mid_voting_seconds())
+#define HIVE_REVERSE_AUCTION_WINDOW_SECONDS (configuration_data.get_hive_reverse_auction_window_seconds())
+#define HIVE_EARLY_VOTING_SECONDS           (configuration_data.get_hive_early_voting_seconds())
+#define HIVE_MID_VOTING_SECONDS             (configuration_data.get_hive_mid_voting_seconds())
 
 #define HIVE_FEED_INTERVAL_BLOCKS             (configuration_data.get_hive_feed_interval_blocks())
 #define HIVE_FEED_HISTORY_WINDOW_PRE_HF_16    (24*7) /// expressed in number of intervals
@@ -176,6 +176,8 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_PROPOSAL_MAINTENANCE_CLEANUP          (60*60*24*1) /// 1 day
 #define HIVE_DAILY_PROPOSAL_MAINTENANCE_PERIOD     HIVE_ONE_DAY_SECONDS
 #define HIVE_GOVERNANCE_VOTE_EXPIRATION_PERIOD     (fc::days(365))
+#define HIVE_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT  (fc::microseconds(HIVE_GOVERNANCE_VOTE_EXPIRATION_PERIOD.count()/2))
+#define FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP  (fc::time_point_sec(HIVE_GENESIS_TIME) + HIVE_GOVERNANCE_VOTE_EXPIRATION_PERIOD)
 #define HIVE_WITNESS_SHUTDOWN_THRESHOLD            HIVE_BLOCKS_PER_DAY
 
 #define HIVE_GLOBAL_REMOVE_THRESHOLD          200
@@ -185,9 +187,9 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_DELAYED_VOTING_TOTAL_INTERVAL_SECONDS (60*60*24*30) // 30 days
 #define HIVE_DELAYED_VOTING_INTERVAL_SECONDS       (60*60*24*1)  // 1 day
 
-#define HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF25 0              /// disabled
-#define HIVE_EARLY_VOTING_SECONDS_HF25           (24 * 60 * 60) /// 24 hours
-#define HIVE_MID_VOTING_SECONDS_HF25             (48 * 60 * 60) /// 48 hours
+#define HIVE_REVERSE_AUCTION_WINDOW_SECONDS 0              /// disabled
+#define HIVE_EARLY_VOTING_SECONDS           (24 * 60 * 60) /// 24 hours
+#define HIVE_MID_VOTING_SECONDS             (48 * 60 * 60) /// 48 hours
 
 #define HIVE_FEED_INTERVAL_BLOCKS             (HIVE_BLOCKS_PER_HOUR)
 #define HIVE_FEED_HISTORY_WINDOW_PRE_HF_16    (24*7) /// 7 days * 24 hours per day
@@ -245,7 +247,6 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_MAX_CONSECUTIVE_RECURRENT_TRANSFER_FAILURES     10
 #define HIVE_VOTING_MANA_REGENERATION_SECONDS (5*60*60*24) // 5 day
 #define HIVE_MAX_VOTE_CHANGES                 5
-#define HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF6 (60*30) /// 30 minutes
 #define HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF20 (60*15) /// 15 minutes
 #define HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF21 (60*5) /// 5 minutes
 #define HIVE_MIN_VOTE_INTERVAL_SEC            3

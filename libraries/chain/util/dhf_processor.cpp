@@ -186,16 +186,7 @@ void dhf_processor::transfer_payments( const time_point_sec& head_time, asset& m
     if( _item.total_votes == 0 )
       break;
 
-    asset period_pay;
-    if( db.has_hardfork(HIVE_HARDFORK_1_25) )
-    {
-      period_pay = asset((( passed_time_seconds * _item.daily_pay.amount.value ) / daily_seconds ), _item.daily_pay.symbol );
-    }
-    else
-    {
-      uint128_t ratio = ( passed_time_seconds * HIVE_100_PERCENT ) / daily_seconds;
-      period_pay = asset( fc::uint128_to_uint64( ratio * _item.daily_pay.amount.value ) / HIVE_100_PERCENT, _item.daily_pay.symbol );
-    }
+    const asset period_pay = asset((( passed_time_seconds * _item.daily_pay.amount.value ) / daily_seconds ), _item.daily_pay.symbol );
 
     if( period_pay >= maintenance_budget_limit )
     {

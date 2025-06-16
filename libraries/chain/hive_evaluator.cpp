@@ -2318,8 +2318,6 @@ void convert_evaluator::do_apply( const convert_operation& o )
 
 void collateralized_convert_evaluator::do_apply( const collateralized_convert_operation& o )
 {
-  FC_ASSERT( _db.has_hardfork( HIVE_HARDFORK_1_25 ), "Operation not available until HF25" );
-
   const auto& owner = _db.get_account( o.owner );
   _db.adjust_balance( owner, -o.amount );
 
@@ -3146,7 +3144,6 @@ struct recurrent_transfer_extension_visitor
 
 void recurrent_transfer_evaluator::do_apply( const recurrent_transfer_operation& op )
 {
-  FC_ASSERT( _db.has_hardfork( HIVE_HARDFORK_1_25 ), "Recurrent transfers are not enabled until hardfork ${hf}", ("hf", HIVE_HARDFORK_1_25) );
   const auto& from_account = _db.get_account( op.from );
   const auto& to_account = _db.get_account( op.to );
 

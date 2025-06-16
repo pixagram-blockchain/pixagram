@@ -1918,9 +1918,6 @@ void database::process_delayed_voting( const block_notification& note )
   */
 void database::process_recurrent_transfers()
 {
-  if( !has_hardfork( HIVE_HARDFORK_1_25 ) )
-    return;
-
   auto now = head_block_time();
   const auto& recurrent_transfers_by_date = get_index< recurrent_transfer_index, by_trigger_date >();
   auto itr = recurrent_transfers_by_date.begin();
@@ -4128,9 +4125,7 @@ try {
           // as for L = 33%; for better accuracy we can express the price as (100%-L)*X HBD per L*Y HIVE
 
           const auto& dgpo = get_dynamic_global_properties();
-          auto hbd_supply = dgpo.get_current_hbd_supply();
-          if( has_hardfork( HIVE_HARDFORK_1_25_HBD_HARD_CAP ) )
-            hbd_supply -= get_treasury().get_hbd_balance();
+          auto hbd_supply = dgpo.get_current_hbd_supply() - get_treasury().get_hbd_balance();
           if( hbd_supply.amount > 0 )
           {
             uint16_t limit = HIVE_HBD_HARD_LIMIT;
@@ -5281,33 +5276,6 @@ void database::modify_balance( const account_object& a, const asset& delta, bool
       }
       case PIXA_ASSET_NUM_PXS:
       {
-        /// Starting from HF 25 HBD interest will be paid only from saving balance.
-        if( has_hardfork(HIVE_HARDFORK_1_25) == false && a.hbd_seconds_last_update != head_block_time() )
-        {
-          acnt.hbd_seconds += fc::uint128_t(a.get_hbd_balance().amount.value) * (head_block_time() - a.hbd_seconds_last_update).to_seconds();
-          acnt.hbd_seconds_last_update = head_block_time();
-          if( acnt.hbd_seconds > 0 &&
-              (acnt.hbd_seconds_last_update - acnt.hbd_last_interest_payment).to_seconds() > HIVE_HBD_INTEREST_COMPOUND_INTERVAL_SEC )
-          {
-            auto interest = acnt.hbd_seconds / HIVE_SECONDS_PER_YEAR;
-            interest *= get_dynamic_global_properties().get_hbd_interest_rate();
-            interest /= HIVE_100_PERCENT;
-            asset interest_paid(fc::uint128_to_uint64(interest), PXS_SYMBOL);
-            acnt.hbd_balance += interest_paid;
-            acnt.hbd_seconds = 0;
-            acnt.hbd_last_interest_payment = head_block_time();
-
-            if(interest > 0)
-              push_virtual_operation( interest_operation( a.get_name(), interest_paid, true ) );
-
-            modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& props)
-            {
-              props.current_hbd_supply += interest_paid;
-              props.virtual_supply += interest_paid * get_feed_history().current_median_history;
-            } );
-          }
-        }
-
         auto b = acnt.hbd_balance;
         acnt.hbd_balance += delta;
 
@@ -5672,9 +5640,6 @@ void database::init_hardforks()
   FC_ASSERT( HIVE_HARDFORK_1_24 == 24, "Invalid hardfork configuration" );
   _hardfork_versions.times[ HIVE_HARDFORK_1_24 ] = fc::time_point_sec( HIVE_HARDFORK_1_24_TIME );
   _hardfork_versions.versions[ HIVE_HARDFORK_1_24 ] = HIVE_HARDFORK_1_24_VERSION;
-  FC_ASSERT( HIVE_HARDFORK_1_25 == 25, "Invalid hardfork configuration" );
-  _hardfork_versions.times[ HIVE_HARDFORK_1_25 ] = fc::time_point_sec( HIVE_HARDFORK_1_25_TIME );
-  _hardfork_versions.versions[ HIVE_HARDFORK_1_25 ] = HIVE_HARDFORK_1_25_VERSION;
 }
 
 void database::process_hardforks()
@@ -5744,11 +5709,18 @@ void database::set_hardfork( uint32_t hardfork, bool apply_now )
 void database::apply_hardfork( uint32_t hardfork )
 {
   //TODO(Matus): move it to init ?
+  modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
+  {
+    rfo.curation_reward_curve = linear;
+    rfo.author_reward_curve   = linear;
+  });
+
   const auto& fwso = create<witness_schedule_object>( [&]( witness_schedule_object& future_witness_schedule )
   {
     future_witness_schedule.copy_values_from( get_witness_schedule_object() );
   } );
   FC_ASSERT( fwso.get_id() == 1, "Unexpected id allocated to future witness schedule object" );
+  ////
 
   if( _log_hardforks )
     elog( "HARDFORK ${hf} at block ${b}", ("hf", hardfork)("b", head_block_num()) );
@@ -6114,21 +6086,6 @@ void database::apply_hardfork( uint32_t hardfork )
 #else
       set_chain_id(HIVE_CHAIN_ID);
 #endif /// IS_TEST_NET
-      break;
-    }
-    case HIVE_HARDFORK_1_25:
-    {
-      modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
-      {
-        rfo.curation_reward_curve = linear;
-        rfo.author_reward_curve   = linear;
-      });
-      modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
-      {
-        gpo.reverse_auction_seconds = HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF25;
-        gpo.early_voting_seconds    = HIVE_EARLY_VOTING_SECONDS_HF25;
-        gpo.mid_voting_seconds      = HIVE_MID_VOTING_SECONDS_HF25;
-      });
       break;
     }
 //TODO(MATUS)
@@ -6606,9 +6563,6 @@ optional< chainbase::database::session >& database::pending_transaction_session(
 
 void database::remove_expired_governance_votes()
 {
-  if (!has_hardfork(HIVE_HARDFORK_1_25))
-    return;
-
   const auto& accounts = get_index<account_index, by_governance_vote_expiration_ts>();
   auto acc_it = accounts.begin();
   time_point_sec first_expiring = acc_it->get_governance_vote_expiration_ts();
