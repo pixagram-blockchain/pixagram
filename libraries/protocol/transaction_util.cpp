@@ -15,7 +15,6 @@ enum class verify_authority_problem
 
 template< bool IS_TRACED=false, typename PROBLEM_HANDLER, typename OTHER_AUTH_PROBLEM_HANDLER >
 void verify_authority_impl(
-  bool allow_strict_and_mixed_authorities,
   bool allow_redundant_signatures,
   const required_authorities_type& required_authorities,
   const flat_set<public_key_type>& sigs,
@@ -53,25 +52,10 @@ FC_EXPAND_MACRO(                                                \
   FC_MULTILINE_MACRO_END                                        \
 )
 
-  sign_state<IS_TRACED> s( sigs, get_posting, { allow_strict_and_mixed_authorities, max_recursion_depth, max_membership, max_account_auths }, tracer );
+  sign_state<IS_TRACED> s( sigs, get_posting, { max_recursion_depth, max_membership, max_account_auths }, tracer );
 
   if( not required_authorities.required_posting.empty() )
   {
-    if( !allow_strict_and_mixed_authorities )
-    {
-    /**
-      *  Up to HF28 transactions with operations required posting authority cannot be combined
-      *  with transactions requiring active or owner authority. This is for ease of
-      *  implementation. Future versions of authority verification may be able to
-      *  check for the merged authority of active and posting.
-      */
-      VERIFY_AUTHORITY_CHECK( required_authorities.required_active.empty() &&
-        required_authorities.required_owner.empty() &&
-        required_authorities.required_witness.empty() &&
-        required_authorities.other.empty(),
-        verify_authority_problem::mixed_with_posting, account_name_type() );
-    }
-
     s.add_approved( posting_approvals );
 
     for( const auto& id : required_authorities.required_posting )
@@ -81,37 +65,7 @@ FC_EXPAND_MACRO(                                                \
         FC_ASSERT(tracer);
         tracer->set_role("posting");
       }
-
-      if( allow_strict_and_mixed_authorities )
-      {
-        VERIFY_AUTHORITY_CHECK( s.check_authority( id ), verify_authority_problem::missing_posting, id );
-      }
-      else
-      {
-        auto check_with_role_upgrade = [&](const authority& auth, const string& role) -> bool {
-          if constexpr (IS_TRACED)
-          {
-            FC_ASSERT(tracer);
-            tracer->trim_final_authority_path();
-          }
-
-          return s.check_authority( auth, id, role );
-        };
-        VERIFY_AUTHORITY_CHECK( s.check_authority( id ) || 
-          check_with_role_upgrade( get_active( id ), "active" ) ||
-          check_with_role_upgrade( get_owner( id ), "owner" ),
-          verify_authority_problem::missing_posting, id );
-      }
-    }
-
-    if( !allow_strict_and_mixed_authorities )
-    {
-      if( !allow_redundant_signatures )
-      {
-        VERIFY_AUTHORITY_CHECK( !s.remove_unused_signatures(),
-          verify_authority_problem::unused_signature, account_name_type() );
-      }
-      return;
+      VERIFY_AUTHORITY_CHECK( s.check_authority( id ), verify_authority_problem::missing_posting, id );
     }
   }
 
@@ -134,28 +88,9 @@ FC_EXPAND_MACRO(                                                \
       FC_ASSERT(tracer);
       tracer->set_role("active");
     }
-      
-    if( allow_strict_and_mixed_authorities )
-    {
-      VERIFY_AUTHORITY_CHECK( s.check_authority( id ),
-        verify_authority_problem::missing_active, id );
-    }
-    else
-    {
-      auto check_with_role_upgrade = [&]() -> bool {
-        if constexpr (IS_TRACED)
-        {
-          FC_ASSERT(tracer);
-          tracer->trim_final_authority_path();
-        }
 
-        return s.check_authority( get_owner( id ), id, "owner" );
-      };
-
-      VERIFY_AUTHORITY_CHECK( 
-        s.check_authority( id ) || check_with_role_upgrade(),
-        verify_authority_problem::missing_active, id );
-    }
+    VERIFY_AUTHORITY_CHECK( s.check_authority( id ),
+      verify_authority_problem::missing_active, id );
   }
 
   for( const auto& id : required_authorities.required_owner )
@@ -191,9 +126,7 @@ FC_EXPAND_MACRO(                                                \
 }
 
 template<bool IS_TRACED>
-void verify_authority(bool allow_strict_and_mixed_authorities,
-                      bool allow_redundant_signatures,
-                      const required_authorities_type& required_authorities,
+void verify_authority(const required_authorities_type& required_authorities,
                       const flat_set<public_key_type>& sigs,
                       const authority_getter& get_active,
                       const authority_getter& get_owner,
@@ -209,7 +142,7 @@ void verify_authority(bool allow_strict_and_mixed_authorities,
                       authority_verification_tracer* tracer
 )
 { try {
-  verify_authority_impl<IS_TRACED>( allow_strict_and_mixed_authorities, allow_redundant_signatures, required_authorities, sigs,
+  verify_authority_impl<IS_TRACED>(true, required_authorities, sigs,
     get_active, get_owner, get_posting, get_witness_key,
     max_recursion_depth, max_membership, max_account_auths,
     active_approvals, owner_approvals, posting_approvals,
@@ -263,9 +196,7 @@ FC_EXPAND_MACRO(                                                      \
 #undef VERIFY_AUTHORITY_THROW
 } FC_CAPTURE_AND_RETHROW((sigs)) }
 
-void verify_authority(bool allow_strict_and_mixed_authorities,
-                      bool allow_redundant_signatures,
-                      const required_authorities_type& required_authorities,
+void verify_authority(const required_authorities_type& required_authorities,
                       const flat_set<public_key_type>& sigs,
                       const authority_getter& get_active,
                       const authority_getter& get_owner,
@@ -281,8 +212,6 @@ void verify_authority(bool allow_strict_and_mixed_authorities,
                       )
 {
   verify_authority<false>(
-    allow_strict_and_mixed_authorities,
-    allow_redundant_signatures,
     required_authorities,
     sigs,
     get_active,
@@ -305,13 +234,11 @@ T force_found(std::optional<T> t, const string& id)
 {
   if( t )
     return *t;
-  
+
   throw std::runtime_error("Not found id: " + id);
 };
 
 authority_verification_trace verify_authority_with_tracing(
-  bool allow_strict_and_mixed_authorities,
-  bool allow_redundant_signatures,
   const required_authorities_type& required_authorities,
   const flat_set<public_key_type>& sigs,
   const authority_getter_i& getters,
@@ -326,8 +253,7 @@ authority_verification_trace verify_authority_with_tracing(
 {
   authority_verification_tracer tracer;
   verify_authority_impl<true>(
-    allow_strict_and_mixed_authorities,
-    allow_redundant_signatures,
+    true,
     required_authorities,
     sigs,
     [&](const string& id) -> authority { return force_found(getters.get_active(id), id); },
@@ -340,7 +266,7 @@ authority_verification_trace verify_authority_with_tracing(
     active_approvals /* = flat_set<account_name_type>() */,
     owner_approvals /* = flat_set<account_name_type>() */,
     posting_approvals /* = flat_set<account_name_type>() */,
-    [&]( const char*, verify_authority_problem, const account_name_type& ){ 
+    [&]( const char*, verify_authority_problem, const account_name_type& ){
       return false; /*Continue verification*/
     },
     [&]( const char*, const authority& ){
@@ -351,8 +277,8 @@ authority_verification_trace verify_authority_with_tracing(
   return tracer.get_trace();
 }
 
-bool has_authorization( bool allow_strict_and_mixed_authorities,
-  bool allow_redundant_signatures,
+bool has_authorization(
+  bool allow_redundant_authorities,
   const required_authorities_type& required_authorities,
   const flat_set<public_key_type>& sigs,
   const authority_getter& get_active,
@@ -361,14 +287,14 @@ bool has_authorization( bool allow_strict_and_mixed_authorities,
   const witness_public_key_getter& get_witness_key )
 {
   bool result = true;
-  verify_authority_impl<false>( allow_strict_and_mixed_authorities, allow_redundant_signatures, required_authorities, sigs,
+  verify_authority_impl<false>( allow_redundant_authorities, required_authorities, sigs,
     get_active, get_owner, get_posting, get_witness_key,
     HIVE_MAX_SIG_CHECK_DEPTH, HIVE_MAX_AUTHORITY_MEMBERSHIP, HIVE_MAX_SIG_CHECK_ACCOUNTS,
     flat_set<account_name_type>(), flat_set<account_name_type>(), flat_set<account_name_type>(),
-    [&]( const char*, verify_authority_problem, const account_name_type& ){ 
+    [&]( const char*, verify_authority_problem, const account_name_type& ){
       result = false; return true; /*Break verification anyway*/
     },
-    [&]( const char*, const authority& ){ 
+    [&]( const char*, const authority& ){
       result = false; return true; /*Break verification anyway*/
     },
     nullptr );

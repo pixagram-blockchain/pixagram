@@ -2020,67 +2020,6 @@ void database::process_recurrent_transfers()
     _benchmark_dumper.end( "processing", "hive::protocol::recurrent_transfer_operation", processed_transfers );
 }
 
-void database::remove_proposal_votes_for_accounts_without_voting_rights()
-{
-  std::vector<account_name_type> voters;
-
-  const auto& proposal_votes_idx = get_index< proposal_vote_index, by_voter_proposal >();
-
-  auto itr = proposal_votes_idx.begin();
-  while( itr != proposal_votes_idx.end() )
-  {
-    voters.push_back( itr->voter );
-    ++itr;
-  }
-
-  //Lack of voters.
-  if( voters.empty() )
-    return;
-
-  std::vector<account_name_type> accounts;
-
-  for( auto& voter : voters )
-  {
-    const auto& account = get_account( voter );
-    if( !account.can_vote )
-      accounts.push_back( account.get_name() );
-  }
-
-  //Lack of voters who declined voting rights.
-  if( accounts.empty() )
-    return;
-
-  /*
-    For every account set a request to remove proposal votes.
-    Current time is set, because we want to start removing proposal votes as soon as possible.
-  */
-  const auto& request_idx = get_index< decline_voting_rights_request_index, by_account >();
-
-  for( auto& account : accounts )
-  {
-    auto found = request_idx.find( account );
-    if( found !=request_idx.end() )
-    {
-      /*
-        Before HF28 it was possible to create `decline_voting_rights` operation again, even if an account had `can_vote` set to false.
-        In this case `effective_date` must be changed otherwise a new object is created.
-      */
-      modify( *found, [&]( decline_voting_rights_request_object& req )
-      {
-        req.effective_date = head_block_time();
-      });
-    }
-    else
-    {
-      create< decline_voting_rights_request_object >( [&]( decline_voting_rights_request_object& req )
-      {
-        req.account = account;
-        req.effective_date = head_block_time();
-      });
-    }
-  }
-}
-
 /**
   * This method updates total_reward_shares2 on DGPO, and children_rshares2 on comments, when a comment's rshares2 changes
   * from old_rshares2 to new_rshares2.  Maintaining invariants that children_rshares2 is the sum of all descendants' rshares2,
@@ -2128,14 +2067,6 @@ void database::process_vesting_withdrawals()
     const auto& from_account = *current; ++current; ++count;
 
     share_type to_withdraw = from_account.get_next_vesting_withdrawal();
-    if( !has_hardfork( HIVE_HARDFORK_1_28_FIX_POWER_DOWN ) && to_withdraw < from_account.vesting_withdraw_rate.amount )
-      to_withdraw = from_account.to_withdraw.amount % from_account.vesting_withdraw_rate.amount;
-    // see history of first (and so far the only) power down of 'gil' account: https://hiveblocks.com/@gil
-    // the situation was caused by HF1, where vesting_withdraw_rate changed from 9615 before split to 9615.384615
-    // (instead of correct 9615.000000); that is the source of nonequivalence between taking all the rest of power down
-    // (0.769270 VESTS) and modulo of "all % weekly rate" (0.000040 VESTS);
-    // it is possible that other accounts were also affected in similar way, 'gil' was just the first where the difference
-    // occurred
     if( to_withdraw > from_account.get_vesting().amount )
     {
       elog( "NOTIFYALERT! somehow account was scheduled to power down more than it has on balance (${s} vs ${h})",
@@ -2734,19 +2665,15 @@ void database::process_funds()
     // below subtraction cannot underflow int64_t because inflation_rate_adjustment is <2^32
     int64_t current_inflation_rate = std::max( start_inflation_rate - inflation_rate_adjustment, inflation_rate_floor );
 
-    safe<int64_t> new_hive;
-    if (has_hardfork(HIVE_HARDFORK_1_28_NO_DHF_HBD_IN_INFLATION)) {
-      auto median_price = get_feed_history().current_median_history;
-      FC_ASSERT( median_price.is_null() == false  );
+    auto median_price = get_feed_history().current_median_history;
+    FC_ASSERT( median_price.is_null() == false  );
 
-      const auto &treasury_account = get_treasury();
-      const auto hbd_supply_without_treasury = (props.get_current_hbd_supply() - treasury_account.hbd_balance).amount < 0 ? asset(0, PXS_SYMBOL) : (props.get_current_hbd_supply() - treasury_account.hbd_balance);
-      const auto virtual_supply_without_treasury = hbd_supply_without_treasury * median_price + props.current_supply;
+    const auto &treasury_account = get_treasury();
+    const auto hbd_supply_without_treasury = (props.get_current_hbd_supply() - treasury_account.hbd_balance).amount < 0 ? asset(0, PXS_SYMBOL) : (props.get_current_hbd_supply() - treasury_account.hbd_balance);
+    const auto virtual_supply_without_treasury = hbd_supply_without_treasury * median_price + props.current_supply;
 
-      new_hive = (virtual_supply_without_treasury.amount * current_inflation_rate) / (int64_t(HIVE_100_PERCENT) * int64_t(HIVE_BLOCKS_PER_YEAR));
-    } else {
-      new_hive = (props.virtual_supply.amount * current_inflation_rate) / (int64_t(HIVE_100_PERCENT) * int64_t(HIVE_BLOCKS_PER_YEAR));
-    }
+    auto new_hive = (virtual_supply_without_treasury.amount * current_inflation_rate) / (int64_t(HIVE_100_PERCENT) * int64_t(HIVE_BLOCKS_PER_YEAR));
+
 
     auto content_reward = ( new_hive * props.content_reward_percent ) / HIVE_100_PERCENT;
     if( has_hardfork( HIVE_HARDFORK_0_17__774 ) )
@@ -3231,7 +3158,7 @@ void database::process_decline_voting_rights()
   {
     const auto& account = get< account_object, by_name >( itr->account );
 
-    if( !has_hardfork( HIVE_HARDFORK_1_28 ) || dhf_helper::remove_proposal_votes( account, proposal_votes, *this, obj_perf ) )
+    if(dhf_helper::remove_proposal_votes( account, proposal_votes, *this, obj_perf ) )
     {
       nullify_proxied_witness_votes( account );
       clear_witness_votes( account );
@@ -4269,20 +4196,10 @@ void database::validate_transaction(const std::shared_ptr<full_transaction_type>
 
     if( full_transaction->get_runtime_expiration() == fc::time_point_sec::min() )
     {
-      if( has_hardfork( HIVE_HARDFORK_1_28_EXPIRATION_TIME ) )
-      {
-        HIVE_ASSERT(trx.expiration <= now + HIVE_MAX_TIME_UNTIL_SIGNATURE_EXPIRATION, transaction_expiration_exception,
-                    "", (trx.expiration)(now)("max_til_exp", HIVE_MAX_TIME_UNTIL_SIGNATURE_EXPIRATION));
+      HIVE_ASSERT(trx.expiration <= now + HIVE_MAX_TIME_UNTIL_SIGNATURE_EXPIRATION, transaction_expiration_exception,
+                  "", (trx.expiration)(now)("max_til_exp", HIVE_MAX_TIME_UNTIL_SIGNATURE_EXPIRATION));
 
-        full_transaction->set_runtime_expiration( std::min( trx.expiration, now + HIVE_MAX_TIME_UNTIL_EXPIRATION ) );
-      }
-      else
-      {
-        HIVE_ASSERT(trx.expiration <= now + HIVE_MAX_TIME_UNTIL_EXPIRATION, transaction_expiration_exception,
-                    "", (trx.expiration)(now)("max_til_exp", HIVE_MAX_TIME_UNTIL_EXPIRATION));
-
-        full_transaction->set_runtime_expiration( trx.expiration );
-      }
+      full_transaction->set_runtime_expiration( std::min( trx.expiration, now + HIVE_MAX_TIME_UNTIL_EXPIRATION ) );
     }
 
     // the hardfork check is needed, f.e. https://explore.openhive.network/transaction/3c1eae5754cc4f70cf0efb12f9e4f9671a8df2a0
@@ -4348,9 +4265,7 @@ void database::validate_transaction(const std::shared_ptr<full_transaction_type>
       const flat_set<public_key_type>& signature_keys = full_transaction->get_signature_keys();
       const required_authorities_type& required_authorities = full_transaction->get_required_authorities();
 
-      hive::protocol::verify_authority(has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-                                       has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
-                                       required_authorities,
+      hive::protocol::verify_authority(required_authorities,
                                        signature_keys,
                                        get_active,
                                        get_owner,
@@ -5777,16 +5692,6 @@ void database::init_hardforks()
   FC_ASSERT( HIVE_HARDFORK_1_27 == 27, "Invalid hardfork configuration" );
   _hardfork_versions.times[ HIVE_HARDFORK_1_27 ] = fc::time_point_sec( HIVE_HARDFORK_1_27_TIME );
   _hardfork_versions.versions[ HIVE_HARDFORK_1_27 ] = HIVE_HARDFORK_1_27_VERSION;
-#if defined(USE_ALTERNATE_CHAIN_ID)
-  FC_ASSERT( HIVE_HARDFORK_1_28 == 28, "Invalid hardfork configuration" );
-  _hardfork_versions.times[ HIVE_HARDFORK_1_28 ] = fc::time_point_sec( HIVE_HARDFORK_1_28_TIME );
-  _hardfork_versions.versions[ HIVE_HARDFORK_1_28 ] = HIVE_HARDFORK_1_28_VERSION;
-#if defined(IS_TEST_NET) && defined(HIVE_ENABLE_SMT)
-  FC_ASSERT( HIVE_HARDFORK_1_29 == 29, "Invalid hardfork configuration" );
-  _hardfork_versions.times[ HIVE_HARDFORK_1_29 ] = fc::time_point_sec( HIVE_HARDFORK_1_29_TIME );
-  _hardfork_versions.versions[ HIVE_HARDFORK_1_29 ] = HIVE_HARDFORK_1_29_VERSION;
-#endif
-#endif
 }
 
 void database::process_hardforks()
@@ -6250,18 +6155,14 @@ void database::apply_hardfork( uint32_t hardfork )
       FC_ASSERT( fwso.get_id() == 1, "Unexpected id allocated to future witness schedule object" );
       break;
     }
-    case HIVE_HARDFORK_1_28:
-    {
-      remove_proposal_votes_for_accounts_without_voting_rights();
-      break;
-    }
-    case HIVE_SMT_HARDFORK:
-    {
-#ifdef HIVE_ENABLE_SMT
-      replenish_nai_pool( *this );
-#endif
-      break;
-    }
+//TODO(MATUS)
+//     case HIVE_SMT_HARDFORK:
+//     {
+// #ifdef HIVE_ENABLE_SMT
+//       replenish_nai_pool( *this );
+// #endif
+//       break;
+//     }
     default:
       break;
   }

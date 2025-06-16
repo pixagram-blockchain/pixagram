@@ -452,9 +452,9 @@ public:
   wallet_signed_transaction build_claim_account_creation(const string& creator, const hive::protocol::asset& fee,
     const std::function<annotated_signed_transaction_ex(signed_transaction)>& tx_signer);
 
-  void set_transaction_expiration( uint32_t tx_expiration_seconds, bool is_hive_hardfork_1_28 )
+  void set_transaction_expiration( uint32_t tx_expiration_seconds )
   {
-    FC_ASSERT( tx_expiration_seconds < ( is_hive_hardfork_1_28 ? HIVE_MAX_TIME_UNTIL_SIGNATURE_EXPIRATION : HIVE_MAX_TIME_UNTIL_EXPIRATION ) );
+    FC_ASSERT( tx_expiration_seconds < HIVE_MAX_TIME_UNTIL_SIGNATURE_EXPIRATION );
     _tx_expiration_seconds = tx_expiration_seconds;
   }
 
@@ -492,7 +492,7 @@ public:
   full_transaction_ptr make_transaction_unique(const full_transaction_ptr& tx, const std::string& auth)
   {
     require_online();
-    
+
     vector<variant> args{variant(tx->get_transaction_id())};
     if (_remote_wallet_bridge_api->is_known_transaction({args},LOCK))
     {
@@ -564,10 +564,7 @@ public:
 
       protocol::hardfork_version _result = _remote_wallet_bridge_api->get_hardfork_version({}, LOCK);
 
-      bool _allow_strict_and_mixed_authorities = _result.minor_v() >= 28;
-      
       auto minimal_signing_keys = signature_source.minimize_required_signatures(
-        _allow_strict_and_mixed_authorities,
         _hive_chain_id,
         available_keys,
         [&]( const string& account_name ) { return collector.get_account( account_name ).active; },
@@ -630,7 +627,7 @@ public:
         throw;
       }
     }
-    
+
     annotated_signed_transaction_ex _result(new_tx->get_transaction(), new_tx->get_transaction_id());
 
     return _result;
@@ -666,7 +663,7 @@ public:
     try
     {
       std::ofstream _file_bin( _store_transaction + ".bin", std::ios_base::out | std::ios_base::binary );
-      
+
       full_trx.dump_serialized_transaction(_file_bin);
 
       _file_bin.flush();
@@ -2415,10 +2412,7 @@ wallet_signed_transaction wallet_api::vote(
 
 void wallet_api::set_transaction_expiration(uint32_t seconds)
 {
-  protocol::hardfork_version _result = my->_remote_wallet_bridge_api->get_hardfork_version({}, LOCK);
-
-  bool _is_hive_hardfork_1_28 = _result.minor_v() >= 28;
-  my->set_transaction_expiration(seconds, _is_hive_hardfork_1_28 );
+  my->set_transaction_expiration(seconds);
 }
 
 wallet_serializer_wrapper<hive::plugins::account_history::annotated_signed_transaction> wallet_api::get_transaction( fc::variant id )const

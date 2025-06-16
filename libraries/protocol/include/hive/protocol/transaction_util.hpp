@@ -9,7 +9,7 @@ template< typename AuthContainerType >
 required_authorities_type get_required_authorities(const vector<AuthContainerType>& auth_containers)
 { try {
   required_authorities_type result;
-  hive::protocol::get_required_auth_visitor auth_visitor(result.required_active, result.required_owner, 
+  hive::protocol::get_required_auth_visitor auth_visitor(result.required_active, result.required_owner,
                                                          result.required_posting, result.required_witness, result.other);
 
   for( const auto& a : auth_containers )
@@ -18,9 +18,7 @@ required_authorities_type get_required_authorities(const vector<AuthContainerTyp
   return result;
 } FC_CAPTURE_AND_RETHROW((auth_containers)) }
 
-void verify_authority(bool allow_strict_and_mixed_authorities,
-                      bool allow_redundant_signatures,
-                      const required_authorities_type& required_authorities,
+void verify_authority(const required_authorities_type& required_authorities,
                       const flat_set<public_key_type>& sigs,
                       const authority_getter& get_active,
                       const authority_getter& get_owner,
@@ -34,8 +32,7 @@ void verify_authority(bool allow_strict_and_mixed_authorities,
                       const flat_set<account_name_type>& owner_approvals = flat_set<account_name_type>(),
                       const flat_set<account_name_type>& posting_approvals = flat_set<account_name_type>());
 
-bool has_authorization( bool allow_strict_and_mixed_authorities,
-                        bool allow_redundant_signatures,
+bool has_authorization( bool allow_redundant_signatures,
                         const required_authorities_type& required_authorities,
                         const flat_set<public_key_type>& sigs,
                         const authority_getter& get_active,
@@ -44,9 +41,7 @@ bool has_authorization( bool allow_strict_and_mixed_authorities,
                         const witness_public_key_getter& get_witness_key );
 
 template< typename AuthContainerType >
-void verify_authority(bool allow_strict_and_mixed_authorities,
-                      bool allow_redundant_signatures,
-                      const vector<AuthContainerType>& auth_containers, 
+void verify_authority(const vector<AuthContainerType>& auth_containers,
                       const flat_set<public_key_type>& sigs,
                       const authority_getter& get_active,
                       const authority_getter& get_owner,
@@ -59,10 +54,8 @@ void verify_authority(bool allow_strict_and_mixed_authorities,
                       const flat_set<account_name_type>& active_approvals = flat_set<account_name_type>(),
                       const flat_set<account_name_type>& owner_approvals = flat_set<account_name_type>(),
                       const flat_set<account_name_type>& posting_approvals = flat_set<account_name_type>())
-{ 
-  verify_authority(allow_strict_and_mixed_authorities,
-                   allow_redundant_signatures,
-                   get_required_authorities(auth_containers),
+{
+  verify_authority(get_required_authorities(auth_containers),
                    sigs,
                    get_active,
                    get_owner,
@@ -86,8 +79,6 @@ class authority_getter_i {
 };
 
 authority_verification_trace verify_authority_with_tracing(
-  bool allow_strict_and_mixed_authorities,
-  bool allow_redundant_signatures,
   const required_authorities_type& required_authorities,
   const flat_set<public_key_type>& sigs,
   const authority_getter_i& authority_getters,

@@ -191,7 +191,7 @@ namespace chain {
         *
         * Opens a database in the specified directory. If no initialized database is found the database
         * will be initialized with the default state.
-        * 
+        *
         * Exists after independent irreversible storage is initiated (no index loaded).
         */
       void pre_open( const open_args& args );
@@ -204,9 +204,6 @@ namespace chain {
 
       uint32_t reindex_internal( const open_args& args, const std::shared_ptr<full_block_type>& full_block, hive::chain::blockchain_worker_thread_pool& thread_pool );
       void remove_expired_governance_votes();
-
-      //Remove proposal votes for accounts that declined voting rights during HF28.
-      void remove_proposal_votes_for_accounts_without_voting_rights();
 
       /// Allows to load all data being independent to the persistent storage held in shared memory file.
       void initialize_state_independent_data(const open_args& args);
@@ -644,7 +641,7 @@ namespace chain {
       void clear_accounts( const std::set< std::string >& cleared_accounts );
       void clear_account( const account_object& account );
 
-      // return the witness schedule object whose current_shuffled_witnesses we use for computing irreversibility.  Roughly, before HF26, it's the 
+      // return the witness schedule object whose current_shuffled_witnesses we use for computing irreversibility.  Roughly, before HF26, it's the
       // current witnesses_schedule_object; after, it's future_witness_schedule_object
       const witness_schedule_object& get_witness_schedule_object_for_irreversibility() const;
 
@@ -933,7 +930,7 @@ namespace chain {
       appbase::application& theApp;
 
     public:
-      
+
       appbase::application& get_app()
       {
         return theApp;

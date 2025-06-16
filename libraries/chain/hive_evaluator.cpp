@@ -154,10 +154,7 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
   {
     fc::raw::unpack_from_vector( itr->second, props.maximum_block_size );
     FC_TODO( "Check and move this to validate after HF 28" );
-    if( _db.is_in_control() || _db.has_hardfork( HIVE_HARDFORK_1_28_MAX_BLOCK_SIZE ) )
-    {
-      FC_ASSERT( props.maximum_block_size <= HIVE_MAX_BLOCK_SIZE, "Max block size cannot be more than 2MiB" );
-    }
+    FC_ASSERT( props.maximum_block_size <= HIVE_MAX_BLOCK_SIZE, "Max block size cannot be more than 2MiB" );
   }
 
   itr = o.props.find( "sbd_interest_rate" );
@@ -1222,10 +1219,7 @@ void withdraw_vesting_evaluator::do_apply( const withdraw_vesting_operation& o )
     //new condition blocks cancel of power down even for accounts with artificial 1 in vesting_withdraw_rate;
     //after HF28, once we remove artificial 1 (will be back to proper 0), check below will be again
     //an equivalent of original check from HF5 (so we can revert back to it but with HF28 condition)
-    if( _db.has_hardfork( HIVE_HARDFORK_1_28_FIX_CANCEL_POWER_DOWN ) )
-      FC_ASSERT( account.has_active_power_down(), "This operation would not change the vesting withdraw rate." );
-    else if( _db.has_hardfork( HIVE_HARDFORK_0_5__57 ) )
-      FC_ASSERT( account.vesting_withdraw_rate.amount != 0, "This operation would not change the vesting withdraw rate." );
+    FC_ASSERT( account.has_active_power_down(), "This operation would not change the vesting withdraw rate." );
 
     _db.modify( account, [&]( account_object& a )
     {
@@ -1257,10 +1251,7 @@ void withdraw_vesting_evaluator::do_apply( const withdraw_vesting_operation& o )
       //new condition allows change of power down rate to 1 even for accounts with artificial 1 already there;
       //after HF28, once we remove artificial 1 (will be back to proper 0), original check from HF5 will
       //be sufficient again, since account.has_active_power_down() <=> (account.vesting_withdraw_rate == 0)
-      if( _db.has_hardfork( HIVE_HARDFORK_1_28_FIX_CANCEL_POWER_DOWN ) )
-        FC_ASSERT( account.vesting_withdraw_rate != new_vesting_withdraw_rate || !account.has_active_power_down(), "This operation would not change the vesting withdraw rate." );
-      else if( _db.has_hardfork( HIVE_HARDFORK_0_5__57 ) )
-        FC_ASSERT( account.vesting_withdraw_rate != new_vesting_withdraw_rate, "This operation would not change the vesting withdraw rate." );
+      FC_ASSERT( account.vesting_withdraw_rate != new_vesting_withdraw_rate || !account.has_active_power_down(), "This operation would not change the vesting withdraw rate." );
 
       a.vesting_withdraw_rate = new_vesting_withdraw_rate;
       a.next_vesting_withdrawal = now + fc::seconds( HIVE_VESTING_WITHDRAW_INTERVAL_SECONDS );
@@ -1789,8 +1780,6 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
   }
   else
   {
-    if( !_db.has_hardfork( HIVE_HARDFORK_1_28_NO_VOTE_LIMIT ) )
-      FC_ASSERT( itr->get_number_of_changes() < HIVE_MAX_VOTE_CHANGES, "Voter has used the maximum number of vote changes on this comment." );
     FC_ASSERT( itr->get_vote_percent() != o.weight, "Your current vote on this comment is identical to this vote." );
     previous_vote_percent = itr->get_vote_percent();
     previous_rshares = itr->get_rshares();
@@ -1805,31 +1794,8 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
   });
 
   int16_t abs_weight = abs( o.weight );
-  uint128_t used_mana = 0;
+  auto used_mana = ( uint128_t( voter.get_effective_vesting_shares().value ) * abs_weight * 60 * 60 * 24 ) / HIVE_100_PERCENT;
 
-  if( _db.has_hardfork( HIVE_HARDFORK_1_28_STABLE_VOTE ) )
-  {
-    used_mana = ( uint128_t( voter.get_effective_vesting_shares().value ) * abs_weight * 60 * 60 * 24 ) / HIVE_100_PERCENT;
-  }
-  else if( dgpo.downvote_pool_percent && o.weight < 0 )
-  {
-    if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
-    {
-      used_mana = ( std::max( ( ( uint128_t( voter.downvote_manabar.current_mana ) * HIVE_100_PERCENT ) / dgpo.downvote_pool_percent ),
-                      uint128_t( voter.voting_manabar.current_mana ) )
-            * abs_weight * 60 * 60 * 24 ) / HIVE_100_PERCENT;
-    }
-    else
-    {
-      used_mana = ( std::max( ( uint128_t( voter.downvote_manabar.current_mana * HIVE_100_PERCENT ) / dgpo.downvote_pool_percent ),
-                      uint128_t( voter.voting_manabar.current_mana ) )
-            * abs_weight * 60 * 60 * 24 ) / HIVE_100_PERCENT;
-    }
-  }
-  else
-  {
-    used_mana = ( uint128_t( voter.voting_manabar.current_mana ) * abs_weight * 60 * 60 * 24 ) / HIVE_100_PERCENT;
-  }
 
   int64_t max_vote_denom = dgpo.vote_power_reserve_rate * HIVE_VOTING_MANA_REGENERATION_SECONDS;
   FC_ASSERT( max_vote_denom > 0 );
@@ -2756,8 +2722,7 @@ void decline_voting_rights_evaluator::do_apply( const decline_voting_rights_oper
 
   const auto& account = _db.get_account( o.account );
 
-  if( _db.is_in_control() || _db.has_hardfork( HIVE_HARDFORK_1_28 ) )
-    FC_ASSERT( account.can_vote, "Voter declined voting rights already, therefore trying to decline voting rights again is forbidden." );
+  FC_ASSERT( account.can_vote, "Voter declined voting rights already, therefore trying to decline voting rights again is forbidden." );
 
   const auto& request_idx = _db.get_index< decline_voting_rights_request_index >().indices().get< by_account >();
   auto itr = request_idx.find( account.get_name() );
@@ -3194,8 +3159,6 @@ struct recurrent_transfer_extension_visitor
 
   void operator()( const recurrent_transfer_pair_id& recurrent_transfer_pair_id )
   {
-    FC_ASSERT( _db.has_hardfork( HIVE_HARDFORK_1_28 ), "recurrent_transfer_pair_id extension requires hardfork ${hf}",
-      ( "hf", HIVE_HARDFORK_1_28 ) );
     pair_id = recurrent_transfer_pair_id.pair_id;
   }
 
@@ -3205,14 +3168,6 @@ struct recurrent_transfer_extension_visitor
 void recurrent_transfer_evaluator::do_apply( const recurrent_transfer_operation& op )
 {
   FC_ASSERT( _db.has_hardfork( HIVE_HARDFORK_1_25 ), "Recurrent transfers are not enabled until hardfork ${hf}", ("hf", HIVE_HARDFORK_1_25) );
-
-  // Legacy faulty validation see https://gitlab.syncad.com/hive/hive/-/issues/456 once hf28 has been released, we can remove it
-  if( _db.has_hardfork( HIVE_HARDFORK_1_28 ) == false )
-  {
-    FC_ASSERT( fc::hours( op.recurrence * op.executions ).to_seconds() < fc::days( HIVE_MAX_RECURRENT_TRANSFER_END_DATE ).to_seconds(),
-      "Cannot set a transfer that would last for longer than ${days} days", ( "days", HIVE_MAX_RECURRENT_TRANSFER_END_DATE ) );
-  }
-
   const auto& from_account = _db.get_account( op.from );
   const auto& to_account = _db.get_account( op.to );
 

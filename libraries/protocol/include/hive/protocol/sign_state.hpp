@@ -10,7 +10,6 @@ namespace hive { namespace protocol {
 
 struct sign_limits
 {
-  bool allow_strict_and_mixed_authorities = false;
   uint32_t recursion = HIVE_MAX_SIG_CHECK_DEPTH;
   uint32_t membership = ~0;
   uint32_t account_auths = ~0;
@@ -68,7 +67,7 @@ class sign_state
         {
           tracer->on_unknown_account_entry( id, 0, 0, 0 );
           return false;
-        }           
+        }
 
         tracer->on_root_authority_start(id, initial_auth.weight_threshold, 0);
       }
@@ -85,10 +84,7 @@ class sign_state
         return true;
       }
 
-      if( limits.allow_strict_and_mixed_authorities )
-        ++account_auth_count;
-      else
-        account_auth_count = 1;
+      ++account_auth_count;
 
       bool success = check_authority_impl( initial_auth, 0 );
 
@@ -112,9 +108,6 @@ class sign_state
           tracer->set_role(role);
           tracer->on_root_authority_start(id, auth.weight_threshold, 0);
       }
-
-      if( !limits.allow_strict_and_mixed_authorities )
-        account_auth_count = 0;
 
       bool success = check_authority_impl( auth, 0 );
 
@@ -192,7 +185,7 @@ class sign_state
 
           if constexpr (IS_TRACED) {
             FC_ASSERT(tracer);
-            tracer->on_matching_key(k.first, k.second, auth.weight_threshold, depth, 
+            tracer->on_matching_key(k.first, k.second, auth.weight_threshold, depth,
                                     total_weight >= auth.weight_threshold);
           }
 
@@ -245,7 +238,7 @@ class sign_state
             {
               tracer->on_unknown_account_entry( a.first, a.second, 0 /*unknown too*/, depth );
               continue;
-            }           
+            }
 
             tracer->on_entering_account_entry( a.first, a.second, account_auth.weight_threshold, depth );
           }

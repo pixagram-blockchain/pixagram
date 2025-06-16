@@ -31,7 +31,7 @@
               "input": "59b009f89477919f95914151cef06f28bf344dd6fb7670aca1c1f4323c80446b",
               "signature": "1f3f83209097efcd01b7d6f27ce726164323d503d6fcf4d55bfb7cb3032796f6766738b36062b5850d69447fdf9c091cbc70825df5eeacc4710a0b11ffdbf0912a",
               "work": "0b62f4837801cd857f01d6a541faeb13d6bb95f1c36c6b4b14a47df632aa6c92",
-              "worker": "STM65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G"
+              "worker": "PIX65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G"
             },
             "worker_account": "admin"
           }
@@ -62,7 +62,7 @@
               "input": "55d4752057cc3206abae80bce5f012a0df82a126c91c72dbd2b92ea70b1d3b76",
               "signature": "207d80794cb57ed0bc5f859d45959350126f7728b055bcf40ac9cef99f38d41d0e5188e1c5b77501c497f575ed83b1f68ab8ea4c564abd57212237a5ecc889b024",
               "work": "024fd8ac09e9dfb966087c250919445f6f4cf2e719e93ff55f81843cbe4a5e70",
-              "worker": "STM65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G"
+              "worker": "PIX65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G"
             },
             "worker_account": "admin"
           }

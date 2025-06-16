@@ -114,7 +114,6 @@ flat_set<public_key_type> signed_transaction::get_signature_keys( const chain_id
 
 
 set<public_key_type> signed_transaction::get_required_signatures(
-  bool allow_strict_and_mixed_authorities,
   bool allow_redundant_signatures,
   const chain_id_type& chain_id,
   const flat_set<public_key_type>& available_keys,
@@ -143,28 +142,14 @@ set<public_key_type> signed_transaction::get_required_signatures(
   };
 
   sign_state s( get_signature_keys( chain_id, hive::protocol::serialization_mode_controller::get_current_pack() ), get_posting,
-                 { allow_strict_and_mixed_authorities, max_recursion_depth, max_membership, max_account_auths } );
+                 { max_recursion_depth, max_membership, max_account_auths } );
 
   s.extend_provided_signatures( available_keys );
 
   /** Up to HF28 posting authority cannot be mixed with active authority in same transaction */
   if( required_posting.size() ) {
-    if( !allow_strict_and_mixed_authorities )
-    {
-      FC_ASSERT( !required_owner.size() );
-      FC_ASSERT( !required_active.size() );
-    }
-
     for( auto& posting : required_posting )
       s.check_authority( posting  );
-
-    if( !allow_strict_and_mixed_authorities )
-    {
-      s.remove_unused_signatures();
-
-      _find_keys( s.get_provided_signatures() );
-      return result;
-    }
   }
 
   s.change_current_authority( get_active );
@@ -185,7 +170,6 @@ set<public_key_type> signed_transaction::get_required_signatures(
 }
 
 set<public_key_type> signed_transaction::minimize_required_signatures(
-  bool allow_strict_and_mixed_authorities,
   const chain_id_type& chain_id,
   const flat_set< public_key_type >& available_keys,
   const authority_getter& get_active,
@@ -199,7 +183,7 @@ set<public_key_type> signed_transaction::minimize_required_signatures(
 {
   //Don't allow redundant authorities. A transaction should be as small as possible.
   const bool _allow_redundant_authorities = false;
-  set< public_key_type > s = get_required_signatures( allow_strict_and_mixed_authorities, _allow_redundant_authorities, chain_id, available_keys, get_active, get_owner, get_posting, get_witness_key, max_recursion, max_membership, max_account_auths );
+  set< public_key_type > s = get_required_signatures( _allow_redundant_authorities, chain_id, available_keys, get_active, get_owner, get_posting, get_witness_key, max_recursion, max_membership, max_account_auths );
   flat_set< public_key_type > result( s.begin(), s.end() );
 
   for( const public_key_type& k : s )
@@ -208,8 +192,6 @@ set<public_key_type> signed_transaction::minimize_required_signatures(
     try
     {
       hive::protocol::verify_authority(
-        allow_strict_and_mixed_authorities,
-        _allow_redundant_authorities,
         operations,
         result,
         get_active,
@@ -234,9 +216,7 @@ set<public_key_type> signed_transaction::minimize_required_signatures(
   return set<public_key_type>( result.begin(), result.end() );
 }
 
-void signed_transaction::verify_authority(bool allow_strict_and_mixed_authorities,
-                                          bool allow_redundant_signatures,
-                                          const chain_id_type& chain_id,
+void signed_transaction::verify_authority(const chain_id_type& chain_id,
                                           const authority_getter& get_active,
                                           const authority_getter& get_owner,
                                           const authority_getter& get_posting,
@@ -246,9 +226,7 @@ void signed_transaction::verify_authority(bool allow_strict_and_mixed_authoritie
                                           uint32_t max_membership,
                                           uint32_t max_account_auths) const
 { try {
-  hive::protocol::verify_authority(allow_strict_and_mixed_authorities,
-                                   allow_redundant_signatures,
-                                   operations,
+  hive::protocol::verify_authority( operations,
                                    get_signature_keys(chain_id, pack),
                                    get_active,
                                    get_owner,

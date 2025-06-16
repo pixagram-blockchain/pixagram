@@ -214,7 +214,6 @@ void condenser_api_fixture::hf23_scenario( check_point_tester_t check_point_test
 
 void condenser_api_fixture::comment_and_reward_scenario( check_point_tester_t check_point_1_tester, check_point_tester_t check_point_2_tester )
 {
-  db->set_hardfork( HIVE_HARDFORK_1_28 );
   generate_block();
 
   ACTORS( (dan0ah)(edgar0ah) );
@@ -479,7 +478,6 @@ void condenser_api_fixture::recurrent_transfer_scenario( check_point_tester_t ch
 
 void condenser_api_fixture::decline_voting_rights_scenario( check_point_tester_t check_point_tester )
 {
-  db->set_hardfork( HIVE_HARDFORK_1_28 );
   generate_block();
 
   ACTORS( (alice11ah)(ben11ah) );

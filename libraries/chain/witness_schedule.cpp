@@ -140,10 +140,6 @@ void update_median_witness_props(database& db, const witness_schedule_object& ws
     int64_t min_decay = fc::uint128_to_int64(fc::uint128( median_decay ) * HIVE_DECAY_BACKSTOP_PERCENT / HIVE_100_PERCENT);
     _wso.account_subsidy_witness_rd.min_decay = min_decay;
   } );
-
-  if( not db.has_hardfork( HIVE_HARDFORK_1_28_GLOBAL_WITNESS_PROPS ) ) // after HF28 it is copied from active wso
-    update_global_witness_properties( db, wso );
-
 } FC_CAPTURE_AND_RETHROW() }
 
 void update_witness_schedule4(database& db, const witness_schedule_object& wso)
@@ -412,7 +408,7 @@ void update_witness_schedule(database& db)
         // that was created during hardfork activation will be a copy of `current_shuffled_witnesses`.
         //
         // every time after that, `future_witness_schedule_object` will already have the next HIVE_MAX_WITNESSES ready,
-        // so we should swap that into `current_shuffled_witnesses` and then compute the new set into 
+        // so we should swap that into `current_shuffled_witnesses` and then compute the new set into
         // `future_witness_schedule_object`
         const witness_schedule_object& future_wso = db.get_future_witness_schedule_object();
 
@@ -422,8 +418,7 @@ void update_witness_schedule(database& db)
           witness_schedule.copy_values_from(future_wso);
         } );
         // activate global witness properties by copying them to dgpo
-        if( db.has_hardfork( HIVE_HARDFORK_1_28_GLOBAL_WITNESS_PROPS ) )
-          update_global_witness_properties( db, wso );
+        update_global_witness_properties( db, wso );
 
         update_witness_schedule4(db, future_wso);
       }
