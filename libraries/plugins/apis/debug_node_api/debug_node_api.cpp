@@ -84,7 +84,6 @@ DEFINE_API_IMPL( debug_node_api_impl, debug_get_witness_schedule )
 DEFINE_API_IMPL( debug_node_api_impl, debug_get_future_witness_schedule )
 {
   //ABW: routine provides access to raw value of the object
-  FC_ASSERT( _db.has_hardfork( HIVE_HARDFORK_1_26 ), "Future schedule only become available after HF26" );
   return debug_get_witness_schedule_return( _db.get_future_witness_schedule_object() );
 }
 

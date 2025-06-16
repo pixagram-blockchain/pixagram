@@ -176,11 +176,9 @@ namespace hive { namespace chain {
       uint64_t get_total_vote_weight() const { return total_vote_weight; }
 
       //called on vote (new or edit)
-      void on_vote( int16_t vote_percent, int16_t old_vote_percent = 0, bool real_vote = true )
+      void on_vote( int16_t vote_percent, int16_t old_vote_percent = 0)
       {
         FC_TODO( "After HF26 try to make it unconditional" );
-        if( real_vote )
-          was_voted_on = true;
         if( old_vote_percent > 0 )
           --net_votes;
         else if( old_vote_percent < 0 )
@@ -244,7 +242,7 @@ namespace hive { namespace chain {
 
       bool              allow_votes = true;
       bool              allow_curation_rewards = true;
-      bool              was_voted_on = false;
+      bool              was_voted_on = true; // TODO(MATUS): remove ?
 
       t_beneficiaries   beneficiaries;
 

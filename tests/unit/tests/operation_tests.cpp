@@ -298,10 +298,6 @@ BOOST_AUTO_TEST_CASE( account_update_authorities )
     BOOST_TEST_MESSAGE( "--- Up to HF28 it was a test failure when containing additional incorrect signature. Now the transaction passes." );
     push_transaction( tx, {active_key, bob_private_key}, database::skip_transaction_dupe_check );
 
-    BOOST_TEST_MESSAGE( "--- Up to HF28 it was a test failure when owner key and active key are present. Now the transaction passes." );
-    HIVE_REQUIRE_ASSERT( push_transaction( tx, {active_key, alice_private_key}, database::skip_transaction_dupe_check ),
-    "util::owner_update_limit_mgr::check( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ), _db.head_block_time(), account_auth.previous_owner_update, account_auth.last_owner_update )" );
-
     validate_database();
   }
   FC_LOG_AND_RETHROW()
@@ -10632,8 +10628,7 @@ struct timeshare_test_fixture : clean_database_fixture
       generate_blocks(42); // delay until the votes should have taken effect
 
       BOOST_TEST_MESSAGE("Witness Schedule: " << log_witnesses_on_schedule(db->get_witness_schedule_object()));
-      if (db->has_hardfork(HIVE_HARDFORK_1_26_FUTURE_WITNESS_SCHEDULE))
-        BOOST_TEST_MESSAGE("Future Witness Schedule: " << log_witnesses_on_schedule(db->get_future_witness_schedule_object()));
+      BOOST_TEST_MESSAGE("Future Witness Schedule: " << log_witnesses_on_schedule(db->get_future_witness_schedule_object()));
 
       BOOST_TEST_MESSAGE("All ten timeshare witnesses have equal votes, so we should expect each witness to "
                          "get a chance to produce in the next ten rounds");
