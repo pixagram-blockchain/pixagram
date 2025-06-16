@@ -60,7 +60,7 @@ DEFINE_API_IMPL( transaction_status_api_impl, find_transaction )
 
       // Check if the expiration is before our earliest tracked block plus maximum transaction expiration
       fc::time_point_sec earliest_timestamp = _tsp.get_earliest_tracked_block_timestamp();
-      auto _expiration =  HIVE_MAX_TIME_UNTIL_SIGNATURE_EXPIRATION;;
+      auto _expiration =  HIVE_MAX_TIME_UNTIL_SIGNATURE_EXPIRATION;
       if (expiration < earliest_timestamp + _expiration)
         return {
           .status = transaction_status::too_old
