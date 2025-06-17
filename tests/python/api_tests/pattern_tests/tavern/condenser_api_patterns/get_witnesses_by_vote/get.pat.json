@@ -6679,7 +6679,7 @@
       "maximum_block_size": 131072
     },
     "running_version": "0.9.0",
-    "signing_key": "STM65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
+    "signing_key": "PIX65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
     "total_missed": 49,
     "url": "steemit.com",
     "virtual_last_update": "103898934093246159180263759",
@@ -6711,7 +6711,7 @@
       "maximum_block_size": 131072
     },
     "running_version": "0.9.0",
-    "signing_key": "STM65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
+    "signing_key": "PIX65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
     "total_missed": 45,
     "url": "steemit.com",
     "virtual_last_update": "103898934093246159180263759",
@@ -6807,7 +6807,7 @@
       "maximum_block_size": 131072
     },
     "running_version": "0.9.0",
-    "signing_key": "STM65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
+    "signing_key": "PIX65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
     "total_missed": 48,
     "url": "steemit.com",
     "virtual_last_update": "103898934093246159180263759",
@@ -7319,7 +7319,7 @@
       "maximum_block_size": 131072
     },
     "running_version": "0.0.0",
-    "signing_key": "STM65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
+    "signing_key": "PIX65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
     "total_missed": 0,
     "url": "",
     "virtual_last_update": "108562768602298528048437043",
@@ -7671,7 +7671,7 @@
       "maximum_block_size": 131072
     },
     "running_version": "0.0.0",
-    "signing_key": "STM65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
+    "signing_key": "PIX65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
     "total_missed": 38,
     "url": "",
     "virtual_last_update": "109264050098635487830103972",
@@ -20407,7 +20407,7 @@
       "maximum_block_size": 131072
     },
     "running_version": "0.0.0",
-    "signing_key": "STM65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
+    "signing_key": "PIX65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
     "total_missed": 3,
     "url": "",
     "virtual_last_update": "0",
@@ -20471,7 +20471,7 @@
       "maximum_block_size": 131072
     },
     "running_version": "0.0.0",
-    "signing_key": "STM65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
+    "signing_key": "PIX65wH1LZ7BfSHcK69SShnqCAH5xdoSZpGkUjmzHJ5GCuxEK9V5G",
     "total_missed": 1,
     "url": "",
     "virtual_last_update": "0",

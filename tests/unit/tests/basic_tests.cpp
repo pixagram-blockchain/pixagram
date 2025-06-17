@@ -1594,8 +1594,6 @@ BOOST_AUTO_TEST_CASE( authorization_speed )
       required_authorities.required_active.insert( "initminer" );
 
       hive::protocol::verify_authority(
-        db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-        db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
         required_authorities, valid_key, get_active, get_owner, get_posting, get_witness_key );
       ++counter;
     }
@@ -1623,8 +1621,6 @@ BOOST_AUTO_TEST_CASE( authorization_speed )
       required_authorities.required_active.insert( "initminer" );
 
       hive::protocol::verify_authority(
-        db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-        db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
         required_authorities, invalid_key, get_active, get_owner, get_posting, get_witness_key );
       counter = 0;
     }
@@ -1652,8 +1648,6 @@ BOOST_AUTO_TEST_CASE( authorization_speed )
       required_authorities.required_active.insert( "initminer" );
 
       hive::protocol::verify_authority(
-        db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-        db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
         required_authorities, no_key, get_active, get_owner, get_posting, get_witness_key );
       counter = 0;
     }
@@ -1679,8 +1673,6 @@ BOOST_AUTO_TEST_CASE( authorization_speed )
     required_authorities.required_active.insert( "initminer" );
 
     bool ok = hive::protocol::has_authorization(
-      db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-      db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
       required_authorities, valid_key, get_active, get_owner, get_posting, get_witness_key );
     if( ok )
       ++counter;
@@ -1704,8 +1696,6 @@ BOOST_AUTO_TEST_CASE( authorization_speed )
     required_authorities.required_active.insert( "initminer" );
 
     bool ok = hive::protocol::has_authorization(
-      db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-      db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
       required_authorities, invalid_key, get_active, get_owner, get_posting, get_witness_key );
     if( ok )
       counter = 0;
@@ -1729,8 +1719,6 @@ BOOST_AUTO_TEST_CASE( authorization_speed )
     required_authorities.required_active.insert( "initminer" );
 
     bool ok = hive::protocol::has_authorization(
-      db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-      db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
     required_authorities, no_key, get_active, get_owner, get_posting, get_witness_key );
     if( ok )
       counter = 0;
@@ -1779,8 +1767,6 @@ BOOST_AUTO_TEST_CASE( authorization_speed )
 
 BOOST_AUTO_TEST_CASE( authorization_redirections )
 {
-  BOOST_REQUIRE( db->has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ) );
-
   auto fee = db->get_witness_schedule_object().median_props.account_creation_fee;
   auto keygen = [&]( const account_name_type& name, authority::classification role )
   {
@@ -1832,7 +1818,7 @@ BOOST_AUTO_TEST_CASE( authorization_redirections )
 
   auto has_authorization = [&]( const fc::flat_set< public_key_type >& keys, bool expected )
   {
-    bool result = hive::protocol::has_authorization( true, false, // enforce no redundancy, since test should have none
+    bool result = hive::protocol::has_authorization( false, // enforce no redundancy, since test should have none
       required_authorities, keys, get_active, get_owner, get_posting, get_witness_key );
     BOOST_CHECK_EQUAL( result, expected );
     return result ? "true" : "false";

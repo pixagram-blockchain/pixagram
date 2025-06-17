@@ -664,14 +664,12 @@ void colony_plugin_impl::start( uint32_t block_num )
     auto get_posting = [&]( const std::string& name ) { return authority( _db.get< account_authority_object, by_account >( name ).posting ); };
     auto get_witness_key = [&]( const std::string& name ) { try { return _db.get_witness( name ).signing_key; } FC_CAPTURE_AND_RETHROW( ( name ) ) };
 
-    bool hf28 = _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES );
     required_authorities_type required_authorities;
     if( active_needed )
       required_authorities.required_active.insert( account.get_name() );
-    if( posting_needed && ( hf28 || !active_needed ) )
+    if( posting_needed )
       required_authorities.required_posting.insert( account.get_name() );
-
-    if( hive::protocol::has_authorization( hf28, false, // no signature redundancy allowed
+    if( hive::protocol::has_authorization( false, // no signature redundancy allowed
         required_authorities, common_keys, get_active, get_owner, get_posting, get_witness_key ) )
     {
       if( i < _max_threads )

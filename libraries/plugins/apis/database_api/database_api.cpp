@@ -1744,8 +1744,7 @@ DEFINE_API_IMPL( database_api_impl, get_required_signatures )
 {
   get_required_signatures_return result;
   result.keys = args.trx.get_required_signatures(
-    _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-    _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
+    true,
     _db.get_chain_id(),
     args.available_keys,
     [&]( string account_name ){ return authority( _db.get< chain::account_authority_object, chain::by_account >( account_name ).active  ); },
@@ -1761,8 +1760,7 @@ DEFINE_API_IMPL( database_api_impl, get_potential_signatures )
 {
   get_potential_signatures_return result;
   args.trx.get_required_signatures(
-    _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-    _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
+    true,
     _db.get_chain_id(),
     flat_set< public_key_type >(),
     [&]( account_name_type account_name )
@@ -1799,8 +1797,6 @@ DEFINE_API_IMPL( database_api_impl, get_potential_signatures )
 DEFINE_API_IMPL( database_api_impl, verify_authority )
 {
   args.trx.verify_authority(
-    _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-    _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
     _db.get_chain_id(),
     [&]( string account_name ){ return authority( _db.get< chain::account_authority_object, chain::by_account >( account_name ).active  ); },
     [&]( string account_name ){ return authority( _db.get< chain::account_authority_object, chain::by_account >( account_name ).owner   ); },
@@ -1833,8 +1829,7 @@ DEFINE_API_IMPL( database_api_impl, verify_account_authority )
   }
 
   bool ok = hive::protocol::has_authorization(
-    _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-    _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
+    true,
     required_authorities,
     args.signers,
     [&]( string account_name ) { return authority( _db.get< chain::account_authority_object, chain::by_account >( account_name ).active ); },
@@ -1864,8 +1859,6 @@ DEFINE_API_IMPL( database_api_impl, verify_signatures )
   try
   {
     hive::protocol::verify_authority< verify_signatures_args >(
-      _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES ),
-      _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_REDUNDANT_SIGNATURES ),
       { args },
       sig_keys,
       [this]( const string& name ) { return authority( _db.get< chain::account_authority_object, chain::by_account >( name ).owner ); },
