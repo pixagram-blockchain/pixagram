@@ -531,9 +531,8 @@ void account_update_evaluator::do_apply( const account_update_operation& o )
 //       but not for the `HIVE_CONVERTER_BUILD`, because mining was removed in HF17 and the `account_update2` operation was first introduced
 //       in HF21, so only this operation is applicable to our needs
 # ifndef HIVE_CONVERTER_BUILD
-    if( _db.has_hardfork( HIVE_HARDFORK_0_11 ) )
-      FC_ASSERT( util::owner_update_limit_mgr::check( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ), _db.head_block_time(),
-                                                      account_auth.previous_owner_update, account_auth.last_owner_update ), "${m}", ("m", util::owner_update_limit_mgr::msg( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ) )) );
+    FC_ASSERT( util::owner_update_limit_mgr::check( _db.head_block_time(),
+                                                    account_auth.previous_owner_update, account_auth.last_owner_update ), "${m}", ("m", util::owner_update_limit_mgr::msg()) );
 # endif
 
     if( ( _db.has_hardfork( HIVE_HARDFORK_0_15__465 ) ) )
@@ -599,8 +598,8 @@ void account_update2_evaluator::do_apply( const account_update2_operation& o )
 
   if( o.owner )
   {
-    FC_ASSERT( util::owner_update_limit_mgr::check( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ), _db.head_block_time(),
-                                                    account_auth.previous_owner_update, account_auth.last_owner_update ), "${m}", ("m", util::owner_update_limit_mgr::msg( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ) ) ) );
+    FC_ASSERT( util::owner_update_limit_mgr::check( _db.head_block_time(),
+                                                    account_auth.previous_owner_update, account_auth.last_owner_update ), "${m}", ("m", util::owner_update_limit_mgr::msg()) );
 
     verify_authority_accounts_exist( _db, *o.owner, o.account, authority::owner );
 
@@ -1764,8 +1763,6 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
 
   auto _now = _db.head_block_time();
   FC_ASSERT( _now < comment_cashout->get_cashout_time(), "Comment is actively being rewarded. Cannot vote on comment." );
-  if( !_db.has_hardfork( HIVE_HARDFORK_1_26_NO_VOTE_COOLDOWN ) )
-    FC_ASSERT( ( _now - voter.last_vote_time ).to_seconds() >= HIVE_MIN_VOTE_INTERVAL_SEC, "Can only vote once every 3 seconds." );
 
   const auto& comment_vote_idx = _db.get_index< comment_vote_index, by_comment_voter >();
   auto itr = comment_vote_idx.find( boost::make_tuple( comment.get_id(), voter.get_id() ) );
@@ -1865,91 +1862,82 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
 
   _db.modify( *comment_cashout, [&]( comment_cashout_object& c )
   {
-    c.on_vote( o.weight, previous_vote_percent, abs_rshares != 0 || _db.has_hardfork( HIVE_HARDFORK_1_26_DUST_VOTE_FIX ) );
+    c.on_vote( o.weight, previous_vote_percent );
 
-    auto old_vote_rshares = comment_cashout->get_vote_rshares();
+    auto old_vote_rshares = comment_cashout->get_vote_rshares() - previous_positive_rshares;
     uint64_t max_vote_weight = 0;
-    if( itr == comment_vote_idx.end() || _db.has_hardfork( HIVE_HARDFORK_1_26_NO_VOTE_EDIT_PENALTY ) )
+    c.accumulate_vote_rshares( rshares - previous_rshares, ( rshares > 0 ? rshares : 0 ) - previous_positive_rshares );
+
+
+    /** this verifies uniqueness of voter
+      *
+      *  cv.weight / c.total_vote_weight ==> % of rshares increase that is accounted for by the vote
+      *
+      *  W(R) = B * R / ( R + 2S )
+      *  W(R) is bounded above by B. B is fixed at 2^64 - 1, so all weights fit in a 64 bit integer.
+      *
+      *  The equation for an individual vote is:
+      *    W(R_N) - W(R_N-1), which is the delta increase of proportional weight
+      *
+      *  c.total_vote_weight =
+      *    W(R_1) - W(R_0) +
+      *    W(R_2) - W(R_1) + ...
+      *    W(R_N) - W(R_N-1) = W(R_N) - W(R_0)
+      *
+      *  Since W(R_0) = 0, c.total_vote_weight is also bounded above by B and will always fit in a 64 bit integer.
+      *
+    **/
     {
-      c.accumulate_vote_rshares( rshares - previous_rshares, ( rshares > 0 ? rshares : 0 ) - previous_positive_rshares );
-      if( _db.has_hardfork( HIVE_HARDFORK_1_26_NO_VOTE_EDIT_PENALTY ) )
-        old_vote_rshares -= previous_positive_rshares;
+      bool curation_reward_eligible = rshares > 0 && comment_cashout->allows_curation_rewards() &&
+        ( _db.get_curation_rewards_percent() > 0 );
 
-      /** this verifies uniqueness of voter
-        *
-        *  cv.weight / c.total_vote_weight ==> % of rshares increase that is accounted for by the vote
-        *
-        *  W(R) = B * R / ( R + 2S )
-        *  W(R) is bounded above by B. B is fixed at 2^64 - 1, so all weights fit in a 64 bit integer.
-        *
-        *  The equation for an individual vote is:
-        *    W(R_N) - W(R_N-1), which is the delta increase of proportional weight
-        *
-        *  c.total_vote_weight =
-        *    W(R_1) - W(R_0) +
-        *    W(R_2) - W(R_1) + ...
-        *    W(R_N) - W(R_N-1) = W(R_N) - W(R_0)
-        *
-        *  Since W(R_0) = 0, c.total_vote_weight is also bounded above by B and will always fit in a 64 bit integer.
-        *
-      **/
+      if( curation_reward_eligible )
       {
-        bool curation_reward_eligible = rshares > 0 && comment_cashout->allows_curation_rewards() &&
-          ( _db.get_curation_rewards_percent() > 0 );
+        // cv.weight = W(R_1) - W(R_0)
+        const auto& reward_fund = _db.get_reward_fund();
+        auto curve = reward_fund.curation_reward_curve;
+        uint64_t old_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( old_vote_rshares, curve, reward_fund.content_constant ));
+        uint64_t new_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( c.get_vote_rshares(), curve, reward_fund.content_constant ));
 
-        if( curation_reward_eligible )
+        if( old_weight < new_weight ) // old_weight > new_weight should never happen, but == is ok
         {
-          // cv.weight = W(R_1) - W(R_0)
-          const auto& reward_fund = _db.get_reward_fund();
-          auto curve = reward_fund.curation_reward_curve;
-          uint64_t old_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( old_vote_rshares, curve, reward_fund.content_constant ));
-          uint64_t new_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( c.get_vote_rshares(), curve, reward_fund.content_constant ));
+          uint64_t _seconds = ( _now - c.get_creation_time() ).to_seconds();
 
-          if( old_weight < new_weight ) // old_weight > new_weight should never happen, but == is ok
+          vote_weight = new_weight - old_weight;
+
+          //In HF25 `dgpo.reverse_auction_seconds` is set to zero. It's replaced by `dgpo.early_voting_seconds` and `dgpo.mid_voting_seconds`.
+          if( _seconds < dgpo.reverse_auction_seconds )
           {
-            uint64_t _seconds = ( _now - c.get_creation_time() ).to_seconds();
+            max_vote_weight = vote_weight;
 
-            vote_weight = new_weight - old_weight;
+            /// discount weight by time
+            uint128_t w( max_vote_weight );
+            uint64_t delta_t = std::min( _seconds, uint64_t( dgpo.reverse_auction_seconds ) );
 
-            //In HF25 `dgpo.reverse_auction_seconds` is set to zero. It's replaced by `dgpo.early_voting_seconds` and `dgpo.mid_voting_seconds`.
-            if( _seconds < dgpo.reverse_auction_seconds )
-            {
-              max_vote_weight = vote_weight;
+            w *= delta_t;
+            w /= dgpo.reverse_auction_seconds;
+            vote_weight = fc::uint128_to_uint64(w);
+          }
+          else if( _seconds >= dgpo.early_voting_seconds && dgpo.early_voting_seconds )
+          {
+            //Following values are chosen empirically
+            const uint32_t phase_1_factor = 2;
+            const uint32_t phase_2_factor = 8;
 
-              /// discount weight by time
-              uint128_t w( max_vote_weight );
-              uint64_t delta_t = std::min( _seconds, uint64_t( dgpo.reverse_auction_seconds ) );
-
-              w *= delta_t;
-              w /= dgpo.reverse_auction_seconds;
-              vote_weight = fc::uint128_to_uint64(w);
-            }
-            else if( _seconds >= dgpo.early_voting_seconds && dgpo.early_voting_seconds )
-            {
-              //Following values are chosen empirically
-              const uint32_t phase_1_factor = 2;
-              const uint32_t phase_2_factor = 8;
-
-              if( _seconds < ( dgpo.early_voting_seconds + dgpo.mid_voting_seconds ) )
-                vote_weight /= phase_1_factor;
-              else
-                vote_weight /= phase_2_factor;
-
-              max_vote_weight = vote_weight;
-            }
+            if( _seconds < ( dgpo.early_voting_seconds + dgpo.mid_voting_seconds ) )
+              vote_weight /= phase_1_factor;
             else
-            {
-              max_vote_weight = vote_weight;
-            }
+              vote_weight /= phase_2_factor;
+
+            max_vote_weight = vote_weight;
+          }
+          else
+          {
+            max_vote_weight = vote_weight;
           }
         }
       }
     }
-    else // pre-HF26 vote edit
-    {
-      c.accumulate_vote_rshares( rshares - previous_rshares, 0 );
-    }
-
     c.accumulate_vote_weight( max_vote_weight - previous_vote_weight );
   } );
 
@@ -1983,11 +1971,9 @@ void vote_evaluator::do_apply( const vote_operation& o )
 void custom_evaluator::do_apply( const custom_operation& o )
 {
   FC_TODO( "Check when this soft-fork was added and change to appropriate hardfork" );
-  if( _db.is_in_control() || _db.has_hardfork( HIVE_HARDFORK_1_26_SOLIDIFY_OLD_SOFTFORKS ) )
-  {
-    FC_ASSERT( o.data.size() <= HIVE_CUSTOM_OP_DATA_MAX_LENGTH,
-      "Operation data must be less than ${bytes} bytes.", ("bytes", HIVE_CUSTOM_OP_DATA_MAX_LENGTH) );
-  }
+  FC_ASSERT( o.data.size() <= HIVE_CUSTOM_OP_DATA_MAX_LENGTH,
+    "Operation data must be less than ${bytes} bytes.", ("bytes", HIVE_CUSTOM_OP_DATA_MAX_LENGTH) );
+
 
   if( _db.has_hardfork( HIVE_HARDFORK_0_20 ) )
   {
@@ -2002,11 +1988,8 @@ void custom_json_evaluator::do_apply( const custom_json_operation& o )
   using hive::protocol::details::truncation_controller;
 
   FC_TODO( "Check when this soft-fork was added and change to appropriate hardfork" );
-  if( _db.is_in_control() || _db.has_hardfork( HIVE_HARDFORK_1_26_SOLIDIFY_OLD_SOFTFORKS ) )
-  {
-    FC_ASSERT( o.json.length() <= HIVE_CUSTOM_OP_DATA_MAX_LENGTH,
-      "Operation JSON must be less than ${bytes} bytes.", ("bytes", HIVE_CUSTOM_OP_DATA_MAX_LENGTH) );
-  }
+  FC_ASSERT( o.json.length() <= HIVE_CUSTOM_OP_DATA_MAX_LENGTH,
+    "Operation JSON must be less than ${bytes} bytes.", ("bytes", HIVE_CUSTOM_OP_DATA_MAX_LENGTH) );
 
   if( _db.has_hardfork( HIVE_HARDFORK_0_20 ) )
   {
@@ -2048,12 +2031,9 @@ void custom_json_evaluator::do_apply( const custom_json_operation& o )
 void custom_binary_evaluator::do_apply( const custom_binary_operation& o )
 {
   FC_TODO( "Check when this soft-fork was added and change to appropriate hardfork" );
-  if( _db.is_in_control() || _db.has_hardfork( HIVE_HARDFORK_1_26_SOLIDIFY_OLD_SOFTFORKS ) )
-  {
-    FC_ASSERT( false, "custom_binary_operation is deprecated" );
-    FC_ASSERT( o.data.size() <= HIVE_CUSTOM_OP_DATA_MAX_LENGTH,
-      "Operation data must be less than ${bytes} bytes.", ("bytes", HIVE_CUSTOM_OP_DATA_MAX_LENGTH) );
-  }
+  FC_ASSERT( false, "custom_binary_operation is deprecated" );
+  FC_ASSERT( o.data.size() <= HIVE_CUSTOM_OP_DATA_MAX_LENGTH,
+    "Operation data must be less than ${bytes} bytes.", ("bytes", HIVE_CUSTOM_OP_DATA_MAX_LENGTH) );
   FC_ASSERT( _db.has_hardfork( HIVE_HARDFORK_0_14__317 ) );
 
   if( _db.has_hardfork( HIVE_HARDFORK_0_20 ) )
@@ -2608,8 +2588,7 @@ void recover_account_evaluator::do_apply( const recover_account_operation& o )
 {
   const auto& account = _db.get_account( o.account_to_recover );
 
-  if( _db.has_hardfork( HIVE_HARDFORK_0_12 ) )
-    FC_ASSERT( util::owner_update_limit_mgr::check( _db.head_block_time(), account.get_last_account_recovery_time() ), "${m}", ("m", util::owner_update_limit_mgr::msg( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ) ) ) );
+  FC_ASSERT( util::owner_update_limit_mgr::check( _db.head_block_time(), account.get_last_account_recovery_time() ), "${m}", ("m", util::owner_update_limit_mgr::msg() ) );
 
   const auto& recovery_request_idx = _db.get_index< account_recovery_request_index, by_account >();
   auto request = recovery_request_idx.find( o.account_to_recover );

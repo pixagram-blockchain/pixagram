@@ -141,8 +141,8 @@ namespace hive { namespace chain {
 
       int64_t available_account_subsidies = 0;
 
-      uint16_t hbd_stop_percent = HIVE_HBD_STOP_PERCENT_HF14;
-      uint16_t hbd_start_percent = HIVE_HBD_START_PERCENT_HF14;
+      uint16_t hbd_stop_percent = HIVE_HBD_STOP_PERCENT;
+      uint16_t hbd_start_percent = HIVE_HBD_START_PERCENT;
 
       // Settings used to compute payments for every proposal
       time_point_sec next_maintenance_time = HIVE_GENESIS_TIME;

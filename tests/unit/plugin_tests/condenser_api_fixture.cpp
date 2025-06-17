@@ -244,7 +244,6 @@ void condenser_api_fixture::comment_and_reward_scenario( check_point_tester_t ch
 
 void condenser_api_fixture::convert_and_limit_order_scenario( check_point_tester_t check_point_tester )
 {
-  db->set_hardfork( HIVE_HARDFORK_1_27 );
   generate_block();
 
   ACTORS( (edgar3ah)(carol3ah) );
@@ -294,7 +293,6 @@ void condenser_api_fixture::vesting_scenario( check_point_tester_t check_point_t
 
 void condenser_api_fixture::witness_scenario( check_point_tester_t check_point_tester )
 {
-  db->set_hardfork( HIVE_HARDFORK_1_27 );
   generate_block();
 
   ACTORS( (alice5ah)(ben5ah)(carol5ah) );
@@ -325,7 +323,6 @@ void condenser_api_fixture::witness_scenario( check_point_tester_t check_point_t
 
 void condenser_api_fixture::escrow_and_savings_scenario( check_point_tester_t check_point_tester )
 {
-  db->set_hardfork( HIVE_HARDFORK_1_27 );
   generate_block();
 
   ACTORS( (alice6ah)(ben6ah)(carol6ah) );
@@ -359,7 +356,6 @@ void condenser_api_fixture::escrow_and_savings_scenario( check_point_tester_t ch
 
 void condenser_api_fixture::proposal_scenario( check_point_tester_t check_point_tester )
 {
-  db->set_hardfork( HIVE_HARDFORK_1_27 );
   generate_block();
 
   ACTORS( (alice7ah)(ben7ah)(carol7ah) );
@@ -400,7 +396,6 @@ void condenser_api_fixture::proposal_scenario( check_point_tester_t check_point_
 
 void condenser_api_fixture::account_scenario( check_point_tester_t check_point_tester )
 {
-  db->set_hardfork( HIVE_HARDFORK_1_27 );
   generate_block();
 
   ACTORS( (alice8ah)(carol8ah) );
@@ -442,7 +437,6 @@ void condenser_api_fixture::account_scenario( check_point_tester_t check_point_t
 
 void condenser_api_fixture::custom_scenario( check_point_tester_t check_point_tester )
 {
-  db->set_hardfork( HIVE_HARDFORK_1_27 );
   generate_block();
 
   ACTORS( (alice9ah) );
@@ -457,7 +451,6 @@ void condenser_api_fixture::custom_scenario( check_point_tester_t check_point_te
 
 void condenser_api_fixture::recurrent_transfer_scenario( check_point_tester_t check_point_tester )
 {
-  db->set_hardfork( HIVE_HARDFORK_1_27 );
   generate_block();
 
   ACTORS( (alice10ah)(ben10ah) );
@@ -493,7 +486,6 @@ void condenser_api_fixture::decline_voting_rights_scenario( check_point_tester_t
 
 void condenser_api_fixture::combo_1_scenario( check_point_tester_t check_point_tester1, check_point_tester_t check_point_tester2 )
 {
-  db->set_hardfork( HIVE_HARDFORK_1_27 );
   generate_block();
 
   PREP_ACTOR( alice12ah );

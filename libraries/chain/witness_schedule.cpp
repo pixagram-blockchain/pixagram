@@ -17,8 +17,7 @@ using hive::chain::util::rd_validate_user_params;
 
 void reset_virtual_schedule_time( database& db )
 { try {
-  const witness_schedule_object& wso = db.has_hardfork(HIVE_HARDFORK_1_27_FIX_TIMESHARE_WITNESS_SCHEDULING) ?
-                                       db.get_witness_schedule_object_for_irreversibility() : db.get_witness_schedule_object();
+  const witness_schedule_object& wso = db.get_witness_schedule_object_for_irreversibility();
   db.modify( wso, [&](witness_schedule_object& o )
   {
     o.current_virtual_time = fc::uint128(); // reset it 0
@@ -400,32 +399,25 @@ void update_witness_schedule(database& db)
     const witness_schedule_object& wso = db.get_witness_schedule_object();
     if( db.has_hardfork(HIVE_HARDFORK_0_4) )
     {
-      if (db.has_hardfork(HIVE_HARDFORK_1_26_FUTURE_WITNESS_SCHEDULE))
+      //dlog("Has hardfork 1_26, generating a future shuffled witness schedule");
+
+      // if this is the first time we've run after the hardfork, the `future_witness_schedule_object`
+      // that was created during hardfork activation will be a copy of `current_shuffled_witnesses`.
+      //
+      // every time after that, `future_witness_schedule_object` will already have the next HIVE_MAX_WITNESSES ready,
+      // so we should swap that into `current_shuffled_witnesses` and then compute the new set into
+      // `future_witness_schedule_object`
+      const witness_schedule_object& future_wso = db.get_future_witness_schedule_object();
+
+      // promote future witnesses to current
+      db.modify(wso, [&](witness_schedule_object& witness_schedule)
       {
-        //dlog("Has hardfork 1_26, generating a future shuffled witness schedule");
+        witness_schedule.copy_values_from(future_wso);
+      } );
+      // activate global witness properties by copying them to dgpo
+      update_global_witness_properties( db, wso );
 
-        // if this is the first time we've run after the hardfork, the `future_witness_schedule_object`
-        // that was created during hardfork activation will be a copy of `current_shuffled_witnesses`.
-        //
-        // every time after that, `future_witness_schedule_object` will already have the next HIVE_MAX_WITNESSES ready,
-        // so we should swap that into `current_shuffled_witnesses` and then compute the new set into
-        // `future_witness_schedule_object`
-        const witness_schedule_object& future_wso = db.get_future_witness_schedule_object();
-
-        // promote future witnesses to current
-        db.modify(wso, [&](witness_schedule_object& witness_schedule)
-        {
-          witness_schedule.copy_values_from(future_wso);
-        } );
-        // activate global witness properties by copying them to dgpo
-        update_global_witness_properties( db, wso );
-
-        update_witness_schedule4(db, future_wso);
-      }
-      else
-      {
-        update_witness_schedule4(db, wso);
-      }
+      update_witness_schedule4(db, future_wso);
       if( db.has_hardfork( HIVE_HARDFORK_0_20 ) )
         db.rc.set_pool_params( wso );
       return;

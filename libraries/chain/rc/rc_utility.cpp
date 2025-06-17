@@ -23,12 +23,6 @@ uint16_t resource_credits::flood_surcharge = HIVE_100_PERCENT;
 
 void delegate_rc_evaluator::do_apply( const delegate_rc_operation& op )
 {
-  if( !_db.has_hardfork( HIVE_HARDFORK_1_26 ) )
-  {
-    dlog( "Ineffective RC delegation @${b} ${op}", ( "b", _db.head_block_num() + 1 )( op ) );
-    return;
-  }
-
   _db.rc.handle_operation_discount< rc_custom_operation >( op );
 
   const dynamic_global_property_object& gpo = _db.get_dynamic_global_properties();
@@ -551,7 +545,7 @@ bool resource_credits::use_account_rcs( int64_t rc )
         }
         else
         {
-          if( !has_mana && db.is_processing_block() && db.has_hardfork( HIVE_HARDFORK_1_26 ) )
+          if( !has_mana && db.is_processing_block())
           {
             //when we didn't have is_processing_block as part of condition the messages below would also
             //be produced when pending transactions were reapplied after new block arrived even though
@@ -587,9 +581,6 @@ bool resource_credits::has_expired_delegation( const account_object& account ) c
 
 void resource_credits::handle_expired_delegations() const
 {
-  if( !db.has_hardfork( HIVE_HARDFORK_1_26 ) )
-    return;
-
   // clear as many delegations as possible within limit starting from oldest ones (smallest id)
   const auto& expired_idx = db.get_index<rc_expired_delegation_index, by_id>();
   auto expired_it = expired_idx.begin();

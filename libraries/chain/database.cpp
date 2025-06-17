@@ -1268,8 +1268,7 @@ void database::adjust_witness_votes( const account_object& a, const share_type& 
 
 void database::adjust_witness_vote( const witness_object& witness, share_type delta )
 {
-  const witness_schedule_object& wso = has_hardfork(HIVE_HARDFORK_1_27_FIX_TIMESHARE_WITNESS_SCHEDULING) ?
-                                       get_witness_schedule_object_for_irreversibility() : get_witness_schedule_object();
+  const witness_schedule_object& wso = get_witness_schedule_object_for_irreversibility();
   modify( witness, [&]( witness_object& w )
   {
     auto delta_pos = w.votes.value * (wso.current_virtual_time - w.virtual_last_update);
@@ -2521,7 +2520,7 @@ void database::process_comment_cashout()
       else
         decay_time = HIVE_RECENT_RSHARES_DECAY_TIME_HF17;
 
-      if( ( _now - rfo.last_update ) <= decay_time || !has_hardfork( HIVE_HARDFORK_1_26_CLAIM_UNDERFLOW ) ) //TODO: remove hardfork part after HF26
+      if( ( _now - rfo.last_update ) <= decay_time )
         rfo.recent_claims -= ( rfo.recent_claims * ( _now - rfo.last_update ).to_seconds() ) / decay_time.to_seconds();
       else
         rfo.recent_claims = 0; // this should never happen - requires chain to be inactive for more than decay_time
@@ -4134,9 +4133,7 @@ try {
             hbd_supply -= get_treasury().get_hbd_balance();
           if( hbd_supply.amount > 0 )
           {
-            uint16_t limit = HIVE_HBD_HARD_LIMIT_PRE_HF26;
-            if( has_hardfork( HIVE_HARDFORK_1_26_HBD_HARD_CAP ) )
-              limit = HIVE_HBD_HARD_LIMIT;
+            uint16_t limit = HIVE_HBD_HARD_LIMIT;
             static_assert( ( HIVE_HBD_HARD_LIMIT % HIVE_1_PERCENT ) == 0, "Hard cap has to be expressed in full percentage points" );
             limit /= HIVE_1_PERCENT; //ABW: this is just to have two more levels of magnitude bigger margin;
               //even without it we can still fit within 64bit value, even though numbers used here are pretty big
@@ -4245,9 +4242,6 @@ void database::validate_transaction(const std::shared_ptr<full_transaction_type>
     {
       full_transaction->validate();
     }
-
-    if (!has_hardfork(HIVE_HARDFORK_1_26_ENABLE_NEW_SERIALIZATION))
-      HIVE_ASSERT(full_transaction->is_legacy_pack(), hive::protocol::transaction_auth_exception, "legacy serialization must be used until hardfork 26");
   }
 
   if (!(skip & (skip_transaction_signatures | skip_authority_check)))
@@ -4757,17 +4751,12 @@ void database::update_signing_witness(const witness_object& signing_witness, con
 
 const witness_schedule_object& database::get_witness_schedule_object_for_irreversibility() const
 {
-  if (has_hardfork(HIVE_HARDFORK_1_26_FUTURE_WITNESS_SCHEDULE))
-    return get_future_witness_schedule_object();
-  else
-    return get_witness_schedule_object();
+  return get_future_witness_schedule_object();
 }
 
 void database::process_fast_confirm_transaction(const std::shared_ptr<full_transaction_type>& full_transaction,
   switch_forks_t sf)
 { try {
-  FC_ASSERT(has_hardfork(HIVE_HARDFORK_1_26_FAST_CONFIRMATION), "Fast confirmation transactions not valid until HF26");
-
   signed_transaction trx = full_transaction->get_transaction();
 
   FC_ASSERT( is_fast_confirm_transaction(full_transaction),
@@ -5686,12 +5675,6 @@ void database::init_hardforks()
   FC_ASSERT( HIVE_HARDFORK_1_25 == 25, "Invalid hardfork configuration" );
   _hardfork_versions.times[ HIVE_HARDFORK_1_25 ] = fc::time_point_sec( HIVE_HARDFORK_1_25_TIME );
   _hardfork_versions.versions[ HIVE_HARDFORK_1_25 ] = HIVE_HARDFORK_1_25_VERSION;
-  FC_ASSERT( HIVE_HARDFORK_1_26 == 26, "Invalid hardfork configuration" );
-  _hardfork_versions.times[ HIVE_HARDFORK_1_26 ] = fc::time_point_sec( HIVE_HARDFORK_1_26_TIME );
-  _hardfork_versions.versions[ HIVE_HARDFORK_1_26 ] = HIVE_HARDFORK_1_26_VERSION;
-  FC_ASSERT( HIVE_HARDFORK_1_27 == 27, "Invalid hardfork configuration" );
-  _hardfork_versions.times[ HIVE_HARDFORK_1_27 ] = fc::time_point_sec( HIVE_HARDFORK_1_27_TIME );
-  _hardfork_versions.versions[ HIVE_HARDFORK_1_27 ] = HIVE_HARDFORK_1_27_VERSION;
 }
 
 void database::process_hardforks()
@@ -5760,6 +5743,13 @@ void database::set_hardfork( uint32_t hardfork, bool apply_now )
 
 void database::apply_hardfork( uint32_t hardfork )
 {
+  //TODO(Matus): move it to init ?
+  const auto& fwso = create<witness_schedule_object>( [&]( witness_schedule_object& future_witness_schedule )
+  {
+    future_witness_schedule.copy_values_from( get_witness_schedule_object() );
+  } );
+  FC_ASSERT( fwso.get_id() == 1, "Unexpected id allocated to future witness schedule object" );
+
   if( _log_hardforks )
     elog( "HARDFORK ${hf} at block ${b}", ("hf", hardfork)("b", head_block_num()) );
   operation hardfork_vop = hardfork_operation( hardfork );
@@ -6139,20 +6129,6 @@ void database::apply_hardfork( uint32_t hardfork )
         gpo.early_voting_seconds    = HIVE_EARLY_VOTING_SECONDS_HF25;
         gpo.mid_voting_seconds      = HIVE_MID_VOTING_SECONDS_HF25;
       });
-      break;
-    }
-    case HIVE_HARDFORK_1_26:
-    {
-      modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
-      {
-        gpo.hbd_stop_percent = HIVE_HBD_STOP_PERCENT_HF26;
-        gpo.hbd_start_percent = HIVE_HBD_START_PERCENT_HF26;
-      } );
-      const auto& fwso = create<witness_schedule_object>( [&]( witness_schedule_object& future_witness_schedule )
-      {
-        future_witness_schedule.copy_values_from( get_witness_schedule_object() );
-      } );
-      FC_ASSERT( fwso.get_id() == 1, "Unexpected id allocated to future witness schedule object" );
       break;
     }
 //TODO(MATUS)

@@ -321,9 +321,8 @@ bool future_witness_schedule::fill( const witness_schedule_object& active, const
 
 DEFINE_API_IMPL( database_api_impl, get_witness_schedule )
 {
-  FC_ASSERT( _db.has_hardfork( HIVE_HARDFORK_1_26 ) || !args.include_future, "Future witnesses only become available after HF26" );
   const auto& wso = _db.get_witness_schedule_object();
-  const auto& future_wso = _db.has_hardfork( HIVE_HARDFORK_1_26 ) ? _db.get_future_witness_schedule_object() : wso;
+  const auto& future_wso = _db.get_future_witness_schedule_object();
   get_witness_schedule_return result( wso, future_wso, args.include_future, _db );
   return result;
 }
@@ -473,7 +472,6 @@ DEFINE_API_IMPL( database_api_impl, list_witness_votes )
 
 DEFINE_API_IMPL( database_api_impl, get_active_witnesses )
 {
-  FC_ASSERT( _db.has_hardfork( HIVE_HARDFORK_1_26 ) || !args.include_future, "Future witnesses only become available after HF26" );
   const auto& wso = _db.get_witness_schedule_object();
   get_active_witnesses_return result;
   result.witnesses.assign( wso.current_shuffled_witnesses.begin(),
