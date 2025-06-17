@@ -75,7 +75,7 @@ private:
       collect_account_auths(*_authority, _account_name, _key_kind, _weight_threshold);
   }
 
-  void collect_memo_key(public_key_type memo_key, collected_keyauth_t& collected_item, bool allow_empty_key) 
+  void collect_memo_key(public_key_type memo_key, collected_keyauth_t& collected_item, bool allow_empty_key)
   {
     if( allow_empty_key || memo_key != public_key_type() )
     {
@@ -85,7 +85,7 @@ private:
   }
 
 
-  void collect_memo_key(optional< public_key_type > memo_key, collected_keyauth_t& collected_item, bool allow_empty_key) 
+  void collect_memo_key(optional< public_key_type > memo_key, collected_keyauth_t& collected_item, bool allow_empty_key)
   {
     if(memo_key)
       collect_memo_key(*memo_key, collected_item, allow_empty_key);
@@ -151,7 +151,7 @@ private:
   }
 
 
-  struct keyauth_pow2_visitor 
+  struct keyauth_pow2_visitor
   {
       using result_type = account_name_type;
 
@@ -256,9 +256,9 @@ collected_keyauth_collection_t operation_get_keyauths(const hive::protocol::oper
 
 
 // Helper function to add key authorizations for different key types
-void add_key_authorizations(keyauth_collector& collector, 
-                            collected_keyauth_t collected_item, 
-                            const std::vector<key_t>& key_types) 
+void add_key_authorizations(keyauth_collector& collector,
+                            collected_keyauth_t collected_item,
+                            const std::vector<key_t>& key_types)
 {
     for (auto& key_type : key_types) {
         collected_item.key_kind = key_type;
@@ -266,7 +266,7 @@ void add_key_authorizations(keyauth_collector& collector,
     }
 }
 
-collected_keyauth_collection_t operation_get_genesis_keyauths() 
+collected_keyauth_collection_t operation_get_genesis_keyauths()
 {
     keyauth_collector collector;
 
@@ -308,7 +308,7 @@ collected_keyauth_collection_t operation_get_hf09_keyauths()
     std::vector<key_t> hf09_key_types = {key_t::OWNER, key_t::ACTIVE, key_t::POSTING};
 
     auto PUBLIC_KEY = public_key_type(HIVE_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR);
-    for (const std::string& ACCOUNT_NAME : hardfork9::get_compromised_accounts()) 
+    for (const std::string& ACCOUNT_NAME : hardfork9::get_compromised_accounts())
     {
         collected_keyauth_t hf09_item {ACCOUNT_NAME, key_t::OWNER, 1, true, PUBLIC_KEY, {}, 1};
         add_key_authorizations(collector, hf09_item, hf09_key_types);
@@ -323,7 +323,7 @@ collected_keyauth_collection_t lock_account( const std::string& account_name )
 
     std::vector<key_t> key_types = {key_t::OWNER, key_t::ACTIVE, key_t::POSTING, key_t::MEMO};
 
-    for (const auto& key_type : key_types) 
+    for (const auto& key_type : key_types)
     {
         collected_keyauth_t default_item {account_name, key_type, 1, key_type == key_t::MEMO, {}, {}, 1, true, key_type != key_t::MEMO/*lock_account_mode*/};
         add_key_authorizations(collector, default_item, {key_type});
@@ -331,14 +331,10 @@ collected_keyauth_collection_t lock_account( const std::string& account_name )
 
     return collector.collected_keyauths;
 }
-collected_keyauth_collection_t operation_get_hf21_keyauths()
-{
-  return lock_account( OBSOLETE_TREASURY_ACCOUNT );
-}
 
 collected_keyauth_collection_t operation_get_hf24_keyauths()
 {
-  return lock_account( NEW_HIVE_TREASURY_ACCOUNT );
+  return lock_account( PIXA_TREASURY_ACCOUNT );
 }
 
 } // namespace hive::app

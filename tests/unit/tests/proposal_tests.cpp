@@ -293,7 +293,7 @@ BOOST_AUTO_TEST_CASE( db_remove_expired_governance_votes )
     set_price_feed( price( ASSET( "1.000 TBD" ), ASSET( "1.000 TESTS" ) ) );
     generate_block();
 
-    const fc::time_point_sec LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS = HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP + HIVE_HARDFORK_1_25_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT;
+    const fc::time_point_sec LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS = HIVE_GENESIS_TIME + HIVE_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT;
 
     auto proposal_creator = "accp";
     ISSUE_FUNDS( proposal_creator, ASSET( "10000.000 TBD" ) );
@@ -319,9 +319,9 @@ BOOST_AUTO_TEST_CASE( db_remove_expired_governance_votes )
 
     //if we vote before hardfork 25
     generate_block();
-    fc::time_point_sec hardfork_25_time(HIVE_HARDFORK_1_25_TIME);
-    generate_blocks(hardfork_25_time - fc::days(201));
-    BOOST_REQUIRE(db->head_block_time() < hardfork_25_time - fc::days(200));
+    fc::time_point_sec genesis_time(HIVE_GENESIS_TIME);
+    generate_blocks(HIVE_GENESIS_TIME - fc::days(201));
+    BOOST_REQUIRE(db->head_block_time() < genesis_time - fc::days(200));
     witness_vote("acc1", "accw2", acc1_private_key); //201 days before HF25
     generate_days_blocks(25);
     vote_proposal("acc2", {proposal_1}, true, acc2_private_key); //176 days before HF25
@@ -363,14 +363,14 @@ BOOST_AUTO_TEST_CASE( db_remove_expired_governance_votes )
       time_point_sec acc_7_vote_expiration_ts = db->get_account( "acc7" ).get_governance_vote_expiration_ts();
       time_point_sec pxy_vote_expiration_ts   = db->get_account( "pxy" ).get_governance_vote_expiration_ts();
 
-      BOOST_REQUIRE(acc_1_vote_expiration_ts > HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_1_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
-      BOOST_REQUIRE(acc_2_vote_expiration_ts > HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_2_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
-      BOOST_REQUIRE(acc_3_vote_expiration_ts > HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_3_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
-      BOOST_REQUIRE(acc_4_vote_expiration_ts > HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_4_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
-      BOOST_REQUIRE(acc_5_vote_expiration_ts > HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_5_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
-      BOOST_REQUIRE(acc_6_vote_expiration_ts > HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_6_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
-      BOOST_REQUIRE(acc_7_vote_expiration_ts > HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_7_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
-      BOOST_REQUIRE(pxy_vote_expiration_ts > HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && pxy_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS );
+      BOOST_REQUIRE(acc_1_vote_expiration_ts > FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_1_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
+      BOOST_REQUIRE(acc_2_vote_expiration_ts > FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_2_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
+      BOOST_REQUIRE(acc_3_vote_expiration_ts > FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_3_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
+      BOOST_REQUIRE(acc_4_vote_expiration_ts > FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_4_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
+      BOOST_REQUIRE(acc_5_vote_expiration_ts > FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_5_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
+      BOOST_REQUIRE(acc_6_vote_expiration_ts > FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_6_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
+      BOOST_REQUIRE(acc_7_vote_expiration_ts > FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && acc_7_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
+      BOOST_REQUIRE(pxy_vote_expiration_ts > FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && pxy_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS );
 
       const auto& witness_votes = db->get_index<witness_vote_index,by_account_witness>();
       BOOST_REQUIRE(witness_votes.size() == 3);
@@ -657,7 +657,7 @@ BOOST_AUTO_TEST_CASE( db_remove_expired_governance_votes_with_proxy )
     proxy( "carol", "bobproxy", carol_private_key );
     generate_block();
 
-    const fc::time_point_sec LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS = HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP + HIVE_HARDFORK_1_25_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT;
+    const fc::time_point_sec LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS = FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP + HIVE_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT;
 
     generate_blocks( db->head_block_time() + HIVE_DELAYED_VOTING_TOTAL_INTERVAL_SECONDS );
 
@@ -757,7 +757,7 @@ BOOST_AUTO_TEST_CASE( proposals_with_decline_voting_rights )
     set_price_feed( price( ASSET( "1.000 TBD" ), ASSET( "1.000 TESTS" ) ) );
     generate_block();
 
-    const fc::time_point_sec LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS = HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP + HIVE_HARDFORK_1_25_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT;
+    const fc::time_point_sec LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS = FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP + HIVE_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT;
     const fc::time_point_sec hardfork_25_time( HIVE_HARDFORK_1_25_TIME );
 
     ISSUE_FUNDS( "accp", ASSET( "10000.000 TBD" ) );
@@ -782,7 +782,7 @@ BOOST_AUTO_TEST_CASE( proposals_with_decline_voting_rights )
       generate_block();
       time_point_sec dwr_vote_expiration_ts = db->get_account( "dwr" ).get_governance_vote_expiration_ts();
       //it takes only 60 seconds in testnet to finish declining, but it is not finished yet
-      BOOST_REQUIRE( dwr_vote_expiration_ts > HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && dwr_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS );
+      BOOST_REQUIRE( dwr_vote_expiration_ts > FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP && dwr_vote_expiration_ts <= LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS );
     }
     generate_blocks( hardfork_25_time - fc::days( 25 ) );
     //TODO: check balance of acc1 (0) and acc2 (50 days worth of proposal pay, maybe more if it caught one more payout before decline finalized)
@@ -860,7 +860,7 @@ BOOST_AUTO_TEST_CASE( db_remove_expired_governance_votes_threshold_exceeded )
     const auto& witness_vote_idx = db->get_index< witness_vote_index, by_id >();
     const auto& account_idx = db->get_index<account_index, by_governance_vote_expiration_ts>();
 
-    const fc::time_point_sec LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS = HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP + HIVE_HARDFORK_1_25_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT;
+    const fc::time_point_sec LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS = FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP + HIVE_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT;
     generate_blocks(LAST_POSSIBLE_OLD_VOTE_EXPIRE_TS);
 
     std::vector<int64_t> proposals;

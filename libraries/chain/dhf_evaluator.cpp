@@ -27,15 +27,12 @@ void create_proposal_evaluator::do_apply( const create_proposal_operation& o )
 
     asset fee_hbd( HIVE_TREASURY_FEE, PXS_SYMBOL );
 
-    if(_db.has_hardfork(HIVE_HARDFORK_1_24))
-    {
-      uint32_t proposal_run_time = o.end_date.sec_since_epoch() - o.start_date.sec_since_epoch();
+    uint32_t proposal_run_time = o.end_date.sec_since_epoch() - o.start_date.sec_since_epoch();
 
-      if(proposal_run_time > HIVE_PROPOSAL_FEE_INCREASE_DAYS_SEC)
-      {
-        uint32_t extra_days = (proposal_run_time / HIVE_ONE_DAY_SECONDS) - HIVE_PROPOSAL_FEE_INCREASE_DAYS;
-        fee_hbd += asset(HIVE_PROPOSAL_FEE_INCREASE_AMOUNT * extra_days, PXS_SYMBOL);
-      }
+    if(proposal_run_time > HIVE_PROPOSAL_FEE_INCREASE_DAYS_SEC)
+    {
+      uint32_t extra_days = (proposal_run_time / HIVE_ONE_DAY_SECONDS) - HIVE_PROPOSAL_FEE_INCREASE_DAYS;
+      fee_hbd += asset(HIVE_PROPOSAL_FEE_INCREASE_AMOUNT * extra_days, PXS_SYMBOL);
     }
 
     //treasury account must exist, also we need it later to change its balance
@@ -87,8 +84,6 @@ void update_proposal_evaluator::do_apply( const update_proposal_operation& o )
 {
   try
   {
-    FC_ASSERT( _db.has_hardfork( HIVE_HARDFORK_1_24 ), "The update proposal functionality not enabled until hardfork ${hf}", ("hf", HIVE_HARDFORK_1_24) );
-
     const auto& proposal = _db.get< proposal_object, by_proposal_id >( o.proposal_id );
 
     FC_ASSERT(o.creator == proposal.creator, "Cannot edit a proposal you are not the creator of");
@@ -103,16 +98,12 @@ void update_proposal_evaluator::do_apply( const update_proposal_operation& o )
     FC_ASSERT(o.daily_pay <= proposal.daily_pay, "You cannot increase the daily pay");
 
     const update_proposal_end_date* ed = nullptr;
-    if (_db.has_hardfork(HIVE_HARDFORK_1_25)) {
-      FC_ASSERT( o.extensions.size() < 2, "Cannot have more than 1 extension");
-      // NOTE: This assumes there is only one extension and it's of type proposal_end_date, if you add more, update this code
-      if (o.extensions.size() == 1) {
-        ed = &(o.extensions.begin()->get<update_proposal_end_date>());
-        FC_ASSERT(ed->end_date <= proposal.end_date, "You cannot increase the end date of the proposal");
-        FC_ASSERT(ed->end_date > proposal.start_date, "The new end date must be after the start date");
-      }
-    } else {
-      FC_ASSERT( o.extensions.empty() , "Cannot set extensions");
+    FC_ASSERT( o.extensions.size() < 2, "Cannot have more than 1 extension");
+    // NOTE: This assumes there is only one extension and it's of type proposal_end_date, if you add more, update this code
+    if (o.extensions.size() == 1) {
+      ed = &(o.extensions.begin()->get<update_proposal_end_date>());
+      FC_ASSERT(ed->end_date <= proposal.end_date, "You cannot increase the end date of the proposal");
+      FC_ASSERT(ed->end_date > proposal.start_date, "The new end date must be after the start date");
     }
 
     _db.modify( proposal, [&]( proposal_object& p )
@@ -121,7 +112,7 @@ void update_proposal_evaluator::do_apply( const update_proposal_operation& o )
       p.subject = o.subject.c_str();
       p.permlink = o.permlink.c_str();
 
-      if (_db.has_hardfork(HIVE_HARDFORK_1_25) && ed != nullptr) {
+      if (ed != nullptr) {
           p.end_date = ed->end_date;
       }
     });
@@ -154,15 +145,12 @@ void update_proposal_votes_evaluator::do_apply( const update_proposal_votes_oper
         continue;
       }
 
-      if( _db.has_hardfork( HIVE_HARDFORK_1_25 ) )
-      {
-        /*
-          In the future is possible a situation, when it will be thousands proposals and some account will vote on each proposal.
-          During the account's deactivation, all votes have to be removed immediately, so it's a risk of potential performance issue.
-          Better it not to allow vote on expired proposal.
-        */
-        FC_ASSERT(_db.head_block_time() <= found_id->end_date, "Voting on expired proposals is not allowed...");
-      }
+      /*
+        In the future is possible a situation, when it will be thousands proposals and some account will vote on each proposal.
+        During the account's deactivation, all votes have to be removed immediately, so it's a risk of potential performance issue.
+        Better it not to allow vote on expired proposal.
+      */
+      FC_ASSERT(_db.head_block_time() <= found_id->end_date, "Voting on expired proposals is not allowed...");
 
       auto found = pvidx.find( boost::make_tuple( o.voter, pid ) );
 

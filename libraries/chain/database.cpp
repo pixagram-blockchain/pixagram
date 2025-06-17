@@ -278,12 +278,8 @@ void database::load_state_initial_data(const open_args& args)
   /// Leave the chain-id passed to cmdline option.
 #else
   with_read_lock([&]() {
-    const auto& hardforks = get_hardfork_property_object();
-    if(hardforks.last_hardfork >= HIVE_HARDFORK_1_24)
-    {
-      ilog("Loaded blockchain which had already processed hardfork 24, setting Hive chain id");
-      set_chain_id(HIVE_CHAIN_ID);
-    }
+    ilog("Setting Pixa chain id");
+    set_chain_id(HIVE_CHAIN_ID);
   });
 #endif /// IS_TEST_NET
 }
@@ -380,15 +376,12 @@ const witness_object* database::find_witness( const account_name_type& name ) co
 
 std::string database::get_treasury_name( uint32_t hardfork ) const
 {
-  if( hardfork >= HIVE_HARDFORK_1_24_TREASURY_RENAME )
-    return NEW_HIVE_TREASURY_ACCOUNT;
-  else
-    return OBSOLETE_TREASURY_ACCOUNT;
+  return PIXA_TREASURY_ACCOUNT;
 }
 
 bool database::is_treasury( const account_name_type& name )const
 {
-  return ( name == NEW_HIVE_TREASURY_ACCOUNT ) || ( name == OBSOLETE_TREASURY_ACCOUNT );
+  return ( name == PIXA_TREASURY_ACCOUNT );
 }
 
 const account_object& database::get_account( const account_id_type id )const
@@ -1435,116 +1428,6 @@ void database::clear_null_account_balance()
   post_push_virtual_operation( vop_op );
 }
 
-void database::consolidate_treasury_balance()
-{
-  if( !has_hardfork( HIVE_HARDFORK_1_24_TREASURY_RENAME ) )
-    return;
-
-  auto treasury_name = get_treasury_name();
-  auto old_treasury_name = get_treasury_name( HIVE_HARDFORK_1_24_TREASURY_RENAME - 1 );
-
-  const auto& old_treasury_account = get_account( old_treasury_name );
-  asset total_hive, total_hbd, total_vests, vesting_shares_hive_value;
-
-  if( treasury_name == old_treasury_name || //ABW: once we actually include change of treasury in HF24 that part of condition can be removed
-    !( collect_account_total_balance( old_treasury_account, &total_hive, &total_hbd, &total_vests, &vesting_shares_hive_value ) ) )
-    return;
-
-  const auto& treasury_account = get_treasury();
-
-  operation vop_op = consolidate_treasury_balance_operation();
-  consolidate_treasury_balance_operation& vop = vop_op.get< consolidate_treasury_balance_operation >();
-  if( total_hive.amount.value > 0 )
-    vop.total_moved.push_back( total_hive );
-  if( total_vests.amount.value > 0 )
-    vop.total_moved.push_back( total_vests );
-  if( total_hbd.amount.value > 0 )
-    vop.total_moved.push_back( total_hbd );
-  pre_push_virtual_operation( vop_op );
-
-  /////////////////////////////////////////////////////////////////////////////////////
-
-  if( old_treasury_account.get_balance().amount > 0 )
-  {
-    adjust_balance( treasury_account, old_treasury_account.get_balance() );
-    adjust_balance( old_treasury_account, -old_treasury_account.get_balance() );
-  }
-
-  if( old_treasury_account.get_savings().amount > 0 )
-  {
-    adjust_savings_balance( treasury_account, old_treasury_account.get_savings() );
-    adjust_savings_balance( old_treasury_account, -old_treasury_account.get_savings() );
-  }
-
-  if( old_treasury_account.get_hbd_balance().amount > 0 )
-  {
-    adjust_balance( treasury_account, old_treasury_account.get_hbd_balance() );
-    adjust_balance( old_treasury_account, -old_treasury_account.get_hbd_balance() );
-  }
-
-  if( old_treasury_account.get_hbd_savings().amount > 0 )
-  {
-    adjust_savings_balance( treasury_account, old_treasury_account.get_hbd_savings() );
-    adjust_savings_balance( old_treasury_account, -old_treasury_account.get_hbd_savings() );
-  }
-
-  if( old_treasury_account.get_vesting().amount > 0 )
-  {
-    //note that if we wanted to move vests in vested form it would complicate delayed_votes part;
-    //not that treasury could gain anything from vests anyway, so it is better to liquify them
-    adjust_balance( treasury_account, vesting_shares_hive_value );
-
-    const auto& gpo = get_dynamic_global_properties();
-    modify( gpo, [&]( dynamic_global_property_object& g )
-    {
-      g.total_vesting_shares -= old_treasury_account.get_vesting();
-      g.total_vesting_fund_hive -= vesting_shares_hive_value;
-    } );
-
-    modify( old_treasury_account, [&]( account_object& a )
-    {
-      a.vesting_shares.amount = 0;
-      a.sum_delayed_votes = 0;
-      a.delayed_votes.clear();
-    } );
-  }
-
-  if( old_treasury_account.get_rewards().amount > 0 )
-  {
-    adjust_reward_balance( treasury_account, old_treasury_account.get_rewards() );
-    adjust_reward_balance( old_treasury_account, -old_treasury_account.get_rewards() );
-  }
-
-  if( old_treasury_account.get_hbd_rewards().amount > 0 )
-  {
-    adjust_reward_balance( treasury_account, old_treasury_account.get_hbd_rewards() );
-    adjust_reward_balance( old_treasury_account, -old_treasury_account.get_hbd_rewards() );
-  }
-
-  if( old_treasury_account.get_vest_rewards().amount > 0 )
-  {
-    //see above handling of regular vests
-    adjust_balance( treasury_account, old_treasury_account.get_vest_rewards_as_hive() );
-
-    const auto& gpo = get_dynamic_global_properties();
-    modify( gpo, [ & ]( dynamic_global_property_object& g )
-    {
-      g.pending_rewarded_vesting_shares -= old_treasury_account.get_vest_rewards();
-      g.pending_rewarded_vesting_hive -= old_treasury_account.get_vest_rewards_as_hive();
-    } );
-
-    modify( old_treasury_account, [&]( account_object& a )
-    {
-      a.reward_vesting_hive.amount = 0;
-      a.reward_vesting_balance.amount = 0;
-    } );
-  }
-
-  //////////////////////////////////////////////////////////////
-
-  post_push_virtual_operation( vop_op );
-}
-
 void database::lock_account( const account_object& account )
 {
   auto* account_auth = find< account_authority_object, by_account >( account.get_name() );
@@ -1733,12 +1616,8 @@ void database::clear_account( const account_object& account )
       a.next_vesting_withdrawal = fc::time_point_sec::maximum();
       a.to_withdraw.amount = 0;
       a.withdrawn.amount = 0;
-
-      if( has_hardfork( HIVE_HARDFORK_1_24 ) )
-      {
-        a.delayed_votes.clear();
-        a.sum_delayed_votes = 0;
-      }
+      a.delayed_votes.clear();
+      a.sum_delayed_votes = 0;
 
       rc.update_account_after_vest_change( account, now, true, true );
     } );
@@ -1836,12 +1715,9 @@ void database::clear_account( const account_object& account )
   }
 
   // Touch HBD balances (to be sure all interests are added to balances)
-  if( has_hardfork( HIVE_HARDFORK_1_24 ) )
-  {
-    adjust_balance( account, HBD_asset( 0 ) );
-    adjust_savings_balance( account, HBD_asset( 0 ) );
-    adjust_reward_balance( account, HBD_asset( 0 ) );
-  }
+  adjust_balance( account, HBD_asset( 0 ) );
+  adjust_savings_balance( account, HBD_asset( 0 ) );
+  adjust_reward_balance( account, HBD_asset( 0 ) );
 
   // Remove remaining savings balances
   total_transferred_hive += account.get_savings();
@@ -1905,11 +1781,8 @@ void database::process_proposals( const block_notification& note )
 
 void database::process_delayed_voting( const block_notification& note )
 {
-  if( has_hardfork( HIVE_HARDFORK_1_24 ) )
-  {
-    delayed_voting dv( *this );
-    dv.run( note.get_block_timestamp() );
-  }
+  delayed_voting dv( *this );
+  dv.run( note.get_block_timestamp() );
 }
 
 /**
@@ -1918,9 +1791,6 @@ void database::process_delayed_voting( const block_notification& note )
   */
 void database::process_recurrent_transfers()
 {
-  if( !has_hardfork( HIVE_HARDFORK_1_25 ) )
-    return;
-
   auto now = head_block_time();
   const auto& recurrent_transfers_by_date = get_index< recurrent_transfer_index, by_trigger_date >();
   auto itr = recurrent_transfers_by_date.begin();
@@ -2079,12 +1949,8 @@ void database::process_vesting_withdrawals()
 
     optional< delayed_voting > dv;
     delayed_voting::opt_votes_update_data_items _votes_update_data_items;
-
-    if( has_hardfork( HIVE_HARDFORK_1_24 ) )
-    {
-      dv = delayed_voting( *this );
-      _votes_update_data_items = delayed_voting::votes_update_data_items();
-    }
+    dv = delayed_voting( *this );
+    _votes_update_data_items = delayed_voting::votes_update_data_items();
 
     share_type vests_deposited = 0;
 
@@ -2128,20 +1994,13 @@ void database::process_vesting_withdrawals()
               if( has_hardfork( HIVE_HARDFORK_0_20 ) )
                 rc.update_account_after_vest_change( to_account, now );
 
-              if( has_hardfork( HIVE_HARDFORK_1_24 ) )
-              {
-                FC_ASSERT( dv.valid(), "The object processing `delayed votes` must exist" );
+              FC_ASSERT( dv.valid(), "The object processing `delayed votes` must exist" );
 
-                dv->add_votes( _votes_update_data_items,
-                          to_account.get_id() == from_account.get_id()/*withdraw_executor*/,
-                          routed.amount.value/*val*/,
-                          to_account/*account*/
-                        );
-              }
-              else
-              {
-                adjust_proxied_witness_votes( to_account, to_deposit );
-              }
+              dv->add_votes( _votes_update_data_items,
+                        to_account.get_id() == from_account.get_id()/*withdraw_executor*/,
+                        routed.amount.value/*val*/,
+                        to_account/*account*/
+                      );
             }
             else
             {
@@ -2173,16 +2032,14 @@ void database::process_vesting_withdrawals()
 
     if( has_hardfork( HIVE_HARDFORK_0_20 ) )
       rc.regenerate_rc_mana( from_account, now );
-    if( has_hardfork( HIVE_HARDFORK_1_24 ) )
-    {
-      FC_ASSERT( dv.valid(), "The object processing `delayed votes` must exist" );
 
-      dv->add_votes( _votes_update_data_items,
-                true/*withdraw_executor*/,
-                -to_withdraw.value/*val*/,
-                from_account/*account*/
-              );
-    }
+    FC_ASSERT( dv.valid(), "The object processing `delayed votes` must exist" );
+
+    dv->add_votes( _votes_update_data_items,
+              true/*withdraw_executor*/,
+              -to_withdraw.value/*val*/,
+              from_account/*account*/
+            );
 
     modify( from_account, [&]( account_object& a )
     {
@@ -2212,20 +2069,12 @@ void database::process_vesting_withdrawals()
       o.total_vesting_shares.amount -= to_convert;
     });
 
-    if( has_hardfork( HIVE_HARDFORK_1_24 ) )
-    {
-      FC_ASSERT( dv.valid(), "The object processing `delayed votes` must exist" );
+    FC_ASSERT( dv.valid(), "The object processing `delayed votes` must exist" );
 
-      fc::optional< ushare_type > leftover = dv->update_votes( _votes_update_data_items, now );
-      FC_ASSERT( leftover.valid(), "Something went wrong" );
-      if( leftover.valid() && ( *leftover ) > 0 )
-        adjust_proxied_witness_votes( from_account, -( ( *leftover ).value ) );
-    }
-    else
-    {
-      if( to_withdraw > 0 )
-        adjust_proxied_witness_votes( from_account, -to_withdraw );
-    }
+    fc::optional< ushare_type > leftover = dv->update_votes( _votes_update_data_items, now );
+    FC_ASSERT( leftover.valid(), "Something went wrong" );
+    if( leftover.valid() && ( *leftover ) > 0 )
+      adjust_proxied_witness_votes( from_account, -( ( *leftover ).value ) );
 
     post_push_virtual_operation( vop );
   }
@@ -3493,24 +3342,14 @@ void database::init_genesis()
       auth.posting.weight_threshold = 1;
     });
 
-#if defined(IS_TEST_NET) || defined(HIVE_CONVERTER_ICEBERG_PLUGIN_ENABLED)
-    create< account_object >( OBSOLETE_TREASURY_ACCOUNT, HIVE_GENESIS_TIME );
+    create< account_object >( PIXA_TREASURY_ACCOUNT, HIVE_GENESIS_TIME );
     create< account_authority_object >([&](account_authority_object& auth)
     {
-      auth.account = OBSOLETE_TREASURY_ACCOUNT;
+      auth.account = PIXA_TREASURY_ACCOUNT;
       auth.owner.weight_threshold = 1;
       auth.active.weight_threshold = 1;
       auth.posting.weight_threshold = 1;
     } );
-    create< account_object >( NEW_HIVE_TREASURY_ACCOUNT, HIVE_GENESIS_TIME );
-    create< account_authority_object >([&](account_authority_object& auth)
-    {
-      auth.account = NEW_HIVE_TREASURY_ACCOUNT;
-      auth.owner.weight_threshold = 1;
-      auth.active.weight_threshold = 1;
-      auth.posting.weight_threshold = 1;
-    } );
-#endif
 
     create< account_object >( HIVE_TEMP_ACCOUNT, HIVE_GENESIS_TIME );
     create< account_authority_object >( [&]( account_authority_object& auth )
@@ -3933,7 +3772,6 @@ void database::_apply_block( const std::shared_ptr<full_block_type>& full_block,
   update_virtual_supply(); //accommodate potentially new price
 
   clear_null_account_balance();
-  consolidate_treasury_balance();
   process_funds();
   process_conversions();
   process_comment_cashout();
@@ -4128,9 +3966,7 @@ try {
           // as for L = 33%; for better accuracy we can express the price as (100%-L)*X HBD per L*Y HIVE
 
           const auto& dgpo = get_dynamic_global_properties();
-          auto hbd_supply = dgpo.get_current_hbd_supply();
-          if( has_hardfork( HIVE_HARDFORK_1_25_HBD_HARD_CAP ) )
-            hbd_supply -= get_treasury().get_hbd_balance();
+          auto hbd_supply = dgpo.get_current_hbd_supply() - get_treasury().get_hbd_balance();
           if( hbd_supply.amount > 0 )
           {
             uint16_t limit = HIVE_HBD_HARD_LIMIT;
@@ -4699,14 +4535,12 @@ uint16_t database::calculate_HBD_percent()
   const auto& dgpo = get_dynamic_global_properties();
   auto hbd_supply = dgpo.get_current_hbd_supply();
   auto virtual_supply = dgpo.virtual_supply;
-  if( has_hardfork( HIVE_HARDFORK_1_24 ) )
-  {
-    // Removing the hbd in the treasury from the debt ratio calculations
-    hbd_supply -= get_treasury().get_hbd_balance();
-    if( hbd_supply.amount < 0 )
-      hbd_supply = asset( 0, PXS_SYMBOL );
-    virtual_supply = hbd_supply * median_price + dgpo.get_current_supply();
-  }
+
+  // Removing the hbd in the treasury from the debt ratio calculations
+  hbd_supply -= get_treasury().get_hbd_balance();
+  if( hbd_supply.amount < 0 )
+    hbd_supply = asset( 0, PXS_SYMBOL );
+  virtual_supply = hbd_supply * median_price + dgpo.get_current_supply();
 
   auto hbd_as_hive = fc::uint128_t( ( hbd_supply * median_price ).amount.value );
   hbd_as_hive *= HIVE_100_PERCENT;
@@ -5281,33 +5115,6 @@ void database::modify_balance( const account_object& a, const asset& delta, bool
       }
       case PIXA_ASSET_NUM_PXS:
       {
-        /// Starting from HF 25 HBD interest will be paid only from saving balance.
-        if( has_hardfork(HIVE_HARDFORK_1_25) == false && a.hbd_seconds_last_update != head_block_time() )
-        {
-          acnt.hbd_seconds += fc::uint128_t(a.get_hbd_balance().amount.value) * (head_block_time() - a.hbd_seconds_last_update).to_seconds();
-          acnt.hbd_seconds_last_update = head_block_time();
-          if( acnt.hbd_seconds > 0 &&
-              (acnt.hbd_seconds_last_update - acnt.hbd_last_interest_payment).to_seconds() > HIVE_HBD_INTEREST_COMPOUND_INTERVAL_SEC )
-          {
-            auto interest = acnt.hbd_seconds / HIVE_SECONDS_PER_YEAR;
-            interest *= get_dynamic_global_properties().get_hbd_interest_rate();
-            interest /= HIVE_100_PERCENT;
-            asset interest_paid(fc::uint128_to_uint64(interest), PXS_SYMBOL);
-            acnt.hbd_balance += interest_paid;
-            acnt.hbd_seconds = 0;
-            acnt.hbd_last_interest_payment = head_block_time();
-
-            if(interest > 0)
-              push_virtual_operation( interest_operation( a.get_name(), interest_paid, true ) );
-
-            modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& props)
-            {
-              props.current_hbd_supply += interest_paid;
-              props.virtual_supply += interest_paid * get_feed_history().current_median_history;
-            } );
-          }
-        }
-
         auto b = acnt.hbd_balance;
         acnt.hbd_balance += delta;
 
@@ -5669,12 +5476,6 @@ void database::init_hardforks()
   FC_ASSERT( HIVE_HARDFORK_0_23 == 23, "Invalid hardfork configuration" );
   _hardfork_versions.times[ HIVE_HARDFORK_0_23 ] = fc::time_point_sec( HIVE_HARDFORK_0_23_TIME );
   _hardfork_versions.versions[ HIVE_HARDFORK_0_23 ] = HIVE_HARDFORK_0_23_VERSION;
-  FC_ASSERT( HIVE_HARDFORK_1_24 == 24, "Invalid hardfork configuration" );
-  _hardfork_versions.times[ HIVE_HARDFORK_1_24 ] = fc::time_point_sec( HIVE_HARDFORK_1_24_TIME );
-  _hardfork_versions.versions[ HIVE_HARDFORK_1_24 ] = HIVE_HARDFORK_1_24_VERSION;
-  FC_ASSERT( HIVE_HARDFORK_1_25 == 25, "Invalid hardfork configuration" );
-  _hardfork_versions.times[ HIVE_HARDFORK_1_25 ] = fc::time_point_sec( HIVE_HARDFORK_1_25_TIME );
-  _hardfork_versions.versions[ HIVE_HARDFORK_1_25 ] = HIVE_HARDFORK_1_25_VERSION;
 }
 
 void database::process_hardforks()
@@ -5744,11 +5545,31 @@ void database::set_hardfork( uint32_t hardfork, bool apply_now )
 void database::apply_hardfork( uint32_t hardfork )
 {
   //TODO(Matus): move it to init ?
+
+  const auto current_blockchain_config = protocol::get_config(get_treasury_name(), get_chain_id());
+  fc::variant current_blockchain_config_as_variant;
+  fc::to_variant(current_blockchain_config, current_blockchain_config_as_variant);
+  set_blockchain_config(fc::json::to_string(current_blockchain_config_as_variant));
+
+  restore_accounts( hardforkprotect::get_restored_accounts() );
+#ifdef USE_ALTERNATE_CHAIN_ID
+      /// Don't change chain_id in testnet build.
+#else
+  set_chain_id(HIVE_CHAIN_ID);
+#endif /// IS_TEST_NET
+
+  modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
+  {
+    rfo.curation_reward_curve = linear;
+    rfo.author_reward_curve   = linear;
+  });
+
   const auto& fwso = create<witness_schedule_object>( [&]( witness_schedule_object& future_witness_schedule )
   {
     future_witness_schedule.copy_values_from( get_witness_schedule_object() );
   } );
   FC_ASSERT( fwso.get_id() == 1, "Unexpected id allocated to future witness schedule object" );
+  ////
 
   if( _log_hardforks )
     elog( "HARDFORK ${hf} at block ${b}", ("hf", hardfork)("b", head_block_num()) );
@@ -6106,31 +5927,6 @@ void database::apply_hardfork( uint32_t hardfork )
       }
       break;
     }
-    case HIVE_HARDFORK_1_24:
-    {
-      restore_accounts( hardforkprotect::get_restored_accounts() );
-#ifdef USE_ALTERNATE_CHAIN_ID
-      /// Don't change chain_id in testnet build.
-#else
-      set_chain_id(HIVE_CHAIN_ID);
-#endif /// IS_TEST_NET
-      break;
-    }
-    case HIVE_HARDFORK_1_25:
-    {
-      modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
-      {
-        rfo.curation_reward_curve = linear;
-        rfo.author_reward_curve   = linear;
-      });
-      modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
-      {
-        gpo.reverse_auction_seconds = HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF25;
-        gpo.early_voting_seconds    = HIVE_EARLY_VOTING_SECONDS_HF25;
-        gpo.mid_voting_seconds      = HIVE_MID_VOTING_SECONDS_HF25;
-      });
-      break;
-    }
 //TODO(MATUS)
 //     case HIVE_SMT_HARDFORK:
 //     {
@@ -6152,28 +5948,6 @@ void database::apply_hardfork( uint32_t hardfork )
     hfp.current_hardfork_version = _hardfork_versions.versions[ hardfork ];
     FC_ASSERT( hfp.processed_hardforks[ hfp.last_hardfork ] == _hardfork_versions.times[ hfp.last_hardfork ], "Hardfork processing failed sanity check..." );
   } );
-
-  if( hardfork == HIVE_HARDFORK_1_24_TREASURY_RENAME )
-  {
-    const auto treasury_name = get_treasury_name();
-
-    if( find_account(treasury_name) == nullptr )
-      create< account_object >( treasury_name, head_block_time() );
-
-    lock_account( get_treasury() );
-    //the following routine can only be called effectively after hardfork was marked as applied
-    //we could wait for regular call in _apply_block(), however it could hinder future changes, most notably use of treasury in future
-    //hardfork code with assumption of nonzero balance
-    consolidate_treasury_balance();
-  }
-  // HF 24 updates blockchain configuration.
-  if (hardfork == HIVE_HARDFORK_1_24)
-  {
-    const auto current_blockchain_config = protocol::get_config(get_treasury_name(), get_chain_id());
-    fc::variant current_blockchain_config_as_variant;
-    fc::to_variant(current_blockchain_config, current_blockchain_config_as_variant);
-    set_blockchain_config(fc::json::to_string(current_blockchain_config_as_variant));
-  }
 
   post_push_virtual_operation( hardfork_vop, _op_in_trx );
 }
@@ -6606,9 +6380,6 @@ optional< chainbase::database::session >& database::pending_transaction_session(
 
 void database::remove_expired_governance_votes()
 {
-  if (!has_hardfork(HIVE_HARDFORK_1_25))
-    return;
-
   const auto& accounts = get_index<account_index, by_governance_vote_expiration_ts>();
   auto acc_it = accounts.begin();
   time_point_sec first_expiring = acc_it->get_governance_vote_expiration_ts();

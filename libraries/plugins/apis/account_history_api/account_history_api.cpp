@@ -109,10 +109,10 @@ struct operation_filtering_visitor
   (fill_vesting_withdraw_operation)(fill_order_operation)(shutdown_witness_operation)
   (fill_transfer_from_savings_operation)(hardfork_operation)(comment_payout_update_operation)
   (return_vesting_delegation_operation)(comment_benefactor_reward_operation) )
-  
+
   CHECK_OPERATIONS_HIGH( (producer_reward_operation) (clear_null_account_balance_operation)(proposal_pay_operation)
   (dhf_funding_operation)(hardfork_hive_operation)(hardfork_hive_restore_operation)(delayed_voting_operation)
-  (consolidate_treasury_balance_operation)(effective_comment_vote_operation)(ineffective_delete_comment_operation)
+  (effective_comment_vote_operation)(ineffective_delete_comment_operation)
   (dhf_conversion_operation)(expired_account_notification_operation)(changed_recovery_account_operation)
   (transfer_to_vesting_completed_operation)(pow_reward_operation)(vesting_shares_split_operation)
   (account_created_operation)(fill_collateralized_convert_request_operation)(system_warning_operation)
@@ -160,7 +160,7 @@ DEFINE_API_IMPL( account_history_api_rocksdb_impl, get_account_history )
         // we want to accept any operations where the corresponding bit is set in {filter_high, filter_low}
         api_operation_object api_op(op);
         operation_filtering_visitor accepting_visitor;
-        
+
         if( accepting_visitor.check( filter_low, filter_high, api_op.op ) )
         {
           result.history.emplace(sequence, std::move(api_op));
@@ -206,9 +206,9 @@ DEFINE_API_IMPL( account_history_api_rocksdb_impl, get_transaction )
 
   if(_dataSource.find_transaction_info(id, include_reversible, &blockNo, &txInBlock))
   {
-    std::shared_ptr<hive::chain::full_block_type> blk = 
+    std::shared_ptr<hive::chain::full_block_type> blk =
       _block_reader.get_block_by_number(blockNo, fc::seconds(1));
-    
+
     const auto& full_txs = blk->get_full_transactions();
 
     FC_ASSERT(full_txs.size() > txInBlock);
@@ -254,7 +254,7 @@ struct virtual_operation_filtering_visitor
   (return_vesting_delegation_operation)(comment_benefactor_reward_operation)(producer_reward_operation)
   (clear_null_account_balance_operation)(proposal_pay_operation)(dhf_funding_operation)
   (hardfork_hive_operation)(hardfork_hive_restore_operation)(delayed_voting_operation)
-  (consolidate_treasury_balance_operation)(effective_comment_vote_operation)(ineffective_delete_comment_operation)
+  (effective_comment_vote_operation)(ineffective_delete_comment_operation)
   (dhf_conversion_operation)(expired_account_notification_operation)(changed_recovery_account_operation)
   (transfer_to_vesting_completed_operation)(pow_reward_operation)(vesting_shares_split_operation)
   (account_created_operation)(fill_collateralized_convert_request_operation)(system_warning_operation)

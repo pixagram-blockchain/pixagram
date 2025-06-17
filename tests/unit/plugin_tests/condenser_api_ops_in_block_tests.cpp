@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE( get_ops_in_block_hf1 )
     }, { // vesting_shares_split_operation / splitting producer reward
     R"~({"trx_id":"0000000000000000000000000000000000000000","block":2,"trx_in_block":4294967295,"op_in_trx":3,"virtual_op":true,"timestamp":"2016-01-01T00:00:06","op":{"type":"vesting_shares_split_operation","value":{"owner":"initminer","vesting_shares_before_split":{"amount":"1000000","precision":6,"nai":"@@000000037"},"vesting_shares_after_split":{"amount":"1000000000000","precision":6,"nai":"@@000000037"}}},"operation_id":0})~",
     R"~({"trx_id":"0000000000000000000000000000000000000000","block":2,"trx_in_block":4294967295,"op_in_trx":3,"virtual_op":true,"timestamp":"2016-01-01T00:00:06","op":["vesting_shares_split",{"owner":"initminer","vesting_shares_before_split":"1.000000 VESTS","vesting_shares_after_split":"1000000.000000 VESTS"}]})~"
-    } }; 
+    } };
     // Note that all operations of this block are virtual, hence we can reuse the same expected container here.
     test_get_ops_in_block( *this, expected_operations, expected_operations, 2 );
 
@@ -311,9 +311,9 @@ BOOST_AUTO_TEST_CASE( get_ops_in_block_hf19 )
     // Note that all operations of this block are virtual, hence we can reuse the same expected container here.
     test_get_ops_in_block( *this, expected_operations, expected_operations, 27 );
   };
-  
+
   hf19_scenario( check_point_tester );
-  
+
 } FC_LOG_AND_RETHROW() }
 
 BOOST_AUTO_TEST_CASE( get_ops_in_block_hf23 )
@@ -357,9 +357,6 @@ BOOST_AUTO_TEST_CASE( get_ops_in_block_hf23 )
       }, { // hardfork_hive_restore_operation
       R"~({"trx_id":"0000000000000000000000000000000000000000","block":6,"trx_in_block":4294967295,"op_in_trx":3,"virtual_op":true,"timestamp":"2016-01-01T00:00:18","op":{"type":"hardfork_hive_restore_operation","value":{"account":"steemflower","treasury":"steem.dao","hbd_transferred":{"amount":"123456789000","precision":3,"nai":"@@000000013"},"hive_transferred":{"amount":"0","precision":3,"nai":"@@000000021"}}},"operation_id":0})~",
       R"~({"trx_id":"0000000000000000000000000000000000000000","block":6,"trx_in_block":4294967295,"op_in_trx":3,"virtual_op":true,"timestamp":"2016-01-01T00:00:18","op":["hardfork_hive_restore",{"account":"steemflower","treasury":"steem.dao","hbd_transferred":"123456789.000 TBD","hive_transferred":"0.000 TESTS"}]})~"
-      }, { // consolidate_treasury_balance_operation
-      R"~({"trx_id":"0000000000000000000000000000000000000000","block":6,"trx_in_block":4294967295,"op_in_trx":4,"virtual_op":true,"timestamp":"2016-01-01T00:00:18","op":{"type":"consolidate_treasury_balance_operation","value":{"total_moved":[{"amount":"132","precision":3,"nai":"@@000000021"},{"amount":"390","precision":3,"nai":"@@000000013"}]}},"operation_id":0})~",
-      R"~({"trx_id":"0000000000000000000000000000000000000000","block":6,"trx_in_block":4294967295,"op_in_trx":4,"virtual_op":true,"timestamp":"2016-01-01T00:00:18","op":["consolidate_treasury_balance",{"total_moved":["0.132 TESTS","0.390 TBD"]}]})~"
       } };
     // Note that all operations of this block are virtual, hence we can reuse the same expected container here.
     test_get_ops_in_block( *this, expected_operations, expected_operations, 6 );
@@ -405,7 +402,7 @@ BOOST_AUTO_TEST_CASE( get_ops_in_block_comment_and_reward )
 
   // Check operations resulting from 2nd set of actions:
   auto check_point_2_tester = [ this ]( uint32_t generate_no_further_than )
-  { 
+  {
     generate_until_irreversible_block( 28 );
     BOOST_REQUIRE( db->head_block_num() <= generate_no_further_than );
 
@@ -610,7 +607,7 @@ BOOST_AUTO_TEST_CASE( get_ops_in_block_witness )
     // Note that all operations of this block are virtual, hence we can reuse the same expected container here.
     test_get_ops_in_block( *this, expected_operations, expected_operations, 8 );
   };
-  
+
   witness_scenario( check_point_tester );
 
   configuration_data.reset_hardfork_schedule();

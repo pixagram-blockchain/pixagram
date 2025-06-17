@@ -135,9 +135,9 @@ namespace hive { namespace chain {
 
       uint32_t delegation_return_period = HIVE_DELEGATION_RETURN_PERIOD_HF0;
 
-      uint64_t reverse_auction_seconds = HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF6;
-      uint64_t early_voting_seconds = 0;
-      uint64_t mid_voting_seconds = 0;
+      uint64_t reverse_auction_seconds = HIVE_REVERSE_AUCTION_WINDOW_SECONDS;
+      uint64_t early_voting_seconds = HIVE_EARLY_VOTING_SECONDS;
+      uint64_t mid_voting_seconds = HIVE_MID_VOTING_SECONDS;
 
       int64_t available_account_subsidies = 0;
 

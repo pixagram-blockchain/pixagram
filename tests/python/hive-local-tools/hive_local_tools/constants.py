@@ -83,7 +83,7 @@ filters_enum_virtual_ops = {
     "hardfork_hive_operation": 0x040000,
     "hardfork_hive_restore_operation": 0x080000,
     "delayed_voting_operation": 0x100000,
-    "consolidate_treasury_balance_operation": 0x200000,
+    # "consolidate_treasury_balance_operation": 0x200000,
     "effective_comment_vote_operation": 0x400000,
     "ineffective_delete_comment_operation": 0x800000,
     "sps_convert_operation": 0x1000000,

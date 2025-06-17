@@ -403,12 +403,6 @@ struct get_impacted_account_visitor
     _impacted.insert( op.treasury );
   }
 
-  void operator()( const consolidate_treasury_balance_operation& op )
-  {
-    _impacted.insert( NEW_HIVE_TREASURY_ACCOUNT );
-    _impacted.insert( OBSOLETE_TREASURY_ACCOUNT );
-  }
-
   void operator()( const clear_null_account_balance_operation& op )
   {
     _impacted.insert( HIVE_NULL_ACCOUNT );
@@ -631,17 +625,6 @@ struct impacted_balance_collector
     // balance tracker and similar apps need to clear all balances or even skip handling null account altogether
     // vop will not contain all the information necessary (f.e. it only has summary including savings and pending
     // rewards, adding all details would bloat the vop)
-  }
-
-  void operator()(const consolidate_treasury_balance_operation& o)
-  {
-    // balance tracker and similar apps need to clear all balances of OBSOLETE_TREASURY_ACCOUNT like in case
-    // of clear_null_account_balance_operation
-    // NOTE: there is a potential problem, since the related routine rewrites balances one to one; normally
-    // treasury cannot have rewards or savings, but if it somehow did (f.e. if old treasury were treated like normal
-    // account due to bug), then we'd be erroneously counting reward/saving balances towards liquid balances
-    for( auto& value : o.total_moved )
-      emplace_back(NEW_HIVE_TREASURY_ACCOUNT, value);
   }
 
   void operator()(const claim_account_operation& o)

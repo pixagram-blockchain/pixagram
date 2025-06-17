@@ -43,7 +43,7 @@ struct full_transaction_type
     mutable hive::protocol::digest_type merkle_digest; // transaction hash used for calculating block's merkle root
     mutable hive::protocol::digest_type digest; // hash used for generating transaction id
 
-    mutable fc::exception_ptr validation_exception; // if validate() threw, this is what it threw 
+    mutable fc::exception_ptr validation_exception; // if validate() threw, this is what it threw
     mutable fc::microseconds validation_computation_time;
 
     struct signature_info_type
@@ -60,17 +60,17 @@ struct full_transaction_type
     mutable std::chrono::nanoseconds required_authorities_computation_time;
 
     /// immutable data below here isn't accessed across multiple threads, it's set at construction time and left alone
-    
+
     // if this full_transaction was created while deserializing a block, we store
     // containing_block_info, and our signed_transaction and serialized data point
     // into data owned by the full_block
     struct contained_in_block_info
     {
-      std::shared_ptr<decoded_block_storage_type> block_storage; 
+      std::shared_ptr<decoded_block_storage_type> block_storage;
       uint32_t index_in_block;
     };
 
-    // if this full_transaction was created from a stand-alone transaction instead of from a block, we 
+    // if this full_transaction was created from a stand-alone transaction instead of from a block, we
     // store the data in this structure
     struct standalone_transaction_info
     {
@@ -104,7 +104,7 @@ struct full_transaction_type
 
     static std::atomic<uint32_t> number_of_instances_created;
     static std::atomic<uint32_t> number_of_instances_destroyed;
-    
+
     /// Helper method encapsulating full_transaction object creation.
     static full_transaction_ptr build_transaction_object(const signed_transaction& transaction, hive::protocol::pack_type serialization_type);
     static serialized_transaction_data fill_serialization_buffer(const signed_transaction& transaction, hive::protocol::pack_type serialization_type,
@@ -155,7 +155,7 @@ struct full_transaction_type
 
     static full_transaction_ptr create_from_block(const std::shared_ptr<decoded_block_storage_type>& block_storage, uint32_t index_in_block,
                                                   const serialized_transaction_data& serialized_transaction, bool use_transaction_cache);
-    /// Allows to build a full_transaction object basing on not yet signed transaction 
+    /// Allows to build a full_transaction object basing on not yet signed transaction
     static full_transaction_ptr create_from_transaction(const hive::protocol::transaction& transaction, hive::protocol::pack_type serialization_type);
     /// Allows to build a full_transaction object from ALREADY signed transaction (pointed transaction object must contain at least one signature).
     static full_transaction_ptr create_from_signed_transaction(const signed_transaction& transaction,
@@ -184,7 +184,7 @@ struct transaction_signature_validation_rules_type
 #ifdef USE_ALTERNATE_CHAIN_ID
 void set_chain_id_for_transaction_signature_validation(const chain_id_type& chain_id);
 #endif
-const transaction_signature_validation_rules_type& get_transaction_signature_validation_rules_at_time(fc::time_point_sec time);
+const transaction_signature_validation_rules_type& get_transaction_signature_validation_rules();
 const transaction_signature_validation_rules_type& get_signature_validation_for_new_transactions();
 
 } } // end namespace hive::chain

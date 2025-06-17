@@ -2411,10 +2411,6 @@ BOOST_AUTO_TEST_CASE( proxy_cleared_operation_basic )
       BOOST_TEST_MESSAGE( "--- Test removing proxy because of votes expiration" );
 
       generate_block();
-
-      fc::time_point_sec hardfork_25_time(HIVE_HARDFORK_1_25_TIME);
-      generate_blocks( hardfork_25_time );
-
       account_witness_proxy_operation op;
       op.account = "carol";
       op.proxy = "dan";

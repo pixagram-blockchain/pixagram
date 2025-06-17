@@ -277,10 +277,10 @@ namespace hive { namespace chain {
       void update_governance_vote_expiration_ts(const time_point_sec vote_time)
       {
         governance_vote_expiration_ts = vote_time + HIVE_GOVERNANCE_VOTE_EXPIRATION_PERIOD;
-        if (governance_vote_expiration_ts < HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP)
+        if (governance_vote_expiration_ts < FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP)
         {
-          const int64_t DIVIDER = HIVE_HARDFORK_1_25_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT.to_seconds();
-          governance_vote_expiration_ts = HARDFORK_1_25_FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP + fc::seconds(governance_vote_expiration_ts.sec_since_epoch() % DIVIDER);
+          const int64_t DIVIDER = HIVE_MAX_OLD_GOVERNANCE_VOTE_EXPIRE_SHIFT.to_seconds();
+          governance_vote_expiration_ts = FIRST_GOVERNANCE_VOTE_EXPIRE_TIMESTAMP + fc::seconds(governance_vote_expiration_ts.sec_since_epoch() % DIVIDER);
         }
       }
 
@@ -302,7 +302,7 @@ namespace hive { namespace chain {
                 ( "sum_delayed_votes",     sum_delayed_votes )
                 ( "vesting_shares.amount", vesting_shares.amount )
                 ( "account",               name ) );
-  
+
         return asset( vesting_shares.amount - sum_delayed_votes.value, VESTS_SYMBOL ).amount;
       }
 
@@ -509,7 +509,7 @@ namespace hive { namespace chain {
         size += new_owner_authority.get_dynamic_alloc();
         return size;
       }
-      
+
     CHAINBASE_UNPACK_CONSTRUCTOR(account_recovery_request_object, (new_owner_authority));
   };
 
@@ -542,7 +542,7 @@ namespace hive { namespace chain {
       time_point_sec    effective_on;
       account_name_type account_to_recover; //changing it to id would influence response from database_api.list_change_recovery_account_requests
       account_name_type recovery_account; //could be changed to id
-      
+
     CHAINBASE_UNPACK_CONSTRUCTOR(change_recovery_account_request_object);
   };
 
