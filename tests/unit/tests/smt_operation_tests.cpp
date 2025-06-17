@@ -2990,16 +2990,8 @@ BOOST_AUTO_TEST_CASE( smt_transfer_apply )
     BOOST_REQUIRE( db->get_balance( "bob", symbol ) == asset( 5000, symbol ) );
     validate_database();
 
-    BOOST_TEST_MESSAGE( "--- Test transfer to old treasury account" );
-    op.to = OBSOLETE_TREASURY_ACCOUNT;
-    tx.operations.push_back( op );
-    tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
-    BOOST_REQUIRE_THROW( push_transaction( tx, alice_private_key ), fc::assert_exception ); //still blocked even though old is no longer active treasury
-    tx.operations.clear();
-    validate_database();
-
     BOOST_TEST_MESSAGE( "--- Test transfer to new treasury account" );
-    op.to = NEW_HIVE_TREASURY_ACCOUNT;
+    op.to = PIXA_TREASURY_ACCOUNT;
     tx.operations.push_back( op );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
     BOOST_REQUIRE_THROW( push_transaction( tx, alice_private_key ), fc::assert_exception );

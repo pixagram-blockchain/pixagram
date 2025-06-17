@@ -158,7 +158,7 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
   }
 
   itr = o.props.find( "sbd_interest_rate" );
-  if(itr == o.props.end() && _db.has_hardfork(HIVE_HARDFORK_1_24))
+  if(itr == o.props.end())
     itr = o.props.find( "hbd_interest_rate" );
 
   flags.hbd_interest_changed = itr != o.props.end();
@@ -189,7 +189,7 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
   }
 
   itr = o.props.find( "sbd_exchange_rate" );
-  if(itr == o.props.end() && _db.has_hardfork(HIVE_HARDFORK_1_24))
+  if(itr == o.props.end())
     itr = o.props.find("hbd_exchange_rate");
 
   flags.hbd_exchange_changed = itr != o.props.end();
@@ -763,7 +763,7 @@ void comment_options_evaluator::do_apply( const comment_options_operation& o )
   */
   if( !comment_cashout )
   {
-    FC_ASSERT( !_db.has_hardfork( HIVE_HARDFORK_1_24 ), "Updating parameters for comment that is paid out is forbidden." );
+    FC_ASSERT( false, "Updating parameters for comment that is paid out is forbidden." );
     return;
   }
 
@@ -1130,7 +1130,7 @@ void escrow_release_evaluator::do_apply( const escrow_release_operation& o )
 
 void transfer_evaluator::do_apply( const transfer_operation& o )
 {
-  if ( _db.has_hardfork(HIVE_HARDFORK_1_24) && o.amount.symbol == PXC_SYMBOL && _db.is_treasury( o.to ) ) {
+  if (o.amount.symbol == PXC_SYMBOL && _db.is_treasury( o.to ) ) {
     const auto &fhistory = _db.get_feed_history();
 
     FC_ASSERT(!fhistory.current_median_history.is_null(), "Cannot send HIVE to ${s} because there is no price feed.", ("s", o.to ));
@@ -1178,17 +1178,10 @@ void transfer_to_vesting_evaluator::do_apply( const transfer_to_vesting_operatio
     Therefore an idea is based on voting deferring. Default value is 30 days.
     This range of time is enough long to defeat/block potential malicious intention.
   */
-  if( _db.has_hardfork( HIVE_HARDFORK_1_24 ) )
-  {
-    amount_vested = _db.adjust_account_vesting_balance( to_account, o.amount, false/*to_reward_balance*/, []( asset vests_created ) {} );
+  amount_vested = _db.adjust_account_vesting_balance( to_account, o.amount, false/*to_reward_balance*/, []( asset vests_created ) {} );
 
-    delayed_voting dv( _db );
-    dv.add_delayed_value( to_account, _db.head_block_time(), amount_vested.amount.value );
-  }
-  else
-  {
-    amount_vested = _db.create_vesting( to_account, o.amount );
-  }
+  delayed_voting dv( _db );
+  dv.add_delayed_value( to_account, _db.head_block_time(), amount_vested.amount.value );
 
   /// Emit this vop unconditionally, since VESTS balance changed immediately, indepdenent to subsequent updates of account voting power done inside `delayed_voting` mechanism.
   _db.push_virtual_operation(transfer_to_vesting_completed_operation(from_account.get_name(), to_account.get_name(), o.amount, amount_vested));

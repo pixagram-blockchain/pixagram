@@ -28,15 +28,12 @@ namespace hive { namespace converter { namespace plugins { namespace iceberg_gen
 
       asset fee_hbd( HIVE_TREASURY_FEE, PXS_SYMBOL );
 
-      if( hf >= HIVE_HARDFORK_1_24 )
-      {
-        uint32_t proposal_run_time = o.end_date.sec_since_epoch() - o.start_date.sec_since_epoch();
+      uint32_t proposal_run_time = o.end_date.sec_since_epoch() - o.start_date.sec_since_epoch();
 
-        if(proposal_run_time > HIVE_PROPOSAL_FEE_INCREASE_DAYS_SEC)
-        {
-          uint32_t extra_days = (proposal_run_time / HIVE_ONE_DAY_SECONDS) - HIVE_PROPOSAL_FEE_INCREASE_DAYS;
-          fee_hbd += asset(HIVE_PROPOSAL_FEE_INCREASE_AMOUNT * extra_days, PXS_SYMBOL);
-        }
+      if(proposal_run_time > HIVE_PROPOSAL_FEE_INCREASE_DAYS_SEC)
+      {
+        uint32_t extra_days = (proposal_run_time / HIVE_ONE_DAY_SECONDS) - HIVE_PROPOSAL_FEE_INCREASE_DAYS;
+        fee_hbd += asset(HIVE_PROPOSAL_FEE_INCREASE_AMOUNT * extra_days, PXS_SYMBOL);
       }
 
       return { { o.creator, { fee_hbd } } };

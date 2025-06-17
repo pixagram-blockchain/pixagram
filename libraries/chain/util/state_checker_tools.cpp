@@ -74,16 +74,8 @@ void verify_match_of_blockchain_configuration(fc::mutable_variant_object current
 
   if (!throw_exception)
   {
-    if (hardfork < HIVE_HARDFORK_1_24)
-    {
-      if (current_hive_treasury_account != OBSOLETE_TREASURY_ACCOUNT || current_hive_chain_id != std::string(OLD_CHAIN_ID))
-        throw_exception = true;
-    }
-    else
-    {
-      if (current_hive_treasury_account != NEW_HIVE_TREASURY_ACCOUNT || current_hive_chain_id != std::string(HIVE_CHAIN_ID))
-        throw_exception = true;
-    }
+    if (current_hive_treasury_account != PIXA_TREASURY_ACCOUNT || current_hive_chain_id != std::string(HIVE_CHAIN_ID))
+      throw_exception = true;
   }
 
   if (throw_exception)

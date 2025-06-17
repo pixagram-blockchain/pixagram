@@ -7,7 +7,7 @@
 using namespace hive::chain;
 using namespace hive::plugins;
 
-namespace hive { namespace plugins { 
+namespace hive { namespace plugins {
 
 namespace condenser_api {
   class condenser_api;
@@ -21,7 +21,7 @@ namespace account_history {
   class account_history_api;
 }
 
-} } // hive::plugins  
+} } // hive::plugins
 
 struct condenser_api_fixture : hived_fixture
 {
@@ -36,10 +36,10 @@ struct condenser_api_fixture : hived_fixture
 
   typedef std::function < void( uint32_t generate_no_further_than ) > check_point_tester_t;
 
-  /** 
+  /**
    * Tests the operations that happen only on hardfork 1 - vesting_shares_split_operation & system_warning_operation (block 21)
    * Also tests: hardfork_operation & producer_reward_operation
-   * 
+   *
    * The operations happen in block 2 (vesting_shares_split_operation, when HF1 is set) and block 21 (system_warning_operation),
    * regardless of configurations settings of the fixture.
   */
@@ -52,10 +52,10 @@ struct condenser_api_fixture : hived_fixture
    */
   void hf8_scenario( check_point_tester_t check_point_tester );
 
-  /** 
+  /**
    * Tests pow_operation that needs hardfork lower than 13.
    * Also tests: pow_reward_operation, account_created_operation & producer_reward_operation.
-   * 
+   *
    * All tested operations happen in block 3 (when create_with_pow is called) regardless of configurations settings of the fixture.
   */
   void hf12_scenario( check_point_tester_t check_point_tester );
@@ -63,7 +63,7 @@ struct condenser_api_fixture : hived_fixture
   /**
    * Tests operations that need hardfork lower than 17:
    *  pow2_operation (< hf17), ineffective_delete_comment_operation (< hf19) & account_create_with_delegation_operation (< hf20)
-   * Also tests: 
+   * Also tests:
    *  account_created_operation, pow_reward_operation, comment_operation, comment_options_operation,
    *  vote_operation, effective_comment_vote_operation, delete_comment_operation & producer_reward_operation
    */
@@ -76,18 +76,10 @@ struct condenser_api_fixture : hived_fixture
   void hf19_scenario( check_point_tester_t check_point_tester );
 
   /**
-   * Tests operations related to HIVE hardforks (23 & 24):
-   *  hardfork_hive_operation, hardfork_hive_restore_operation, consolidate_treasury_balance_operation & clear_null_account_balance_operation.
-   * Also tests:
-   *  transfer_operation, producer_reward_operation &  hardfork_operation
-   */
-  void hf23_scenario( check_point_tester_t check_point_tester );
-
-  /**
    * Operations tested here:
    *  curation_reward_operation, author_reward_operation, comment_reward_operation, comment_payout_update_operation,
    *  claim_reward_balance_operation, producer_reward_operation
-   */  
+   */
   void comment_and_reward_scenario( check_point_tester_t check_point_1_tester, check_point_tester_t check_point_2_tester );
 
   /**
@@ -96,7 +88,7 @@ struct condenser_api_fixture : hived_fixture
    *  limit_order_create_operation, limit_order_create2_operation, limit_order_cancel_operation, limit_order_cancelled_operation,
    *  producer_reward_operation,
    *  fill_convert_request_operation, fill_collateralized_convert_request_operation
-   */  
+   */
   void convert_and_limit_order_scenario( check_point_tester_t check_point_tester );
 
   /**
@@ -111,9 +103,9 @@ struct condenser_api_fixture : hived_fixture
    * Operations tested here:
    *  witness_update_operation, feed_publish_operation, account_witness_proxy_operation, account_witness_vote_operation,
    *  witness_set_properties_operation, proxy_cleared_operation & expired_account_notification_operation
-   * Also tested here: 
+   * Also tested here:
    *  producer_reward_operation
-   *  
+   *
    * Note that witness_block_approve_operation never appears in block (see its evaluator).
    */
   void witness_scenario( check_point_tester_t check_point_tester );
@@ -139,7 +131,7 @@ struct condenser_api_fixture : hived_fixture
    *  change_recovery_account_operation, changed_recovery_account_operation,
    *  request_account_recovery_operation, recover_account_operation,
    *  account_update_operation & account_update2_operation
-   * 
+   *
    * Note that reset_account_operation & set_reset_account_operation have been disabled and do not occur in blockchain.
    */
   void account_scenario( check_point_tester_t check_point_tester );
@@ -147,7 +139,7 @@ struct condenser_api_fixture : hived_fixture
   /**
    * Operations tested here:
    *  custom_operation, custom_json_operation & producer_reward_operation
-   * 
+   *
    * Note that custom_binary_operation has been disabled and does not occur in blockchain.
    */
   void custom_scenario( check_point_tester_t check_point_tester );

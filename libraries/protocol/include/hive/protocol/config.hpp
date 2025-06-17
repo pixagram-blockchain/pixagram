@@ -470,11 +470,8 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 /// Represents the canonical root post parent account
 #define HIVE_ROOT_POST_PARENT                 (account_name_type())
 /// Represents the account with NO authority which holds resources for payouts according to given proposals
-//#define HIVE_TREASURY_ACCOUNT                 "steem.dao" //no longer constant, changed in HF24 - use database::get_treasury_name() instead
-//note that old account is still considered a treasury (cannot be reused for other purposes), just all funds and actions are redirected to new one
 //DO NOT USE the following constants anywhere other than inside database::get_treasury_name()
-#define OBSOLETE_TREASURY_ACCOUNT             "steem.dao"
-#define NEW_HIVE_TREASURY_ACCOUNT             "hive.fund"
+#define PIXA_TREASURY_ACCOUNT             "pixa.fund"
 ///@}
 
 /// HIVE PROPOSAL SYSTEM support

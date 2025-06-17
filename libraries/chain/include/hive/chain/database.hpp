@@ -677,8 +677,6 @@ namespace chain {
         asset* total_vests, asset* vesting_shares_hive_value );
       //removes (burns) balances held on null account
       void clear_null_account_balance();
-      //moves balances from old treasury account to current one
-      void consolidate_treasury_balance();
 
       //locks given account by clearing its authorizations and removing pending recovery [account change] request (used for treasury in HF code)
       void lock_account( const account_object& account );

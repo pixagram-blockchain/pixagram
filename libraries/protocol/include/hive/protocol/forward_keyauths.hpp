@@ -44,7 +44,6 @@ typedef std::vector<collected_keyauth_t> collected_keyauth_collection_t;
 collected_keyauth_collection_t operation_get_keyauths(const hive::protocol::operation& op);
 collected_keyauth_collection_t operation_get_genesis_keyauths();
 collected_keyauth_collection_t operation_get_hf09_keyauths();
-collected_keyauth_collection_t operation_get_hf21_keyauths();
 collected_keyauth_collection_t operation_get_hf24_keyauths();
 
 } // namespace hive::app

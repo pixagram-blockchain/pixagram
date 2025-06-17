@@ -287,7 +287,7 @@ namespace detail {
     std::map< uint32_t, hp::share_type > init_assets;
 
     boost::container::flat_set<hp::account_name_type> all_accounts = {
-      HIVE_MINER_ACCOUNT, HIVE_NULL_ACCOUNT, HIVE_TEMP_ACCOUNT, HIVE_INIT_MINER_NAME, "steem", OBSOLETE_TREASURY_ACCOUNT, NEW_HIVE_TREASURY_ACCOUNT
+      HIVE_MINER_ACCOUNT, HIVE_NULL_ACCOUNT, HIVE_TEMP_ACCOUNT, HIVE_INIT_MINER_NAME, "steem", PIXA_TREASURY_ACCOUNT
     };
     boost::container::flat_set<author_and_permlink_hash_t> all_permlinks;
 

@@ -396,17 +396,6 @@ struct delayed_voting_operation : public virtual_operation
 };
 
 /**
-  * Related to block processing.
-  * Generated during block processing potentially every block, but only if there is nonzero transfer. Transfer occurs
-  * if there are assets on OBSOLETE_TREASURY_ACCOUNT ('steem.dao'). They are consolidated from all balances (per asset
-  * type) and moved to NEW_HIVE_TREASURY_ACCOUNT ('hive.fund').
-  */
-struct consolidate_treasury_balance_operation : public virtual_operation
-{
-  vector< asset >   total_moved; //(HIVE, VESTS or HBD) funds moved from old to new treasury
-};
-
-/**
   * Related to vote_operation.
   * Generated every time vote is cast for the first time or edited, but only as long as it is effective, that is,
   * the target comment was not yet cashed out.
@@ -839,7 +828,6 @@ FC_REFLECT( hive::protocol::dhf_funding_operation, (treasury)(additional_funds) 
 FC_REFLECT( hive::protocol::hardfork_hive_operation, (account)(treasury)(other_affected_accounts)(hbd_transferred)(hive_transferred)(vests_converted)(total_hive_from_vests) )
 FC_REFLECT( hive::protocol::hardfork_hive_restore_operation, (account)(treasury)(hbd_transferred)(hive_transferred) )
 FC_REFLECT( hive::protocol::delayed_voting_operation, (voter)(votes) )
-FC_REFLECT( hive::protocol::consolidate_treasury_balance_operation, (total_moved) )
 FC_REFLECT( hive::protocol::effective_comment_vote_operation, (voter)(author)(permlink)(weight)(rshares)(total_vote_weight)(pending_payout) )
 FC_REFLECT( hive::protocol::ineffective_delete_comment_operation, (author)(permlink) )
 FC_REFLECT( hive::protocol::dhf_conversion_operation, (treasury)(hive_amount_in)(hbd_amount_out) )

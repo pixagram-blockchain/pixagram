@@ -95,7 +95,7 @@ struct get_account_history_return
   std::map< uint32_t, api_operation_object > history;
 };
 
-/** 
+/**
  * Use these flags e.g. in filter_low argument of get_account_history.
  */
 enum class get_account_history_op_filter_low : uint64_t
@@ -166,7 +166,7 @@ enum class get_account_history_op_filter_low : uint64_t
   comment_benefactor_reward_operation                   = 0x80000000'00000000ull
 };
 
-/** 
+/**
  * Use these flags e.g. in filter_high argument of get_account_history.
  */
 enum class get_account_history_op_filter_high : uint64_t
@@ -178,7 +178,7 @@ enum class get_account_history_op_filter_high : uint64_t
   hardfork_hive_operation                               = 0x00000000'00000010ull,
   hardfork_hive_restore_operation                       = 0x00000000'00000020ull,
   delayed_voting_operation                              = 0x00000000'00000040ull,
-  consolidate_treasury_balance_operation                = 0x00000000'00000080ull,
+  // consolidate_treasury_balance_operation                = 0x00000000'00000080ull,
   effective_comment_vote_operation                      = 0x00000000'00000100ull,
   ineffective_delete_comment_operation                  = 0x00000000'00000200ull,
   dhf_conversion_operation                              = 0x00000000'00000400ull,
@@ -226,7 +226,7 @@ enum enum_vops_filter : uint64_t
   hardfork_hive_operation                       = 0x0000'00040000ull,
   hardfork_hive_restore_operation               = 0x0000'00080000ull,
   delayed_voting_operation                      = 0x0000'00100000ull,
-  consolidate_treasury_balance_operation        = 0x0000'00200000ull,
+  // consolidate_treasury_balance_operation        = 0x0000'00200000ull,
   effective_comment_vote_operation              = 0x0000'00400000ull,
   ineffective_delete_comment_operation          = 0x0000'00800000ull,
   dhf_conversion_operation                      = 0x0000'01000000ull,

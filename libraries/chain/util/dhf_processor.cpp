@@ -30,9 +30,6 @@ bool dhf_processor::is_maintenance_period( const time_point_sec& head_time ) con
 
 bool dhf_processor::is_daily_maintenance_period( const time_point_sec& head_time ) const
 {
-  /// No DHF conversion until HF24 !
-  if( !db.has_hardfork( HIVE_HARDFORK_1_24 ) )
-    return false;
   auto due_time = db.get_dynamic_global_properties().next_daily_maintenance_time;
   return due_time <= head_time;
 }

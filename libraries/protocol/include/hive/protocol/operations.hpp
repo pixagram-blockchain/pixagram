@@ -108,7 +108,7 @@ namespace hive { namespace protocol {
         hardfork_hive_operation, // last_regular + 19
         hardfork_hive_restore_operation, // last_regular + 20
         delayed_voting_operation, // last_regular + 21
-        consolidate_treasury_balance_operation, // last_regular + 22
+        // consolidate_treasury_balance_operation, // last_regular + 22
         effective_comment_vote_operation, // last_regular + 23
         ineffective_delete_comment_operation, // last_regular + 24
         dhf_conversion_operation, // last_regular + 25

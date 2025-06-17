@@ -47,7 +47,7 @@ full_transaction_type::~full_transaction_type()
 }
 
 const signed_transaction& full_transaction_type::get_transaction() const
-{ 
+{
   if (std::holds_alternative<contained_in_block_info>(storage))
   {
     const contained_in_block_info& contained_in_block = std::get<contained_in_block_info>(storage);
@@ -130,7 +130,7 @@ void full_transaction_type::compute_signature_keys() const
       const contained_in_block_info& contained_in_block = std::get<contained_in_block_info>(storage);
       assert(contained_in_block.block_storage->block);
       FC_ASSERT(contained_in_block.block_storage->block, "block should have already been decoded");
-      validation_rules = &get_transaction_signature_validation_rules_at_time(contained_in_block.block_storage->block->timestamp);
+      validation_rules = &get_transaction_signature_validation_rules();
     }
     else
       validation_rules = &get_signature_validation_for_new_transactions();
@@ -170,7 +170,7 @@ const flat_set<hive::protocol::public_key_type>& full_transaction_type::get_sign
   else
   {
     cached_get_signature_keys_calls.fetch_add(1, std::memory_order_relaxed);
-    // ilog("get_signature_keys cache hit.  saved ${saved}µs, totals: ${cached} cached, ${not} not cached", 
+    // ilog("get_signature_keys cache hit.  saved ${saved}µs, totals: ${cached} cached, ${not} not cached",
     //      ("saved", signature_info->computation_time)
     //      ("cached", cached_get_signature_keys_calls.load())
     //      ("not", non_cached_get_signature_keys_calls.load()));
@@ -206,7 +206,7 @@ void full_transaction_type::precompute_validation(std::function<void(const hive:
     }
     validation_computation_time = fc::time_point::now() - computation_start;
     validation_attempted.store(true, std::memory_order_release);
-    // ilog("validate cache miss.  cost ${cost}µs, totals: ${cached} cached, ${not} not cached", 
+    // ilog("validate cache miss.  cost ${cost}µs, totals: ${cached} cached, ${not} not cached",
     //      ("cost", validation_computation_time)("cached", cached_validate_calls.load())("not", non_cached_validate_calls.load()));
     // idump((get_transaction()));
   }
@@ -222,7 +222,7 @@ void full_transaction_type::validate(std::function<void(const hive::protocol::op
   else
   {
     cached_validate_calls.fetch_add(1, std::memory_order_relaxed);
-    // ilog("validate cache hit.  saved ${saved}µs, totals: ${cached} cached, ${not} not cached", 
+    // ilog("validate cache hit.  saved ${saved}µs, totals: ${cached} cached, ${not} not cached",
     //      ("saved", validation_computation_time)("cached", cached_validate_calls.load())("not", non_cached_validate_calls.load()));
   }
   validation_accessed.store(true, std::memory_order_relaxed);
@@ -252,7 +252,7 @@ const hive::protocol::required_authorities_type& full_transaction_type::get_requ
   else
   {
     cached_get_required_authorities_calls.fetch_add(1, std::memory_order_relaxed);
-    // ilog("get_required_authorities cache hit.  saved ${saved}ns, totals: ${cached} cached, ${not} not cached", 
+    // ilog("get_required_authorities cache hit.  saved ${saved}ns, totals: ${cached} cached, ${not} not cached",
     //      ("saved", required_authorities_computation_time)
     //      ("cached", cached_get_required_authorities_calls.load())("not", non_cached_get_required_authorities_calls.load()));
   }
@@ -288,7 +288,7 @@ bool full_transaction_type::is_legacy_pack() const
 }
 
 size_t full_transaction_type::get_transaction_size() const
-{ 
+{
   return serialized_transaction.signed_transaction_end - serialized_transaction.begin;
 }
 
@@ -340,8 +340,8 @@ void full_transaction_type::sign_transaction(const std::vector<hive::protocol::p
   }
 }
 
-/* static */ full_transaction_ptr full_transaction_type::create_from_block(const std::shared_ptr<decoded_block_storage_type>& block_storage, 
-                                                                           uint32_t index_in_block, 
+/* static */ full_transaction_ptr full_transaction_type::create_from_block(const std::shared_ptr<decoded_block_storage_type>& block_storage,
+                                                                           uint32_t index_in_block,
                                                                            const serialized_transaction_data& serialized_transaction,
                                                                            bool use_transaction_cache)
 {
@@ -429,16 +429,16 @@ void full_transaction_type::sign_transaction(const std::vector<hive::protocol::p
 // tl;dr Over the lifetime of the hive blockchain, we have had three different rules for how to validate
 // a transaction signature.  This function tells you what rules were in effect at a given time.
 //
-//  - At hardfork 0.20, we started using bip_0062 signatures.  At hardfork 
+//  - At hardfork 0.20, we started using bip_0062 signatures.  At hardfork
 //  - 1.24, we changed the chain_id, which is used in the signature calculation.
 // originally, the transaction validation code just queried the current blockchain state to find out
 // which hardforks had been activated to determine what rules would be used to validate transactions,
-// and this worked well.  Now, to improve performance, we'd like to start pushing off some of the 
+// and this worked well.  Now, to improve performance, we'd like to start pushing off some of the
 // signature checks into another thread, starting the work as soon as we get the transactions/blocks,
 // so that the expensive computation will be completed well before the transactions are included in
-// the blockchain (when resyncing the blockchain, this could be 100,000+ blocks ahead of the head 
-// block.  To begin advance validation of these transactions, we need to know what rules will be 
-// in effect at the time they're included in the blockchain, not what rules are being followed 
+// the blockchain (when resyncing the blockchain, this could be 100,000+ blocks ahead of the head
+// block.  To begin advance validation of these transactions, we need to know what rules will be
+// in effect at the time they're included in the blockchain, not what rules are being followed
 // at the current head block.
 //
 // So when validating transactions that come in from a block, we'll call this function to find
@@ -452,44 +452,25 @@ void full_transaction_type::sign_transaction(const std::vector<hive::protocol::p
 */
 namespace
 {
-  transaction_signature_validation_rules_type pre_hf_1_24_rules = {OLD_CHAIN_ID};
-#ifndef USE_ALTERNATE_CHAIN_ID
-  transaction_signature_validation_rules_type post_hf_1_24_rules = {HIVE_CHAIN_ID};
-#endif
+  transaction_signature_validation_rules_type rules = {HIVE_CHAIN_ID};
 }
 
 #ifdef USE_ALTERNATE_CHAIN_ID
 // on testnets, chain_id is passed on the command line, so we can't hard-code it
 void set_chain_id_for_transaction_signature_validation(const chain_id_type& chain_id)
 {
-  pre_hf_1_24_rules.chain_id = chain_id;
+  rules.chain_id = chain_id;
 }
 #endif
 
-const transaction_signature_validation_rules_type& get_transaction_signature_validation_rules_at_time(fc::time_point_sec time)
+const transaction_signature_validation_rules_type& get_transaction_signature_validation_rules()
 {
-#ifdef IS_TEST_NET
-  // testnet -- we can't rely on time because in unit tests it will be close to genesis, but also hardforks are activated at different times manually
-  return pre_hf_1_24_rules; //this is bad but better than rules for mirrornet
-#elif USE_ALTERNATE_CHAIN_ID
-  // mirrornet -- always uses the same chain_id, so no change of behavior at hf 1.24
-  return pre_hf_1_24_rules;
-#else
-  // mainnet rules
-  if (time.sec_since_epoch() > HIVE_HARDFORK_1_24_ACTUAL_TIME)
-    return post_hf_1_24_rules;
-  else
-    return pre_hf_1_24_rules;
-#endif
+  return rules;
 }
 
 const transaction_signature_validation_rules_type& get_signature_validation_for_new_transactions()
 {
-#ifdef USE_ALTERNATE_CHAIN_ID
-  return pre_hf_1_24_rules;
-#else
-  return post_hf_1_24_rules;
-#endif
+  return rules;
 }
 
 struct full_transaction_cache::impl
