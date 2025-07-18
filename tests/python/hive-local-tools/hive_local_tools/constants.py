@@ -81,7 +81,7 @@ filters_enum_virtual_ops = {
     "proposal_pay_operation": 0x010000,
     "sps_fund_operation": 0x020000,
     "hardfork_hive_operation": 0x040000,
-    "hardfork_hive_restore_operation": 0x080000,
+    # "hardfork_hive_restore_operation": 0x080000,
     "delayed_voting_operation": 0x100000,
     # "consolidate_treasury_balance_operation": 0x200000,
     "effective_comment_vote_operation": 0x400000,

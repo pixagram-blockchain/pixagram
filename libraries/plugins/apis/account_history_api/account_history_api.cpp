@@ -111,7 +111,7 @@ struct operation_filtering_visitor
   (return_vesting_delegation_operation)(comment_benefactor_reward_operation) )
 
   CHECK_OPERATIONS_HIGH( (producer_reward_operation) (clear_null_account_balance_operation)(proposal_pay_operation)
-  (dhf_funding_operation)(hardfork_hive_operation)(hardfork_hive_restore_operation)(delayed_voting_operation)
+  (dhf_funding_operation)(hardfork_hive_operation)(delayed_voting_operation)
   (effective_comment_vote_operation)(ineffective_delete_comment_operation)
   (dhf_conversion_operation)(expired_account_notification_operation)(changed_recovery_account_operation)
   (transfer_to_vesting_completed_operation)(pow_reward_operation)(vesting_shares_split_operation)
@@ -253,7 +253,7 @@ struct virtual_operation_filtering_visitor
   (fill_transfer_from_savings_operation)(hardfork_operation)(comment_payout_update_operation)
   (return_vesting_delegation_operation)(comment_benefactor_reward_operation)(producer_reward_operation)
   (clear_null_account_balance_operation)(proposal_pay_operation)(dhf_funding_operation)
-  (hardfork_hive_operation)(hardfork_hive_restore_operation)(delayed_voting_operation)
+  (hardfork_hive_operation)(delayed_voting_operation)
   (effective_comment_vote_operation)(ineffective_delete_comment_operation)
   (dhf_conversion_operation)(expired_account_notification_operation)(changed_recovery_account_operation)
   (transfer_to_vesting_completed_operation)(pow_reward_operation)(vesting_shares_split_operation)

@@ -2911,18 +2911,9 @@ FC_TODO("Update get_effective_vesting_shares when modifying this operation to su
     available_shares = asset( delegator.voting_manabar.current_mana, VESTS_SYMBOL );
     if( gpo.downvote_pool_percent )
     {
-      if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
-      {
-        available_downvote_shares = asset(
-          fc::uint128_to_int64( ( uint128_t( delegator.downvote_manabar.current_mana ) * HIVE_100_PERCENT ) / gpo.downvote_pool_percent
-          + ( HIVE_100_PERCENT / gpo.downvote_pool_percent ) - 1 ), VESTS_SYMBOL );
-      }
-      else
-      {
-        available_downvote_shares = asset(
-          ( delegator.downvote_manabar.current_mana * HIVE_100_PERCENT ) / gpo.downvote_pool_percent
-          + ( HIVE_100_PERCENT / gpo.downvote_pool_percent ) - 1, VESTS_SYMBOL );
-      }
+      available_downvote_shares = asset(
+        fc::uint128_to_int64( ( uint128_t( delegator.downvote_manabar.current_mana ) * HIVE_100_PERCENT ) / gpo.downvote_pool_percent
+        + ( HIVE_100_PERCENT / gpo.downvote_pool_percent ) - 1 ), VESTS_SYMBOL );
     }
     else
     {
@@ -2984,15 +2975,7 @@ FC_TODO("Update get_effective_vesting_shares when modifying this operation to su
       if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
       {
         a.voting_manabar.use_mana( op.vesting_shares.amount.value );
-
-        if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
-        {
-          a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( op.vesting_shares.amount.value ) * gpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
-        }
-        else if( _db.has_hardfork( HIVE_HARDFORK_0_21__3336 ) )
-        {
-          a.downvote_manabar.use_mana( op.vesting_shares.amount.value );
-        }
+        a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( op.vesting_shares.amount.value ) * gpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
       }
     } );
 
@@ -3026,15 +3009,7 @@ FC_TODO("Update get_effective_vesting_shares when modifying this operation to su
       if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
       {
         a.voting_manabar.use_mana( delta.amount.value );
-
-        if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
-        {
-          a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( delta.amount.value ) * gpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
-        }
-        else if( _db.has_hardfork( HIVE_HARDFORK_0_21__3336 ) )
-        {
-          a.downvote_manabar.use_mana( delta.amount.value );
-        }
+        a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( delta.amount.value ) * gpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
       }
     } );
 
@@ -3073,11 +3048,7 @@ FC_TODO("Update get_effective_vesting_shares when modifying this operation to su
 
     _db.modify( delegatee, [&]( account_object& a )
     {
-      if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
-      {
-        util::update_manabar( gpo, a );
-      }
-
+      util::update_manabar( gpo, a );
       a.received_vesting_shares -= delta;
 
       if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
@@ -3086,14 +3057,7 @@ FC_TODO("Update get_effective_vesting_shares when modifying this operation to su
 
         if( _db.has_hardfork( HIVE_HARDFORK_0_21__3336 ) )
         {
-          if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
-          {
-            a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( delta.amount.value ) * gpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
-          }
-          else
-          {
-            a.downvote_manabar.use_mana( op.vesting_shares.amount.value );
-          }
+          a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( delta.amount.value ) * gpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
         }
       }
     } );

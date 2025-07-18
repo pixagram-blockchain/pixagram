@@ -632,10 +632,6 @@ namespace chain {
       void validate_smt_invariants()const;
       ///@}
 #endif
-
-      //Restores balances for some accounts, which were cleared by mistake during HF23
-      void restore_accounts( const std::set< std::string >& restored_accounts );
-
       //Clears all pending operations on account that involve balance, moves tokens to treasury account
       void gather_balance( const std::string& name, const asset& balance, const asset& hbd_balance );
       void clear_accounts( const std::set< std::string >& cleared_accounts );

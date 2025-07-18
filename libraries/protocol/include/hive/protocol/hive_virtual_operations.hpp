@@ -359,26 +359,6 @@ struct hardfork_hive_operation : public virtual_operation
 };
 
 /**
-  * Related to hardfork 24.
-  * Generated for every account that was excluded from HF23 airdrop but won appeal.
-  * Note: the late airdrop did not apply properly since HIVE that the accounts should receive did not account for
-  * HIVE from converted VESTS. [how was it resolved?]
-  * @see hardfork_hive_operation
-  */
-struct hardfork_hive_restore_operation : public virtual_operation
-{
-  hardfork_hive_restore_operation() = default;
-  hardfork_hive_restore_operation( const account_name_type& acc, const account_name_type& _treasury, const HBD_asset& s, const HIVE_asset& st )
-    : account( acc ), treasury( _treasury ), hbd_transferred( s ), hive_transferred( st )
-  {}
-
-  account_name_type account; //account to receive late airdrop (receiver of funds)
-  account_name_type treasury; //treasury, source of late airdrop
-  HBD_asset         hbd_transferred; //(HBD) part of airdrop (equals related hardfork_hive_operation.hbd_transferred)
-  HIVE_asset        hive_transferred; //(HIVE) part of airdrop (equals related hardfork_hive_operation.hive_transferred)
-};
-
-/**
   * Related to transfer_to_vesting_operation.
   * Generated during block processing every time part of fairly fresh VESTS becomes active part of governance vote for the account.
   * Note: after account receives new VESTS there is a grace period before those VESTS are accounted for when
@@ -826,7 +806,6 @@ FC_REFLECT( hive::protocol::clear_null_account_balance_operation, (total_cleared
 FC_REFLECT( hive::protocol::proposal_pay_operation, (proposal_id)(receiver)(payer)(payment) )
 FC_REFLECT( hive::protocol::dhf_funding_operation, (treasury)(additional_funds) )
 FC_REFLECT( hive::protocol::hardfork_hive_operation, (account)(treasury)(other_affected_accounts)(hbd_transferred)(hive_transferred)(vests_converted)(total_hive_from_vests) )
-FC_REFLECT( hive::protocol::hardfork_hive_restore_operation, (account)(treasury)(hbd_transferred)(hive_transferred) )
 FC_REFLECT( hive::protocol::delayed_voting_operation, (voter)(votes) )
 FC_REFLECT( hive::protocol::effective_comment_vote_operation, (voter)(author)(permlink)(weight)(rshares)(total_vote_weight)(pending_payout) )
 FC_REFLECT( hive::protocol::ineffective_delete_comment_operation, (author)(permlink) )

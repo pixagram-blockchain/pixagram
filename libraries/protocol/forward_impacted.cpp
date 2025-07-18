@@ -392,12 +392,6 @@ struct get_impacted_account_visitor
     _impacted.insert( op.other_affected_accounts.begin(), op.other_affected_accounts.end() );
   }
 
-  void operator()( const hardfork_hive_restore_operation& op )
-  {
-    _impacted.insert( op.treasury );
-    _impacted.insert( op.account );
-  }
-
   void operator()( const dhf_conversion_operation& op )
   {
     _impacted.insert( op.treasury );
@@ -655,14 +649,6 @@ struct impacted_balance_collector
     emplace_back(o.treasury, o.hive_transferred);
     emplace_back(o.treasury, o.hbd_transferred);
     emplace_back(o.treasury, o.total_hive_from_vests);
-  }
-
-  void operator()(const hardfork_hive_restore_operation& o)
-  {
-    emplace_back(o.account, o.hbd_transferred);
-    emplace_back(o.treasury, -o.hbd_transferred);
-    emplace_back(o.account, o.hive_transferred);
-    emplace_back(o.treasury, -o.hive_transferred);
   }
 
   void operator()(const fill_recurrent_transfer_operation& o)

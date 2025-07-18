@@ -276,68 +276,49 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
     int witnesses_on_version = 0;
     auto ver_itr = witness_versions.begin();
 
-    const auto& hpo = db.get_hardfork_property_object();
-
-    if( hpo.current_hardfork_version == HIVE_HARDFORK_0_22_VERSION )
+    // The map should be sorted highest version to smallest, so we iterate until we hit the majority of witnesses on at least this version
+    while( ver_itr != witness_versions.end() )
     {
-      if( hpo.next_hardfork != HIVE_HARDFORK_0_23_VERSION )
-      {
-        ilog("Forcing HF23 without need to have witness majority version");
+      witnesses_on_version += ver_itr->second;
 
-        /// Force HF23 even no witness majority.
-        db.modify(hpo, [&](hardfork_property_object& _hpo)
-        {
-          _hpo.next_hardfork = HIVE_HARDFORK_0_23_VERSION;
-          _hpo.next_hardfork_time = fc::time_point_sec(HIVE_HARDFORK_0_23_TIME);
-        });
+      if( witnesses_on_version >= wso.hardfork_required_witnesses )
+      {
+        majority_version = ver_itr->first;
+        break;
       }
+
+      ++ver_itr;
     }
-    else
+
+    auto hf_itr = hardfork_version_votes.begin();
+
+    while( hf_itr != hardfork_version_votes.end() )
     {
-      // The map should be sorted highest version to smallest, so we iterate until we hit the majority of witnesses on at least this version
-      while( ver_itr != witness_versions.end() )
+      if( hf_itr->second >= wso.hardfork_required_witnesses )
       {
-        witnesses_on_version += ver_itr->second;
+        const auto& hfp = db.get_hardfork_property_object();
+        if( hfp.next_hardfork != std::get<0>( hf_itr->first ) ||
+          hfp.next_hardfork_time != std::get<1>( hf_itr->first ) ) {
 
-        if( witnesses_on_version >= wso.hardfork_required_witnesses )
-        {
-          majority_version = ver_itr->first;
-          break;
+          db.modify( hfp, [&]( hardfork_property_object& hpo )
+          {
+            hpo.next_hardfork = std::get<0>( hf_itr->first );
+            hpo.next_hardfork_time = std::get<1>( hf_itr->first );
+          } );
         }
-
-        ++ver_itr;
+        break;
       }
 
-      auto hf_itr = hardfork_version_votes.begin();
+      ++hf_itr;
+    }
 
-      while( hf_itr != hardfork_version_votes.end() )
+    // We no longer have a majority
+    if( hf_itr == hardfork_version_votes.end() )
+    {
+      db.modify( db.get_hardfork_property_object(), [&]( hardfork_property_object& hpo )
       {
-        if( hf_itr->second >= wso.hardfork_required_witnesses )
-        {
-          const auto& hfp = db.get_hardfork_property_object();
-          if( hfp.next_hardfork != std::get<0>( hf_itr->first ) ||
-            hfp.next_hardfork_time != std::get<1>( hf_itr->first ) ) {
-
-            db.modify( hfp, [&]( hardfork_property_object& hpo )
-            {
-              hpo.next_hardfork = std::get<0>( hf_itr->first );
-              hpo.next_hardfork_time = std::get<1>( hf_itr->first );
-            } );
-          }
-          break;
-        }
-
-        ++hf_itr;
-      }
-
-      // We no longer have a majority
-      if( hf_itr == hardfork_version_votes.end() )
-      {
-        db.modify( db.get_hardfork_property_object(), [&]( hardfork_property_object& hpo )
-        {
-          hpo.next_hardfork = hpo.current_hardfork_version;
-        });
-      }
+        hpo.next_hardfork = hpo.current_hardfork_version;
+      });
     }
   }
 

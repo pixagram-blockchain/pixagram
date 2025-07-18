@@ -1471,45 +1471,6 @@ void database::lock_account( const account_object& account )
     remove( *change_request );
 }
 
-void database::restore_accounts( const std::set< std::string >& restored_accounts )
-{
-  const auto& hardforks = get_hardfork_property_object();
-
-  const auto& treasury_account = get_treasury();
-  auto treasury_name = get_treasury_name();
-
-  for( auto& name : restored_accounts )
-  {
-    auto found = hardforks.h23_balances.find( name );
-
-    if( found == hardforks.h23_balances.end() )
-    {
-      #ifndef IS_TEST_NET
-        ilog( "The account ${acc} hadn't removed balances, balances can't be restored", ( "acc", name ) );
-      #endif
-      continue;
-    }
-
-    const auto* account_ptr = find_account( name );
-    if( account_ptr == nullptr )
-    {
-      ilog( "The account ${acc} doesn't exist at all, balances can't be restored", ( "acc", name ) );
-      continue;
-    }
-
-    adjust_balance( treasury_account, -found->second.hbd_balance );
-    adjust_balance( treasury_account, -found->second.balance );
-
-    adjust_balance( *account_ptr, found->second.hbd_balance );
-    adjust_balance( *account_ptr, found->second.balance );
-
-    operation vop = hardfork_hive_restore_operation( name, treasury_name, found->second.hbd_balance, found->second.balance );
-    push_virtual_operation( vop );
-
-    ilog( "Balances ${hbd} and ${hive} for the account ${acc} were restored", ( "hbd", found->second.hbd_balance )( "hive", found->second.balance )( "acc", name ) );
-  }
-}
-
 void database::gather_balance( const std::string& name, const asset& balance, const asset& hbd_balance )
 {
   modify( get_hardfork_property_object(), [&]( hardfork_property_object& hfp )
@@ -5470,12 +5431,6 @@ void database::init_hardforks()
   FC_ASSERT( HIVE_HARDFORK_0_21 == 21, "Invalid hardfork configuration" );
   _hardfork_versions.times[ HIVE_HARDFORK_0_21 ] = fc::time_point_sec( HIVE_HARDFORK_0_21_TIME );
   _hardfork_versions.versions[ HIVE_HARDFORK_0_21 ] = HIVE_HARDFORK_0_21_VERSION;
-  FC_ASSERT( HIVE_HARDFORK_0_22 == 22, "Invalid hardfork configuration" );
-  _hardfork_versions.times[ HIVE_HARDFORK_0_22 ] = fc::time_point_sec( HIVE_HARDFORK_0_22_TIME );
-  _hardfork_versions.versions[ HIVE_HARDFORK_0_22 ] = HIVE_HARDFORK_0_22_VERSION;
-  FC_ASSERT( HIVE_HARDFORK_0_23 == 23, "Invalid hardfork configuration" );
-  _hardfork_versions.times[ HIVE_HARDFORK_0_23 ] = fc::time_point_sec( HIVE_HARDFORK_0_23_TIME );
-  _hardfork_versions.versions[ HIVE_HARDFORK_0_23 ] = HIVE_HARDFORK_0_23_VERSION;
 }
 
 void database::process_hardforks()
@@ -5550,8 +5505,6 @@ void database::apply_hardfork( uint32_t hardfork )
   fc::variant current_blockchain_config_as_variant;
   fc::to_variant(current_blockchain_config, current_blockchain_config_as_variant);
   set_blockchain_config(fc::json::to_string(current_blockchain_config_as_variant));
-
-  restore_accounts( hardforkprotect::get_restored_accounts() );
 #ifdef USE_ALTERNATE_CHAIN_ID
       /// Don't change chain_id in testnet build.
 #else
@@ -5910,23 +5863,6 @@ void database::apply_hardfork( uint32_t hardfork )
       });
     }
     break;
-    case HIVE_HARDFORK_0_22:
-      break;
-    case HIVE_HARDFORK_0_23:
-    {
-      clear_accounts( hardforkprotect::get_steemit_accounts() );
-
-      // Reset TAPOS buffer to avoid replay attack
-      auto empty_block_id = block_id_type();
-      const auto& bs_idx = get_index< block_summary_index, by_id >();
-      for( auto itr = bs_idx.begin(); itr != bs_idx.end(); ++itr )
-      {
-        modify( *itr, [&](block_summary_object& p) {
-          p.block_id = empty_block_id;
-        });
-      }
-      break;
-    }
 //TODO(MATUS)
 //     case HIVE_SMT_HARDFORK:
 //     {
