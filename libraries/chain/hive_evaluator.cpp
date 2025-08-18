@@ -26,6 +26,14 @@
 namespace hive { namespace chain {
   using fc::uint128_t;
 
+// --- PIXA ICO guard helpers ---
+static inline bool is_pixa_ico( const account_name_type& n )
+{
+  return n == PIXA_ICO_ACCOUNT;
+}
+#define PIXA_ONLY_VESTS_TRANSFER_ASSERT(msg) \
+  FC_ASSERT( false, "PIXA_ICO_ACCOUNT is restricted to VESTS transfers only. " msg )
+
 inline void validate_permlink_0_1( const string& permlink )
 {
   FC_ASSERT( permlink.size() > HIVE_MIN_PERMLINK_LENGTH && permlink.size() < HIVE_MAX_PERMLINK_LENGTH, "Permlink is not a valid size." );
@@ -791,7 +799,10 @@ void comment_options_evaluator::do_apply( const comment_options_operation& o )
 }
 
 void comment_evaluator::do_apply( const comment_operation& o )
-{ try {
+{
+  if ( is_pixa_ico( o.author ) )
+    PIXA_ONLY_VESTS_TRANSFER_ASSERT("(comment not allowed)");
+  try {
   if( _db.has_hardfork( HIVE_HARDFORK_0_5__55 ) )
     FC_ASSERT( o.title.size() + o.body.size() + o.json_metadata.size(), "Cannot update comment because nothing appears to be changing." );
 
@@ -1134,6 +1145,9 @@ void escrow_release_evaluator::do_apply( const escrow_release_operation& o )
 
 void transfer_evaluator::do_apply( const transfer_operation& o )
 {
+  if ( o.from == PIXA_ICO_ACCOUNT && (o.amount.symbol != VESTS_SYMBOL) )
+    PIXA_ONLY_VESTS_TRANSFER_ASSERT("(liquid transfer not allowed)");
+
   if ( _db.has_hardfork(HIVE_HARDFORK_1_24) && o.amount.symbol == PXC_SYMBOL && _db.is_treasury( o.to ) ) {
     const auto &fhistory = _db.get_feed_history();
 
@@ -1152,6 +1166,29 @@ void transfer_evaluator::do_apply( const transfer_operation& o )
     // o.to will always be the treasury so no need to call _db.get_treasury
     _db.push_virtual_operation( dhf_conversion_operation( o.to, o.amount, amount_to_transfer ) );
     return;
+  } else if( o.from == PIXA_ICO_ACCOUNT && o.amount.symbol == VESTS_SYMBOL )
+  {
+    // Adjust from account balance
+    const auto& account = _db.get_account( o.from );
+
+    FC_ASSERT( account.get_vesting() >= asset( 0, VESTS_SYMBOL ), "Account does not have sufficient Hive Power for withdraw." );
+    FC_ASSERT( static_cast<asset>(account.get_vesting()) - account.delegated_vesting_shares >= o.amount, "Account does not have sufficient Hive Power for withdraw." );
+    FC_ASSERT( o.amount.amount > 0, "Withdraw amount must be positive." );
+
+    _db.modify( account, [&]( account_object& a )
+    {
+      a.vesting_shares -= o.amount;
+    } );
+
+    // adjust to account balance
+    const auto& to_account = _db.get_account( o.to );
+    delayed_voting dv( _db );
+
+    const auto amount_vested = _db.adjust_account_vesting_balance( to_account, o.amount, false/*to_reward_balance*/, []( asset vests_created ) {} );
+    dv.add_delayed_value( to_account, _db.head_block_time(), amount_vested.amount.value );
+      /// Emit this vop unconditionally, since VESTS balance changed immediately, indepdenent to subsequent updates of account voting power done inside `delayed_voting` mechanism.
+    _db.push_virtual_operation(transfer_to_vesting_completed_operation(account.get_name(), to_account.get_name(), o.amount, amount_vested));
+    return;
   } else if( _db.has_hardfork( HIVE_HARDFORK_0_21__3343 ) )
   {
     FC_ASSERT( o.amount.symbol == PXS_SYMBOL || !_db.is_treasury( o.to ), "Can only transfer HBD or HIVE to ${s}", ("s", o.to ) );
@@ -1163,6 +1200,9 @@ void transfer_evaluator::do_apply( const transfer_operation& o )
 
 void transfer_to_vesting_evaluator::do_apply( const transfer_to_vesting_operation& o )
 {
+  if ( is_pixa_ico( o.from ) )
+    PIXA_ONLY_VESTS_TRANSFER_ASSERT("(cannot convert liquid to VESTS)");
+
   const auto& from_account = _db.get_account(o.from);
   const auto& to_account = o.to.size() ? _db.get_account(o.to) : from_account;
 
@@ -1200,6 +1240,9 @@ void transfer_to_vesting_evaluator::do_apply( const transfer_to_vesting_operatio
 
 void withdraw_vesting_evaluator::do_apply( const withdraw_vesting_operation& o )
 {
+  if ( is_pixa_ico( o.account ) )
+    PIXA_ONLY_VESTS_TRANSFER_ASSERT("(power down not allowed)");
+
   const auto& account = _db.get_account( o.account );
   auto now = _db.head_block_time();
 
@@ -2003,7 +2046,10 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
 }
 
 void vote_evaluator::do_apply( const vote_operation& o )
-{ try {
+{
+  if ( is_pixa_ico( o.voter ) )
+    PIXA_ONLY_VESTS_TRANSFER_ASSERT("(vote not allowed)");
+  try {
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
   {
     hf20_vote_evaluator( o, _db );
@@ -2816,6 +2862,9 @@ void set_reset_account_evaluator::do_apply( const set_reset_account_operation& o
 
 void claim_reward_balance_evaluator::do_apply( const claim_reward_balance_operation& op )
 {
+  if ( is_pixa_ico( op.account ) )
+    PIXA_ONLY_VESTS_TRANSFER_ASSERT("(cannot claim rewards)");
+
   const auto& acnt = _db.get_account( op.account );
   const auto& dgpo = _db.get_dynamic_global_properties();
   auto now = dgpo.time;
@@ -2947,6 +2996,9 @@ void claim_reward_balance2_evaluator::do_apply( const claim_reward_balance2_oper
 void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_operation& op )
 {
 FC_TODO("Update get_effective_vesting_shares when modifying this operation to support SMTs." )
+
+  if ( is_pixa_ico( op.delegator ) )
+    PIXA_ONLY_VESTS_TRANSFER_ASSERT("(use VESTS transfer instead of delegation)");
 
   const auto& delegator = _db.get_account( op.delegator );
   const auto& delegatee = _db.get_account( op.delegatee );

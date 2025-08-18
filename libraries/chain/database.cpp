@@ -3549,6 +3549,16 @@ void database::init_genesis()
     // Create blockchain accounts
     public_key_type      init_public_key(HIVE_INIT_PUBLIC_KEY);
 
+    create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME );
+    create< account_authority_object >( [&]( account_authority_object& auth )
+    {
+      auth.account = PIXA_ICO_ACCOUNT;
+      auth.owner.add_authority( init_public_key, 1 ); // TODO add 2 keys of Mat and Mat:D
+      auth.owner.weight_threshold = 1;
+      auth.active  = auth.owner;
+      auth.posting = auth.active;
+    });
+
     create< account_object >( HIVE_MINER_ACCOUNT, HIVE_GENESIS_TIME );
     create< account_authority_object >( [&]( account_authority_object& auth )
     {
