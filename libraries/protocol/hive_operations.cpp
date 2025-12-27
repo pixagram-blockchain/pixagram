@@ -201,8 +201,8 @@ namespace hive { namespace protocol {
   { try {
     validate_account_name( from );
     validate_account_name( to );
-    FC_ASSERT( amount.symbol.is_vesting() == false && from != PIXA_ICO_ACCOUNT, "Transfer of vesting is not allowed." );
-    FC_ASSERT( amount.amount > 0, "Cannot transfer a negataccount_name_typeive amount (aka: stealing)" );
+    FC_ASSERT( amount.symbol.is_vesting() == false || from == PIXA_ICO_ACCOUNT, "Transfer of vesting is not allowed except from ICO account." );
+    FC_ASSERT( amount.amount > 0, "Cannot transfer a negative amount (aka: stealing)" );
     FC_ASSERT( memo.size() < HIVE_MAX_MEMO_SIZE, "Memo is too large" );
     FC_ASSERT( fc::is_utf8( memo ), "Memo is not UTF8" );
   } FC_CAPTURE_AND_RETHROW( (*this) ) }

@@ -1170,24 +1170,30 @@ void transfer_evaluator::do_apply( const transfer_operation& o )
   {
     // Adjust from account balance
     const auto& account = _db.get_account( o.from );
+    const auto& to_account = _db.get_account( o.to );
+    auto now = _db.head_block_time();
 
-    FC_ASSERT( account.get_vesting() >= asset( 0, VESTS_SYMBOL ), "Account does not have sufficient Hive Power for withdraw." );
-    FC_ASSERT( static_cast<asset>(account.get_vesting()) - account.delegated_vesting_shares >= o.amount, "Account does not have sufficient Hive Power for withdraw." );
+    FC_ASSERT( account.get_vesting() >= asset( 0, VESTS_SYMBOL ), "Account does not have sufficient Pixa Power for withdraw." );
+    FC_ASSERT( static_cast<asset>(account.get_vesting()) - account.delegated_vesting_shares >= o.amount, "Account does not have sufficient Pixa Power for withdraw." );
     FC_ASSERT( o.amount.amount > 0, "Withdraw amount must be positive." );
 
+    _db.rc.regenerate_rc_mana( account, now );
     _db.modify( account, [&]( account_object& a )
     {
       a.vesting_shares -= o.amount;
     } );
+    _db.rc.update_account_after_vest_change( account, now );
 
     // adjust to account balance
-    const auto& to_account = _db.get_account( o.to );
-    delayed_voting dv( _db );
 
-    const auto amount_vested = _db.adjust_account_vesting_balance( to_account, o.amount, false/*to_reward_balance*/, []( asset vests_created ) {} );
-    dv.add_delayed_value( to_account, _db.head_block_time(), amount_vested.amount.value );
-      /// Emit this vop unconditionally, since VESTS balance changed immediately, indepdenent to subsequent updates of account voting power done inside `delayed_voting` mechanism.
-    _db.push_virtual_operation(transfer_to_vesting_completed_operation(account.get_name(), to_account.get_name(), o.amount, amount_vested));
+    _db.rc.regenerate_rc_mana( to_account, now );
+    _db.modify( to_account, [&]( account_object& a )
+    {
+      a.vesting_shares += o.amount;
+    } );
+
+    _db.rc.update_account_after_vest_change( to_account, now );
+
     return;
   } else if( _db.has_hardfork( HIVE_HARDFORK_0_21__3343 ) )
   {

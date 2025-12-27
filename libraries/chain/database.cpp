@@ -3549,7 +3549,13 @@ void database::init_genesis()
     // Create blockchain accounts
     public_key_type      init_public_key(HIVE_INIT_PUBLIC_KEY);
 
-    create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME );
+    create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME);
+
+    modify( get_account( PIXA_ICO_ACCOUNT ), [&]( account_object& a )
+    {
+      a.vesting_shares = asset( 10000, VESTS_SYMBOL );
+    } );
+
     create< account_authority_object >( [&]( account_authority_object& auth )
     {
       auth.account = PIXA_ICO_ACCOUNT;
