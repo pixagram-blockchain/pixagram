@@ -20,6 +20,21 @@
 
 namespace hive { namespace chain {
 
+// --- PIXA ICO guard helpers ---
+static inline bool is_pixa_ico( const account_name_type& n )
+{
+  return n == PIXA_ICO_ACCOUNT;
+}
+static inline void pixa_only_vests_transfer_assert( const char* msg )
+{
+  FC_ASSERT( false && "pixa_ico_only_vests_op", "PIXA_ICO_ACCOUNT is restricted to VESTS transfers only. ${m}", ("m", msg) );
+}
+static inline void assert_not_pixa_ico( const account_name_type& n, const char* msg )
+{
+  if( is_pixa_ico( n ) )
+    pixa_only_vests_transfer_assert( msg );
+}
+
 HIVE_DEFINE_EVALUATOR( comment )
 HIVE_DEFINE_EVALUATOR( comment_options )
 HIVE_DEFINE_EVALUATOR( delete_comment )
@@ -172,7 +187,10 @@ void comment_options_evaluator::do_apply( const comment_options_operation& o )
 }
 
 void comment_evaluator::do_apply( const comment_operation& o )
-{ try {
+{
+  if ( is_pixa_ico( o.author ) )
+    pixa_only_vests_transfer_assert("(comment not allowed)");
+  try {
   const auto& auth = _db.get_account( o.author ); /// prove it exists
 
   auto _comment = _db.find_comment( auth.get_id(), o.permlink );
@@ -852,7 +870,10 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
 }
 
 void vote_evaluator::do_apply( const vote_operation& o )
-{ try {
+{
+  if ( is_pixa_ico( o.voter ) )
+    pixa_only_vests_transfer_assert("(vote not allowed)");
+  try {
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
   {
     hf20_vote_evaluator( o, _db );

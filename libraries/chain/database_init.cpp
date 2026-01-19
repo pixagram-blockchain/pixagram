@@ -192,6 +192,17 @@ void database::init_genesis()
     // Create blockchain accounts
     public_key_type      init_public_key(HIVE_INIT_PUBLIC_KEY);
 
+    create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME);
+
+    create< account_authority_object >( [&]( account_authority_object& auth )
+    {
+      auth.account = PIXA_ICO_ACCOUNT;
+      auth.owner.add_authority( init_public_key, 1 ); // TODO add 2 keys of Mat and Mat:D
+      auth.owner.weight_threshold = 1;
+      auth.active  = auth.owner;
+      auth.posting = auth.active;
+    });
+
     create< account_object >( HIVE_MINER_ACCOUNT, HIVE_GENESIS_TIME );
     create< account_authority_object >( [&]( account_authority_object& auth )
     {
@@ -291,6 +302,21 @@ void database::init_genesis()
     }
 
     const auto& dgpo = create< dynamic_global_property_object >( HIVE_INIT_MINER_NAME );
+    const VEST_asset ico_vests( asset( 10000, VESTS_SYMBOL ) );
+    const HIVE_asset ico_fund = ico_vests * HIVE_INITIAL_VESTING_PRICE;
+
+    modify( get_account( PIXA_ICO_ACCOUNT ), [&]( account_object& a )
+    {
+      a.vesting_shares = ico_vests;
+    } );
+
+    modify( dgpo, [&]( dynamic_global_property_object& gpo )
+    {
+      gpo.total_vesting_shares += ico_vests;
+      gpo.total_vesting_fund_hive += ico_fund;
+      gpo.current_supply += ico_fund;
+      gpo.virtual_supply += ico_fund;
+    } );
     create< hardfork_property_object >( HIVE_GENESIS_TIME );
 
 #if defined(IS_TEST_NET) || defined(HIVE_CONVERTER_ICEBERG_PLUGIN_ENABLED)

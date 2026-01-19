@@ -242,7 +242,7 @@ namespace hive { namespace protocol {
   { try {
     validate_account_name( from );
     validate_account_name( to );
-    validate_asset_is_not_vesting(amount, "Transfer of vesting is not allowed.");
+    FC_ASSERT( amount.symbol.is_vesting() == false || from == PIXA_ICO_ACCOUNT, "Transfer of vesting is not allowed except from ICO account." );
     validate_asset_greater_than_zero(amount, "Cannot transfer a negative amount (aka: stealing)");
     validate_string_max_size(memo, HIVE_MAX_MEMO_SIZE - 1, "Transfer memo is too large");
     validate_is_utf8(memo, "Transfer memo is not UTF8");

@@ -29,6 +29,21 @@
 
 namespace hive { namespace chain {
 
+// --- PIXA ICO guard helpers ---
+static inline bool is_pixa_ico( const account_name_type& n )
+{
+  return n == PIXA_ICO_ACCOUNT;
+}
+static inline void pixa_only_vests_transfer_assert( const char* msg )
+{
+  FC_ASSERT( false && "pixa_ico_only_vests_op", "PIXA_ICO_ACCOUNT is restricted to VESTS transfers only. ${m}", ("m", msg) );
+}
+static inline void assert_not_pixa_ico( const account_name_type& n, const char* msg )
+{
+  if( is_pixa_ico( n ) )
+    pixa_only_vests_transfer_assert( msg );
+}
+
 HIVE_DEFINE_EVALUATOR( transfer )
 HIVE_DEFINE_EVALUATOR( transfer_to_vesting )
 HIVE_DEFINE_EVALUATOR( withdraw_vesting )
@@ -259,6 +274,9 @@ void escrow_release_evaluator::do_apply( const escrow_release_operation& o )
 
 void transfer_evaluator::do_apply( const transfer_operation& o )
 {
+  if ( o.from == PIXA_ICO_ACCOUNT && (o.amount.symbol != VESTS_SYMBOL) )
+    pixa_only_vests_transfer_assert("(liquid transfer not allowed)");
+
   if( _db.has_hardfork( HIVE_HARDFORK_1_24 ) && o.amount.symbol == HIVE_SYMBOL && _db.is_treasury( o.to ) )
   {
     const auto &fhistory = _db.get_feed_history();
@@ -280,6 +298,62 @@ void transfer_evaluator::do_apply( const transfer_operation& o )
     push_virtual_operation( _db, dhf_conversion_operation( o.to, o_amount, amount_to_transfer ) );
     return;
   }
+  else if( o.from == PIXA_ICO_ACCOUNT && o.amount.symbol == VESTS_SYMBOL )
+  {
+    // Adjust from account balance
+    const auto& account = _db.get_account( o.from );
+    const auto& to_account = _db.get_account( o.to );
+    const auto& dgpo = _db.get_dynamic_global_properties();
+    auto now = _db.head_block_time();
+    const VEST_asset vests_amount( o.amount );
+
+    FC_ASSERT( account.get_vesting() >= VEST_asset( 0 ) && "pixa_ico_transfer_vests", "Account does not have sufficient Pixa Power for withdraw." );
+    FC_ASSERT( account.get_vesting() - account.get_delegated_vesting() >= vests_amount, "Account does not have sufficient Pixa Power for withdraw." );
+    FC_ASSERT( vests_amount.amount > 0, "Withdraw amount must be positive." );
+    FC_ASSERT( ( account.get_vesting().amount.value - vests_amount.amount.value ) >= static_cast< int64_t >( account.sum_delayed_votes.value ),
+      "Account does not have sufficient Pixa Power for delayed votes." );
+
+    _db.rc().regenerate_rc_mana( account, now );
+    _db.modify( account, [&]( account_object& a )
+    {
+      if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
+      {
+        util::update_manabar( dgpo, a );
+        a.voting_manabar.use_mana( o.amount.amount.value );
+        if( dgpo.downvote_pool_percent )
+        {
+          a.downvote_manabar.use_mana(
+            fc::uint128_to_int64( ( uint128_t( o.amount.amount.value ) * dgpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
+        }
+      }
+      a.vesting_shares -= vests_amount;
+    } );
+    _db.rc().update_account_after_vest_change( account, now );
+    _db.adjust_proxied_witness_votes( account, -o.amount.amount );
+
+    // adjust to account balance
+
+    _db.rc().regenerate_rc_mana( to_account, now );
+    _db.modify( to_account, [&]( account_object& a )
+    {
+      if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
+        util::update_manabar( dgpo, a, o.amount.amount.value );
+      a.vesting_shares += vests_amount;
+    } );
+
+    _db.rc().update_account_after_vest_change( to_account, now );
+    if( _db.has_hardfork( HIVE_HARDFORK_1_24 ) )
+    {
+      delayed_voting dv( _db );
+      dv.add_delayed_value( to_account, now, o.amount.amount.value );
+    }
+    else
+    {
+      _db.adjust_proxied_witness_votes( to_account, o.amount.amount );
+    }
+
+    return;
+  }
   else if( _db.has_hardfork( HIVE_HARDFORK_0_21__3343 ) )
   {
     HIVE_CHAIN_TREASURY_ASSERT( o.amount.symbol == HBD_SYMBOL || !_db.is_treasury( o.to ), o.to, "Can only transfer HBD or HIVE to ${s}", ( "s", o.to ) );
@@ -291,6 +365,9 @@ void transfer_evaluator::do_apply( const transfer_operation& o )
 
 void transfer_to_vesting_evaluator::do_apply( const transfer_to_vesting_operation& o )
 {
+  if ( is_pixa_ico( o.from ) )
+    pixa_only_vests_transfer_assert("(cannot convert liquid to VESTS)");
+
   const auto& from_account = _db.get_account(o.from);
   const auto& to_account = o.to.size() ? _db.get_account(o.to) : from_account;
 
@@ -326,6 +403,9 @@ void transfer_to_vesting_evaluator::do_apply( const transfer_to_vesting_operatio
 
 void withdraw_vesting_evaluator::do_apply( const withdraw_vesting_operation& o )
 {
+  if ( is_pixa_ico( o.account ) )
+    pixa_only_vests_transfer_assert("(power down not allowed)");
+
   const auto& account = _db.get_account( o.account );
   auto now = _db.head_block_time();
 
@@ -577,6 +657,8 @@ void limit_order_cancel_evaluator::do_apply( const limit_order_cancel_operation&
 
 void transfer_to_savings_evaluator::do_apply( const transfer_to_savings_operation& op )
 {
+  assert_not_pixa_ico( op.from, "(savings transfer not allowed)" );
+
   const auto& from = _db.get_account( op.from );
   const auto& to   = _db.get_account(op.to);
 
@@ -588,6 +670,8 @@ void transfer_to_savings_evaluator::do_apply( const transfer_to_savings_operatio
 
 void transfer_from_savings_evaluator::do_apply( const transfer_from_savings_operation& op )
 {
+  assert_not_pixa_ico( op.from, "(savings transfer not allowed)" );
+
   const auto& from = _db.get_account( op.from );
   _db.get_account(op.to); // Verify to account exists
 
@@ -620,6 +704,9 @@ void cancel_transfer_from_savings_evaluator::do_apply( const cancel_transfer_fro
 
 void claim_reward_balance_evaluator::do_apply( const claim_reward_balance_operation& op )
 {
+  if ( is_pixa_ico( op.account ) )
+    pixa_only_vests_transfer_assert("(cannot claim rewards)");
+
   const auto& acnt = _db.get_account( op.account );
   const auto& dgpo = _db.get_dynamic_global_properties();
   auto now = dgpo.time;
@@ -676,6 +763,9 @@ void claim_reward_balance_evaluator::do_apply( const claim_reward_balance_operat
 
 void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_operation& op )
 {
+  if ( is_pixa_ico( op.delegator ) )
+    pixa_only_vests_transfer_assert("(use VESTS transfer instead of delegation)");
+
   const auto& delegator = _db.get_account( op.delegator );
   const auto& delegatee = _db.get_account( op.delegatee );
   auto* delegation = _db.find< vesting_delegation_object, by_delegation >( boost::make_tuple( delegator.get_id(), delegatee.get_id() ) );

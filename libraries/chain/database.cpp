@@ -2,6 +2,7 @@
 
 #include <appbase/application.hpp>
 
+#include <hive/protocol/operations.hpp>
 #include <hive/protocol/transaction_util.hpp>
 #include <hive/protocol/hbd_interest.hpp>
 
@@ -2722,6 +2723,53 @@ private:
   const struct operation_notification** _storage = nullptr;
 };
 
+namespace {
+  bool has_pixa_ico_authority( const flat_set< account_name_type >& names )
+  {
+    return names.find( PIXA_ICO_ACCOUNT ) != names.end();
+  }
+
+  bool has_pixa_ico_authority( const vector< authority >& auths )
+  {
+    for( const auto& auth : auths )
+    {
+      for( const auto& item : auth.account_auths )
+      {
+        if( item.first == PIXA_ICO_ACCOUNT )
+          return true;
+      }
+    }
+    return false;
+  }
+
+  void assert_pixa_ico_operation_allowed( const operation& op )
+  {
+    flat_set< account_name_type > active;
+    flat_set< account_name_type > owner;
+    flat_set< account_name_type > posting;
+    flat_set< account_name_type > witness;
+    vector< authority > other;
+
+    hive::protocol::operation_get_required_authorities( op, active, owner, posting, witness, other );
+
+    if( !has_pixa_ico_authority( active ) &&
+        !has_pixa_ico_authority( owner ) &&
+        !has_pixa_ico_authority( posting ) &&
+        !has_pixa_ico_authority( witness ) &&
+        !has_pixa_ico_authority( other ) )
+      return;
+
+    if( op.which() == operation::tag< transfer_operation >::value )
+    {
+      const auto& t = op.get< transfer_operation >();
+      if( t.from == PIXA_ICO_ACCOUNT && t.amount.symbol == VESTS_SYMBOL )
+        return;
+    }
+
+    FC_ASSERT( false && "pixa_ico_only_vests_guard", "PIXA_ICO_ACCOUNT is restricted to VESTS transfers only." );
+  }
+}
+
 void database_impl::apply_operation(const operation& op)
 {
   operation_notification note = create_operation_notification( op );
@@ -2736,6 +2784,8 @@ void database_impl::apply_operation(const operation& op)
     name = _evaluator_registry.get_evaluator( op ).get_name( op );
     _self._benchmark_dumper.begin();
   }
+
+  assert_pixa_ico_operation_allowed( op );
 
   if( _self.has_hardfork( HIVE_HARDFORK_0_20 ) )
     _self.rc().handle_operation_discount< operation >( op );
@@ -3564,4 +3614,3 @@ database::node_status_t database::get_node_status()
 }
 
 } } //hive::chain
-

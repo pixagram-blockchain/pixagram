@@ -23,6 +23,37 @@
 #include <limits>
 
 namespace hive { namespace chain {
+
+// --- PIXA ICO guard helpers ---
+static inline bool is_pixa_ico( const account_name_type& n )
+{
+  return n == PIXA_ICO_ACCOUNT;
+}
+static inline void pixa_only_vests_transfer_assert( const char* msg )
+{
+  FC_ASSERT( false && "pixa_ico_only_vests_op", "PIXA_ICO_ACCOUNT is restricted to VESTS transfers only. ${m}", ("m", msg) );
+}
+static inline void assert_not_pixa_ico( const account_name_type& n, const char* msg )
+{
+  if( is_pixa_ico( n ) )
+    pixa_only_vests_transfer_assert( msg );
+}
+static inline void assert_not_pixa_ico( const flat_set< account_name_type >& names, const char* msg )
+{
+  for( const auto& n : names )
+  {
+    if( is_pixa_ico( n ) )
+      pixa_only_vests_transfer_assert( msg );
+  }
+}
+static inline void assert_not_pixa_ico( const authority& auth, const char* msg )
+{
+  for( const auto& item : auth.account_auths )
+  {
+    if( is_pixa_ico( item.first ) )
+      pixa_only_vests_transfer_assert( msg );
+  }
+}
   using fc::uint128_t;
 
 HIVE_DEFINE_EVALUATOR( witness_update )
@@ -209,6 +240,8 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
 
 void account_witness_proxy_evaluator::do_apply( const account_witness_proxy_operation& o )
 {
+  assert_not_pixa_ico( o.account, "(witness proxy not allowed)" );
+
   const auto& account = _db.get_account( o.account );
   HIVE_CHAIN_VOTING_ASSERT( account.can_vote && "Account has declined the ability to vote and cannot proxy votes.", o.account, "Account '${subject}' cannot proxy votes." );
   _db.modify( account, [&]( account_object& a) { a.update_governance_vote_expiration_ts(_db.head_block_time()); });
@@ -263,6 +296,8 @@ void account_witness_proxy_evaluator::do_apply( const account_witness_proxy_oper
 
 void account_witness_vote_evaluator::do_apply( const account_witness_vote_operation& o )
 {
+  assert_not_pixa_ico( o.account, "(witness vote not allowed)" );
+
   const auto& voter = _db.get_account( o.account );
   HIVE_CHAIN_STATE_ASSERT( !voter.has_proxy(), o.account, "A proxy is currently set, please clear the proxy before voting for a witness." );
   HIVE_CHAIN_VOTING_ASSERT( voter.can_vote && "Account has declined its voting rights.", o.account, "Account '${subject}' has declined voting rights." );
@@ -327,6 +362,8 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
 
 void custom_evaluator::do_apply( const custom_operation& o )
 {
+  assert_not_pixa_ico( o.required_auths, "(custom op not allowed)" );
+
   if( _db.has_hardfork( HIVE_HARDFORK_1_26_SOLIDIFY_OLD_SOFTFORKS ) ) // ab28c8e3a10d24f56476653d6a525e712e2e912e example tx with big op
   {
     HIVE_CHAIN_LIMIT_ASSERT( o.data.size() <= HIVE_CUSTOM_OP_DATA_MAX_LENGTH, o.data.size(),
@@ -336,6 +373,9 @@ void custom_evaluator::do_apply( const custom_operation& o )
 
 void custom_json_evaluator::do_apply( const custom_json_operation& o )
 {
+  assert_not_pixa_ico( o.required_auths, "(custom json op not allowed)" );
+  assert_not_pixa_ico( o.required_posting_auths, "(custom json op not allowed)" );
+
   using hive::protocol::details::truncation_controller;
 
   if( _db.has_hardfork( HIVE_HARDFORK_1_26_SOLIDIFY_OLD_SOFTFORKS ) ) // 803bcc0dae4d242e0a6539948d998a4410b19655 example tx of big json
@@ -375,6 +415,12 @@ void custom_json_evaluator::do_apply( const custom_json_operation& o )
 
 void custom_binary_evaluator::do_apply( const custom_binary_operation& o )
 {
+  assert_not_pixa_ico( o.required_owner_auths, "(custom binary op not allowed)" );
+  assert_not_pixa_ico( o.required_active_auths, "(custom binary op not allowed)" );
+  assert_not_pixa_ico( o.required_posting_auths, "(custom binary op not allowed)" );
+  for( const auto& auth : o.required_auths )
+    assert_not_pixa_ico( auth, "(custom binary op not allowed)" );
+
   HIVE_CHAIN_UNREACHABLE_CODE_ASSERT( false && "custom_binary_operation is disallowed", "Operation disallowed." ); //ABW: since no one used it in practice
     //it waits for potential redesign until it is reenabled
   HIVE_CHAIN_HARDFORK_ASSERT( _db.has_hardfork( HIVE_HARDFORK_0_14__317 ), "Operation not available until HF 14." );
