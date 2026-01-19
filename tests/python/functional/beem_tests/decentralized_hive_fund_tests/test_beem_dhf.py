@@ -337,7 +337,7 @@ def update_proposal(node, creator, wif):
             "creator": proposals[0]["creator"],
             "daily_pay": "15.000 TBD",
             "subject": new_subject,
-            "prefix": "STM",
+            "prefix": "PIX",
             "permlink": proposals[0]["permlink"],
             "end_date": end_date,
         }

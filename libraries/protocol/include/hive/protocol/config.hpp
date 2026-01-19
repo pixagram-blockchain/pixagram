@@ -15,7 +15,7 @@
 
 #define __HIVE_START_PROTOCOL_DEFINITIONS__
 
-#define HIVE_DEFAULT_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR "STM7sw22HqsXbz7D2CmJfmMwt9rimtk518dRzsR1f8Cgw52dQR1pR"
+#define HIVE_DEFAULT_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR "PIX7sw22HqsXbz7D2CmJfmMwt9rimtk518dRzsR1f8Cgw52dQR1pR"
 
 #ifdef USE_ALTERNATE_CHAIN_ID
 
@@ -39,7 +39,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #else
 
 /// Mainnet
-#define HIVE_INIT_PUBLIC_KEY_STR              "STM8GC13uCZbP44HzMLV6zPZGwVQ8Nt4Kji8PapsPiNq1BK153XTX"
+#define HIVE_INIT_PUBLIC_KEY_STR              "PIX8GC13uCZbP44HzMLV6zPZGwVQ8Nt4Kji8PapsPiNq1BK153XTX"
 #define HIVE_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR HIVE_DEFAULT_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR
 
 #define HIVE_MIN_ROOT_COMMENT_INTERVAL        (fc::seconds(60*5)) // 5 minutes
@@ -143,7 +143,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #endif
 
 #ifndef HIVE_INIT_PUBLIC_KEY_STR
-# define HIVE_INIT_PUBLIC_KEY_STR              "STM8GC13uCZbP44HzMLV6zPZGwVQ8Nt4Kji8PapsPiNq1BK153XTX"
+# define HIVE_INIT_PUBLIC_KEY_STR              "PIX8GC13uCZbP44HzMLV6zPZGwVQ8Nt4Kji8PapsPiNq1BK153XTX"
 #endif
 
 #ifdef USE_ALTERNATE_CHAIN_ID
@@ -209,7 +209,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 
 #define HIVE_BLOCKCHAIN_HARDFORK_VERSION      ( hardfork_version( HIVE_BLOCKCHAIN_VERSION ) )
 
-#define HIVE_ADDRESS_PREFIX                   "STM"
+#define HIVE_ADDRESS_PREFIX                   "PIX"
 
 
 #define HIVE_100_PERCENT                      10000
@@ -361,7 +361,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_SECONDS_PER_YEAR                 (uint64_t(60*60*24*365ll))
 
 #define HIVE_HBD_INTEREST_COMPOUND_INTERVAL_SEC (60*60*24*30)
-#define HIVE_MAX_TRANSACTION_SIZE             (1024*64)
+#define HIVE_MAX_TRANSACTION_SIZE             (1024*128)
 #define HIVE_MIN_BLOCK_SIZE_LIMIT             (HIVE_MAX_TRANSACTION_SIZE)
 #define HIVE_MAX_BLOCK_SIZE                   (2*1024*1024)
 #define HIVE_MIN_BLOCK_SIZE                   115
@@ -454,7 +454,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 //note that old account is still considered a treasury (cannot be reused for other purposes), just all funds and actions are redirected to new one
 //DO NOT USE the following constants anywhere other than inside database::get_treasury_name()
 #define OBSOLETE_TREASURY_ACCOUNT             "steem.dao"
-#define NEW_HIVE_TREASURY_ACCOUNT             "hive.fund"
+#define NEW_HIVE_TREASURY_ACCOUNT             "pixa.fund"
 ///@}
 
 /// HIVE PROPOSAL SYSTEM support
