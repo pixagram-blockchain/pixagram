@@ -139,7 +139,7 @@ def test_suggest_brain_key(configured_wallet: tt.OldWallet) -> None:
 
     assert len(brain_priv_key) == 16
     assert len(result["wif_priv_key"]) == 51
-    assert result["pub_key"].startswith("STM")
+    assert result["pub_key"].startswith("PIX")
 
 
 def test_set_transaction_expiration() -> None:

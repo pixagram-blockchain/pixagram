@@ -82,9 +82,9 @@ std::string asset_num_to_string(uint32_t asset_num)
       return "TBD";
 #else
     case HIVE_ASSET_NUM_HIVE:
-      return "HIVE";
+      return "PIXA";
     case HIVE_ASSET_NUM_HBD:
-      return "HBD";
+      return "PXS";
 #endif
     case HIVE_ASSET_NUM_VESTS:
       return "VESTS";

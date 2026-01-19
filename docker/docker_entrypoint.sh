@@ -64,6 +64,7 @@ cleanup () {
 HIVED_ARGS=()
 HIVED_ARGS+=("$@")
 export HIVED_ARGS
+HIVED_NOFILE="${HIVED_NOFILE:-1048576}"
 
 run_instance() {
 # What can be a difference to catch EXIT instead of SIGINT ? Found here: https://gist.github.com/CMCDragonkai/e2cde09b688170fb84268cafe7a2b509
@@ -78,6 +79,7 @@ echo "Attempting to execute hived using additional command line arguments: ${HIV
 sudo -Enu hived /bin/bash << EOF
 echo "Attempting to execute hived using additional command line arguments: ${HIVED_ARGS[*]}"
 set -euo pipefail
+ulimit -n ${HIVED_NOFILE}
 
 /home/hived/bin/hived --webserver-ws-endpoint=0.0.0.0:${WS_PORT} --webserver-http-endpoint=0.0.0.0:${HTTP_PORT} --p2p-endpoint=0.0.0.0:${P2P_PORT} \
   --data-dir="$DATADIR" --shared-file-dir="$SHM_DIR"  \

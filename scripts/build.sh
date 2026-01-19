@@ -41,7 +41,7 @@ HAF_BUILD=""
 
 CMAKE_ARGS=()
 
-JOBS=$(nproc)
+JOBS=${HIVE_BUILD_JOBS:-$(nproc)}
 JOBS=$(( JOBS > 10 ? 10 : JOBS ))
 echo "Build will use $JOBS concurrent jobs..."
 
@@ -98,7 +98,7 @@ pushd "$abs_build_dir"
 echo "Building Hive!"
 
 cmake -DCMAKE_BUILD_TYPE=Release -GNinja "${CMAKE_ARGS[@]}" "$abs_src_dir"
-ninja "$@"
+ninja -j "$JOBS" "$@"
 
 if [[ "$CLEAN_AFTER_BUILD" == "true" ]]; then
     echo "Cleaning up after build..."

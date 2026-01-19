@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(wallet_test)
 
   auto _keys_a = _key_generation( 1 );
 
-  auto _prefix = "STM";
+  auto _prefix = "PIX";
   wallet.import_key( _keys_a[0].first, _prefix);
   BOOST_REQUIRE_EQUAL(1u, wallet.get_keys_details().size());
 
@@ -194,7 +194,7 @@ BOOST_AUTO_TEST_CASE(wallet_manager_test)
   const auto key2 = private_key_type::wif_to_key( key2_str ).value();
   const auto key3 = private_key_type::wif_to_key( key3_str ).value();
 
-  auto _prefix = "STM";
+  auto _prefix = "PIX";
 
   beekeeper_wallet_manager wm = b_mgr.create_wallet( app, 900, 3 );
 
@@ -329,7 +329,7 @@ BOOST_AUTO_TEST_CASE(wallet_manager_create_test)
 
     BOOST_REQUIRE( wm.start() );
     std::string _token = wm.create_session( "this is salt" );
-    auto _prefix = "STM";
+    auto _prefix = "PIX";
 
     wm.create(_token, "test", std::optional<std::string>(), false/*is_temporary*/ );
     constexpr auto key1 = "5JktVNHnRX48BUdtewU7N1CyL4Z886c42x7wYW7XhNWkDQRhdcS";
@@ -696,7 +696,7 @@ BOOST_AUTO_TEST_CASE(wallet_manager_sign_transaction)
       const uint32_t _session_limit = 64;
 
       const std::string _wallet_name = "0";
-      auto _prefix = "STM";
+      auto _prefix = "PIX";
 
       appbase::application app;
 
@@ -1665,7 +1665,7 @@ BOOST_AUTO_TEST_CASE(data_reliability_when_file_with_wallet_is_removed)
 
     const uint64_t _timeout = 90;
     const uint32_t _session_limit = 64;
-    auto _prefix = "STM";
+    auto _prefix = "PIX";
 
     appbase::application app;
 
@@ -1774,7 +1774,7 @@ BOOST_AUTO_TEST_CASE(encrypt_decrypt_data)
 
     const uint64_t _timeout = 90;
     const uint32_t _session_limit = 64;
-    auto _prefix = "STM";
+    auto _prefix = "PIX";
 
     appbase::application app;
 
@@ -2089,7 +2089,7 @@ BOOST_AUTO_TEST_CASE(import_keys)
 
     const uint64_t _timeout = 90;
     const uint32_t _session_limit = 64;
-    auto _prefix = "STM";
+    auto _prefix = "PIX";
 
     appbase::application app;
 
@@ -2197,7 +2197,7 @@ BOOST_AUTO_TEST_CASE(temporary_wallets)
     beekeeper_wallet_manager _beekeeper = b_mgr.create_wallet( app, _timeout, _session_limit );
     BOOST_REQUIRE( _beekeeper.start() );
 
-    auto _prefix = "STM";
+    auto _prefix = "PIX";
 
     struct keys
     {
@@ -2319,7 +2319,7 @@ BOOST_AUTO_TEST_CASE(wallets_synchronization)
 
     const uint64_t _timeout = 90;
     const uint32_t _session_limit = 64;
-    auto _prefix = "STM";
+    auto _prefix = "PIX";
 
     appbase::application app;
 

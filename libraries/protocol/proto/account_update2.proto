@@ -55,7 +55,7 @@ message account_update2 {
 
   // @param {string} memo_key - Optional. In order to update the {memo_key}, the active authority is required.
   //                            If a user provides a new key, the old one will be deleted.
-  optional string            memo_key = 5 [default = "STM1111111111111111111111111111111114T1Anm", json_name = "memo_key"];
+  optional string            memo_key = 5 [default = "PIX1111111111111111111111111111111114T1Anm", json_name = "memo_key"];
 
   // @param {string} json_metadata - json_string; In order to update the {json_metadata}, the active authority is required.
   required string            json_metadata = 6 [json_name = "json_metadata"];

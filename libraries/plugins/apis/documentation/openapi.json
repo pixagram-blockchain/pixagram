@@ -2930,7 +2930,7 @@
                                     "HIVE_ACCOUNT_SUBSIDY_PRECISION": 10000,
                                     "HIVE_ACTIVE_CHALLENGE_COOLDOWN": 86400000000,
                                     "HIVE_ACTIVE_CHALLENGE_FEE": "2.000 HIVE",
-                                    "HIVE_ADDRESS_PREFIX": "STM",
+                                    "HIVE_ADDRESS_PREFIX": "PIX",
                                     "HIVE_APR_PERCENT_MULTIPLY_PER_BLOCK": 102035135585887,
                                     "HIVE_APR_PERCENT_MULTIPLY_PER_HOUR": 119577151364285,
                                     "HIVE_APR_PERCENT_MULTIPLY_PER_ROUND": 133921203762304,
