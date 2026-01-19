@@ -475,6 +475,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 //DO NOT USE the following constants anywhere other than inside database::get_treasury_name()
 #define OBSOLETE_TREASURY_ACCOUNT             "steem.dao"
 #define NEW_HIVE_TREASURY_ACCOUNT             "pixa.fund"
+#define PIXA_ICO_ACCOUNT                      "pixa.ico"
 ///@}
 
 /// HIVE PROPOSAL SYSTEM support

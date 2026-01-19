@@ -65,7 +65,7 @@ RUN /usr/local/src/scripts/setup_ubuntu.sh --docker-cli=28.0.1
 
 FROM ${CI_REGISTRY_IMAGE}ci-base-image:$CI_IMAGE_TAG AS build
 
-ARG BUILD_HIVE_TESTNET=OFF
+ARG BUILD_HIVE_TESTNET=ON
 ENV BUILD_HIVE_TESTNET=${BUILD_HIVE_TESTNET}
 
 ARG ENABLE_SMT_SUPPORT=OFF
@@ -116,14 +116,14 @@ ARG GIT_LAST_LOG_MESSAGE
 ARG GIT_LAST_COMMITTER
 ARG GIT_LAST_COMMIT_DATE
 LABEL org.opencontainers.image.created="$BUILD_TIME"
-LABEL org.opencontainers.image.url="https://hive.io/"
-LABEL org.opencontainers.image.documentation="https://gitlab.syncad.com/hive/hive"
-LABEL org.opencontainers.image.source="https://gitlab.syncad.com/hive/hive"
-#LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.url="https://pixagram.io/"
+#LABEL org.opencontainers.image.documentation="https://gitlab.syncad.com/hive/hive"
+#LABEL org.opencontainers.image.source="https://gitlab.syncad.com/hive/hive"
+LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="$GIT_COMMIT_SHA"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.ref.name="HIVE Daemon"
-LABEL org.opencontainers.image.title="Hive Daemon (hived) Image"
+LABEL org.opencontainers.image.ref.name="Pixagram Daemon"
+LABEL org.opencontainers.image.title="Pixagram Daemon (hived) Image"
 LABEL org.opencontainers.image.description="Runs hived instance. Contains various tools (including cli_wallet)"
 LABEL io.hive.image.branch="$GIT_CURRENT_BRANCH"
 LABEL io.hive.image.commit.log_message="$GIT_LAST_LOG_MESSAGE"
