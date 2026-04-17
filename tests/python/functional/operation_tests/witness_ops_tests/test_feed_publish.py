@@ -16,7 +16,7 @@ def test_publish_feed_from_witness_account(
     prepared_node: tt.InitNode, wallet: tt.Wallet, alice: WitnessAccount
 ) -> None:
     # test case 1.1 from https://gitlab.syncad.com/hive/hive/-/issues/633
-    alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 1000)
+    alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 0)
     alice.check_if_account_has_witness_role(expected_witness_role=True)
     alice.rc_manabar.update()
     trx = alice.feed_publish(base=1000, quote=100)

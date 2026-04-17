@@ -80,6 +80,18 @@ long next_hf_time()
   return hfTime;
 }
 
+#ifndef IS_TEST_NET
+#ifndef PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR
+#error "Define PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR for non-testnet builds"
+#endif
+#ifndef PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR
+#error "Define PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR for non-testnet builds"
+#endif
+#ifndef PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR
+#error "Define PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR for non-testnet builds"
+#endif
+#endif
+
 namespace hive { namespace chain {
 
 struct object_schema_repr
@@ -116,6 +128,29 @@ struct reward_fund_context
   asset       reward_balance = asset( 0, HIVE_SYMBOL );
   share_type  hive_awarded = 0;
 };
+
+namespace {
+
+public_key_type get_pixa_multisig_public_key( const char* test_seed, const char* configured_key )
+{
+#ifdef IS_TEST_NET
+  return fc::ecc::private_key::regenerate( fc::sha256::hash( std::string( test_seed ) ) ).get_public_key();
+#else
+  return public_key_type( configured_key );
+#endif
+}
+
+authority make_three_of_three_authority( const public_key_type& key1, const public_key_type& key2, const public_key_type& key3 )
+{
+  authority auth;
+  auth.weight_threshold = 3;
+  auth.add_authority( key1, 1 );
+  auth.add_authority( key2, 1 );
+  auth.add_authority( key3, 1 );
+  return auth;
+}
+
+} // anonymous namespace
 
 class database_impl
 {
@@ -3642,16 +3677,25 @@ void database::init_genesis()
 
     // Create blockchain accounts
     public_key_type      init_public_key(HIVE_INIT_PUBLIC_KEY);
+#ifdef IS_TEST_NET
+    public_key_type      pixa_multisig_key1 = get_pixa_multisig_public_key( "pixa-multisig-key-1", nullptr );
+    public_key_type      pixa_multisig_key2 = get_pixa_multisig_public_key( "pixa-multisig-key-2", nullptr );
+    public_key_type      pixa_multisig_key3 = get_pixa_multisig_public_key( "pixa-multisig-key-3", nullptr );
+#else
+    public_key_type      pixa_multisig_key1 = get_pixa_multisig_public_key( "pixa-multisig-key-1", PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR );
+    public_key_type      pixa_multisig_key2 = get_pixa_multisig_public_key( "pixa-multisig-key-2", PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR );
+    public_key_type      pixa_multisig_key3 = get_pixa_multisig_public_key( "pixa-multisig-key-3", PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR );
+#endif
+    authority            pixa_multisig_authority = make_three_of_three_authority( pixa_multisig_key1, pixa_multisig_key2, pixa_multisig_key3 );
 
     create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME);
 
     create< account_authority_object >( [&]( account_authority_object& auth )
     {
       auth.account = PIXA_ICO_ACCOUNT;
-      auth.owner.add_authority( init_public_key, 1 ); // TODO add 2 keys of Mat and Mat:D
-      auth.owner.weight_threshold = 1;
-      auth.active  = auth.owner;
-      auth.posting = auth.active;
+      auth.owner = pixa_multisig_authority;
+      auth.active = pixa_multisig_authority;
+      auth.posting = pixa_multisig_authority;
     });
 
     create< account_object >( HIVE_MINER_ACCOUNT, HIVE_GENESIS_TIME );
@@ -3681,15 +3725,16 @@ void database::init_genesis()
       auth.active.weight_threshold = 1;
       auth.posting.weight_threshold = 1;
     } );
+#endif
+
     create< account_object >( NEW_HIVE_TREASURY_ACCOUNT, HIVE_GENESIS_TIME );
     create< account_authority_object >([&](account_authority_object& auth)
     {
       auth.account = NEW_HIVE_TREASURY_ACCOUNT;
-      auth.owner.weight_threshold = 1;
-      auth.active.weight_threshold = 1;
-      auth.posting.weight_threshold = 1;
+      auth.owner = pixa_multisig_authority;
+      auth.active = pixa_multisig_authority;
+      auth.posting = pixa_multisig_authority;
     } );
-#endif
 
     create< account_object >( HIVE_TEMP_ACCOUNT, HIVE_GENESIS_TIME );
     create< account_authority_object >( [&]( account_authority_object& auth )
@@ -3753,20 +3798,27 @@ void database::init_genesis()
     }
 
     const auto& dgpo = create< dynamic_global_property_object >( HIVE_INIT_MINER_NAME );
-    const VEST_asset ico_vests( asset( 10000, VESTS_SYMBOL ) );
+    const VEST_asset ico_vests( asset( 50000000000000ll, VESTS_SYMBOL ) );
+    const VEST_asset fund_vests( asset( 25000000000000ll, VESTS_SYMBOL ) );
     const HIVE_asset ico_fund = ico_vests * HIVE_INITIAL_VESTING_PRICE;
+    const HIVE_asset fund_fund = fund_vests * HIVE_INITIAL_VESTING_PRICE;
 
     modify( get_account( PIXA_ICO_ACCOUNT ), [&]( account_object& a )
     {
       a.vesting_shares = ico_vests;
     } );
 
+    modify( get_account( NEW_HIVE_TREASURY_ACCOUNT ), [&]( account_object& a )
+    {
+      a.vesting_shares = fund_vests;
+    } );
+
     modify( dgpo, [&]( dynamic_global_property_object& gpo )
     {
-      gpo.total_vesting_shares += ico_vests;
-      gpo.total_vesting_fund_hive += ico_fund;
-      gpo.current_supply += ico_fund;
-      gpo.virtual_supply += ico_fund;
+      gpo.total_vesting_shares += ico_vests + fund_vests;
+      gpo.total_vesting_fund_hive += ico_fund + fund_fund;
+      gpo.current_supply += ico_fund + fund_fund;
+      gpo.virtual_supply += ico_fund + fund_fund;
     } );
     create< hardfork_property_object >( HIVE_GENESIS_TIME );
 
@@ -6338,6 +6390,7 @@ void database::apply_hardfork( uint32_t hardfork )
       {
         gpo.proposal_fund_percent = HIVE_PROPOSAL_FUND_PERCENT_HF21;
         gpo.content_reward_percent = HIVE_CONTENT_REWARD_PERCENT_HF21;
+        gpo.vesting_reward_percent = 0;
         gpo.downvote_pool_percent = HIVE_DOWNVOTE_POOL_PERCENT_HF21;
         gpo.reverse_auction_seconds = HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF21;
       });
@@ -6399,8 +6452,9 @@ void database::apply_hardfork( uint32_t hardfork )
     {
       modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
       {
-        rfo.curation_reward_curve = linear;
-        rfo.author_reward_curve   = linear;
+        rfo.author_reward_curve = convergent_linear;
+        rfo.curation_reward_curve = convergent_square_root;
+        rfo.content_constant = HIVE_CONTENT_CONSTANT_HF21;
       });
       modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {

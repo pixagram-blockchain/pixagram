@@ -1525,7 +1525,7 @@ BOOST_AUTO_TEST_CASE( rc_differential_usage_many_ops )
     witness.block_signing_key = generate_private_key( "carol_witness" ).get_public_key();
     witness.props.account_creation_fee = legacy_hive_asset::from_amount( HIVE_MAX_ACCOUNT_CREATION_FEE / 2 );
     witness.props.maximum_block_size = HIVE_MAX_BLOCK_SIZE;
-    witness.props.hbd_interest_rate = 30 * HIVE_1_PERCENT;
+    witness.props.hbd_interest_rate = 0;
     witness.fee = asset( 100, HIVE_SYMBOL );
     push_transaction( witness, carol_private_key );
     auto carol_state_usage = db->rc.get_block_info().usage[ resource_state_bytes ];

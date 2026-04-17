@@ -14,7 +14,7 @@ def test_list_witnesses(node: tt.InitNode | tt.RemoteNode, should_prepare: bool)
             "alice",
             "http://url.html",
             tt.Account("alice").public_key,
-            {"account_creation_fee": tt.Asset.Test(28), "maximum_block_size": 131072, "hbd_interest_rate": 1000},
+            {"account_creation_fee": tt.Asset.Test(28), "maximum_block_size": 131072, "hbd_interest_rate": 0},
         )
     witnesses = node.api.database.list_witnesses(start="", limit=100, order="by_name").witnesses
     assert len(witnesses) != 0

@@ -488,8 +488,7 @@ namespace hive { namespace protocol {
       }
       FC_ASSERT( account_creation_fee.amount >= HIVE_MIN_ACCOUNT_CREATION_FEE);
       FC_ASSERT( maximum_block_size >= HIVE_MIN_BLOCK_SIZE_LIMIT);
-      FC_ASSERT( hbd_interest_rate >= 0 );
-      FC_ASSERT( hbd_interest_rate <= HIVE_100_PERCENT );
+      FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
     }
   };
 
@@ -1291,4 +1290,3 @@ FC_REFLECT( hive::protocol::delegate_vesting_shares_operation, (delegator)(deleg
 FC_REFLECT( hive::protocol::recurrent_transfer_operation, (from)(to)(amount)(memo)(recurrence)(executions)(extensions) );
 FC_REFLECT_TYPENAME( hive::protocol::recurrent_transfer_extension )
 FC_REFLECT( hive::protocol::witness_block_approve_operation, (witness)(block_id) );
-

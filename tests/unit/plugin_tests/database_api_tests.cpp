@@ -92,10 +92,61 @@ struct database_api_fixture_basic : hived_fixture
   hive::plugins::database_api::database_api* database_api = nullptr;
 };
 
+struct database_api_genesis_fixture : hived_fixture
+{
+  database_api_genesis_fixture()
+  {
+    configuration_data.set_initial_asset_supply( INITIAL_TEST_SUPPLY, HBD_INITIAL_TEST_SUPPLY );
+
+    hive::plugins::database_api::database_api_plugin* db_api_plugin = nullptr;
+    postponed_init(
+      {
+        config_line_t( { "plugin", { HIVE_DATABASE_API_PLUGIN_NAME } } ),
+        config_line_t( { "shared-file-size",
+          { std::to_string( 1024 * 1024 * shared_file_size_small ) } }
+        )
+      },
+      &db_api_plugin
+    );
+
+    database_api = db_api_plugin->api.get();
+    BOOST_REQUIRE( database_api );
+  }
+
+  hive::plugins::database_api::database_api* database_api = nullptr;
+};
+
 using database_api_fixture = database_api_fixture_basic<HIVE_NUM_HARDFORKS>;
+using database_api_fixture_18 = database_api_fixture_basic<18>;
+using database_api_fixture_20 = database_api_fixture_basic<20>;
 using database_api_fixture_27 = database_api_fixture_basic<27>;
 
 BOOST_FIXTURE_TEST_SUITE( database_api_tests, database_api_fixture );
+
+BOOST_AUTO_TEST_CASE( pixa_reward_fund_and_inflation_defaults )
+{ try {
+  const auto gpo = database_api->get_dynamic_global_properties( {} );
+  const auto reward_funds = database_api->get_reward_funds( {} );
+
+  const hive::plugins::database_api::api_reward_fund_object* post_reward_fund = nullptr;
+  for( const auto& fund : reward_funds.funds )
+  {
+    if( fund.name == HIVE_POST_REWARD_FUND_NAME )
+    {
+      post_reward_fund = &fund;
+      break;
+    }
+  }
+  BOOST_REQUIRE( post_reward_fund != nullptr );
+
+  BOOST_REQUIRE( post_reward_fund->author_reward_curve == curve_id::convergent_linear );
+  BOOST_REQUIRE( post_reward_fund->curation_reward_curve == curve_id::convergent_square_root );
+  BOOST_REQUIRE( post_reward_fund->content_constant == HIVE_CONTENT_CONSTANT_HF21 );
+
+  BOOST_REQUIRE_EQUAL( gpo.content_reward_percent, 70 * HIVE_1_PERCENT );
+  BOOST_REQUIRE_EQUAL( gpo.vesting_reward_percent, 0 );
+  BOOST_REQUIRE_EQUAL( gpo.proposal_fund_percent, 15 * HIVE_1_PERCENT );
+} FC_LOG_AND_RETHROW() }
 
 BOOST_AUTO_TEST_CASE( get_witness_schedule_test )
 { try {
@@ -561,6 +612,120 @@ BOOST_AUTO_TEST_CASE( verify_account_authority_test )
 
 } FC_LOG_AND_RETHROW() }
 
+BOOST_AUTO_TEST_CASE( pixa_genesis_accounts_test )
+{ try {
+  const auto pixa_multisig_key1 = generate_private_key( "pixa-multisig-key-1" );
+  const auto pixa_multisig_key2 = generate_private_key( "pixa-multisig-key-2" );
+  const auto pixa_multisig_key3 = generate_private_key( "pixa-multisig-key-3" );
+  const authority pixa_multisig_authority( 3,
+    pixa_multisig_key1.get_public_key(), 1,
+    pixa_multisig_key2.get_public_key(), 1,
+    pixa_multisig_key3.get_public_key(), 1 );
+
+  const auto accounts = database_api->find_accounts( { { PIXA_ICO_ACCOUNT, NEW_HIVE_TREASURY_ACCOUNT }, true } );
+  BOOST_REQUIRE_EQUAL( accounts.accounts.size(), 2u );
+
+  const auto& pixa_ico = accounts.accounts.at( 0 );
+  const auto& pixa_fund = accounts.accounts.at( 1 );
+
+  BOOST_REQUIRE_EQUAL( pixa_ico.name, PIXA_ICO_ACCOUNT );
+  BOOST_REQUIRE_EQUAL( pixa_ico.vesting_shares, asset( 50000000000000ll, VESTS_SYMBOL ) );
+  BOOST_REQUIRE_EQUAL( pixa_ico.owner, pixa_multisig_authority );
+  BOOST_REQUIRE_EQUAL( pixa_ico.active, pixa_multisig_authority );
+  BOOST_REQUIRE_EQUAL( pixa_ico.posting, pixa_multisig_authority );
+
+  BOOST_REQUIRE_EQUAL( pixa_fund.name, NEW_HIVE_TREASURY_ACCOUNT );
+  BOOST_REQUIRE_EQUAL( pixa_fund.vesting_shares, asset( 25000000000000ll, VESTS_SYMBOL ) );
+  BOOST_REQUIRE_EQUAL( pixa_fund.owner, pixa_multisig_authority );
+  BOOST_REQUIRE_EQUAL( pixa_fund.active, pixa_multisig_authority );
+  BOOST_REQUIRE_EQUAL( pixa_fund.posting, pixa_multisig_authority );
+
+  const flat_set< public_key_type > all_keys = {
+    pixa_multisig_key1.get_public_key(),
+    pixa_multisig_key2.get_public_key(),
+    pixa_multisig_key3.get_public_key()
+  };
+  const flat_set< public_key_type > missing_one_key = {
+    pixa_multisig_key1.get_public_key(),
+    pixa_multisig_key2.get_public_key()
+  };
+
+  const auto check_account = [&]( const account_name_type& account )
+  {
+    for( const auto level : { authority_level::active, authority_level::owner, authority_level::posting } )
+    {
+      BOOST_CHECK( database_api->verify_account_authority( { account, all_keys, level } ).valid );
+      BOOST_CHECK( not database_api->verify_account_authority( { account, missing_one_key, level } ).valid );
+    }
+  };
+
+  check_account( PIXA_ICO_ACCOUNT );
+  check_account( NEW_HIVE_TREASURY_ACCOUNT );
+
+  validate_database();
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE( database_api_tests_18, database_api_fixture_18 );
+
+BOOST_AUTO_TEST_CASE( pixa_reward_fund_defaults_before_hf19 )
+{ try {
+  const auto reward_funds = database_api->get_reward_funds( {} );
+
+  const hive::plugins::database_api::api_reward_fund_object* post_reward_fund = nullptr;
+  for( const auto& fund : reward_funds.funds )
+  {
+    if( fund.name == HIVE_POST_REWARD_FUND_NAME )
+    {
+      post_reward_fund = &fund;
+      break;
+    }
+  }
+  BOOST_REQUIRE( post_reward_fund != nullptr );
+
+  BOOST_REQUIRE( post_reward_fund->author_reward_curve == curve_id::quadratic );
+  BOOST_REQUIRE( post_reward_fund->curation_reward_curve == curve_id::bounded_curation );
+  BOOST_REQUIRE( post_reward_fund->content_constant == HIVE_CONTENT_CONSTANT_HF0 );
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE( database_api_genesis_tests, database_api_genesis_fixture );
+
+BOOST_AUTO_TEST_CASE( pixa_genesis_dgpo_accounting_test )
+{ try {
+  const auto gpo = db->get_dynamic_global_properties();
+
+  const VEST_asset ico_vests( asset( 50000000000000ll, VESTS_SYMBOL ) );
+  const VEST_asset fund_vests( asset( 25000000000000ll, VESTS_SYMBOL ) );
+  const HIVE_asset ico_fund = ico_vests * HIVE_INITIAL_VESTING_PRICE;
+  const HIVE_asset fund_fund = fund_vests * HIVE_INITIAL_VESTING_PRICE;
+  const auto expected_total_vesting_shares = asset( HIVE_INITIAL_VESTING, HIVE_SYMBOL ) * HIVE_INITIAL_VESTING_PRICE + ico_vests + fund_vests;
+  const auto expected_total_vesting_fund_hive = asset( HIVE_INITIAL_VESTING, HIVE_SYMBOL ) + ico_fund + fund_fund;
+  const auto expected_current_supply = asset( INITIAL_TEST_SUPPLY, HIVE_SYMBOL ) + ico_fund + fund_fund;
+  const auto expected_current_hbd_supply = asset( HBD_INITIAL_TEST_SUPPLY, HBD_SYMBOL );
+  const auto expected_virtual_supply = expected_current_supply + expected_current_hbd_supply * price( asset( 1, HBD_SYMBOL ), asset( 1, HIVE_SYMBOL ) );
+
+  BOOST_REQUIRE_EQUAL( gpo.total_vesting_shares, expected_total_vesting_shares );
+  BOOST_REQUIRE_EQUAL( gpo.total_vesting_fund_hive, expected_total_vesting_fund_hive );
+  BOOST_REQUIRE_EQUAL( gpo.current_supply, expected_current_supply );
+  BOOST_REQUIRE_EQUAL( gpo.virtual_supply, expected_virtual_supply );
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE( database_api_tests_20, database_api_fixture_20 );
+
+BOOST_AUTO_TEST_CASE( pixa_inflation_split_before_hf21 )
+{ try {
+  const auto gpo = database_api->get_dynamic_global_properties( {} );
+
+  BOOST_REQUIRE_EQUAL( gpo.content_reward_percent, 75 * HIVE_1_PERCENT );
+  BOOST_REQUIRE_EQUAL( gpo.vesting_reward_percent, 15 * HIVE_1_PERCENT );
+  BOOST_REQUIRE_EQUAL( gpo.proposal_fund_percent, 0 );
+} FC_LOG_AND_RETHROW() }
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_FIXTURE_TEST_SUITE( database_api_tests_27, database_api_fixture_27 );
@@ -876,4 +1041,3 @@ BOOST_AUTO_TEST_CASE( verify_account_authority_test )
 
 BOOST_AUTO_TEST_SUITE_END()
 #endif
-

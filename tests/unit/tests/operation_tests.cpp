@@ -1303,6 +1303,32 @@ BOOST_AUTO_TEST_CASE( transfer_authorities )
   FC_LOG_AND_RETHROW()
 }
 
+BOOST_AUTO_TEST_CASE( pixa_ico_liquid_transfer_rejected_even_with_multisig )
+{
+  try
+  {
+    ACTORS( (alice) )
+
+    const auto pixa_multisig_key1 = generate_private_key( "pixa-multisig-key-1" );
+    const auto pixa_multisig_key2 = generate_private_key( "pixa-multisig-key-2" );
+    const auto pixa_multisig_key3 = generate_private_key( "pixa-multisig-key-3" );
+
+    transfer_operation op;
+    op.from = PIXA_ICO_ACCOUNT;
+    op.to = "alice";
+    op.amount = ASSET( "1.000 TESTS" );
+
+    signed_transaction tx;
+    tx.operations.push_back( op );
+    tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
+
+    HIVE_REQUIRE_ASSERT(
+      push_transaction( tx, { pixa_multisig_key1, pixa_multisig_key2, pixa_multisig_key3 } ),
+      "PIXA_ICO_ACCOUNT is restricted to VESTS transfers only." );
+  }
+  FC_LOG_AND_RETHROW()
+}
+
 BOOST_AUTO_TEST_CASE( signature_stripping )
 {
   try
@@ -1773,6 +1799,20 @@ BOOST_AUTO_TEST_CASE( witness_update_validate )
   {
     BOOST_TEST_MESSAGE( "Testing: withness_update_validate" );
 
+    witness_update_operation op;
+    op.owner = "alice";
+    op.url = "foo.bar";
+    op.fee = ASSET( "1.000 TESTS" );
+    op.block_signing_key = generate_private_key( "witness_validate" ).get_public_key();
+    op.props.account_creation_fee = legacy_hive_asset::from_asset( ASSET( "1.000 TESTS" ) );
+    op.props.maximum_block_size = HIVE_MIN_BLOCK_SIZE_LIMIT + 1;
+
+    op.props.hbd_interest_rate = 1;
+    HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
+
+    op.props.hbd_interest_rate = 0;
+    HIVE_REQUIRE_NO_THROW( op.validate() );
+
     validate_database();
   }
   FC_LOG_AND_RETHROW()
@@ -1866,6 +1906,20 @@ BOOST_AUTO_TEST_CASE( witness_update_apply )
     BOOST_REQUIRE( alice_witness.virtual_position == 0 );
     BOOST_REQUIRE( alice_witness.virtual_scheduled_time == fc::uint128_max_value() );
     BOOST_REQUIRE( alice.get_balance().amount.value == ASSET( "10.000 TESTS" ).amount.value ); // No fee
+    validate_database();
+
+    BOOST_TEST_MESSAGE( "--- Test failure when witness_update sets non-zero hbd_interest_rate" );
+    tx.clear();
+    op.props.hbd_interest_rate = 1;
+    tx.operations.push_back( op );
+    HIVE_REQUIRE_ASSERT( push_transaction( tx, alice_private_key ), "hbd_interest_rate is fixed at 0" );
+
+    BOOST_TEST_MESSAGE( "--- Test success when witness_update sets zero hbd_interest_rate" );
+    tx.clear();
+    op.props.hbd_interest_rate = 0;
+    tx.operations.push_back( op );
+    push_transaction( tx, alice_private_key );
+    BOOST_REQUIRE( alice_witness.props.hbd_interest_rate == 0 );
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test updating a witness" );
@@ -8396,19 +8450,35 @@ BOOST_AUTO_TEST_CASE( witness_set_properties_validate )
     prop_op.props[ "maximum_block_size" ] = fc::raw::pack_to_vector( HIVE_MIN_BLOCK_SIZE_LIMIT - 1 );
     HIVE_REQUIRE_THROW( prop_op.validate(), fc::assert_exception );
 
-    BOOST_TEST_MESSAGE( "--- failure when setting hbd_interest_rate with negative number" );
+    BOOST_TEST_MESSAGE( "--- failure when setting hbd_interest_rate to a non-zero value" );
     prop_op.props.erase( "maximum_block_size" );
-    prop_op.props[ "sbd_interest_rate" ] = fc::raw::pack_to_vector( -700 );
-    //ABW: works also with outdated "sbd_interest_rate" instead of "hbd_interest_rate"
+    prop_op.props[ "hbd_interest_rate" ] = fc::raw::pack_to_vector( 1 );
     HIVE_REQUIRE_THROW( prop_op.validate(), fc::assert_exception );
 
-    BOOST_TEST_MESSAGE( "--- failure when setting hbd_interest_rate to HIVE_100_PERCENT + 1" );
-    prop_op.props.erase( "sbd_interest_rate" );
-    prop_op.props[ "hbd_interest_rate" ] = fc::raw::pack_to_vector( HIVE_100_PERCENT + 1 );
+    BOOST_TEST_MESSAGE( "--- success when setting hbd_interest_rate to zero" );
+    prop_op.props[ "hbd_interest_rate" ] = fc::raw::pack_to_vector( 0 );
+    prop_op.validate();
+
+    BOOST_TEST_MESSAGE( "--- failure when setting legacy sbd_interest_rate to a non-zero value" );
+    prop_op.props.erase( "hbd_interest_rate" );
+    prop_op.props[ "sbd_interest_rate" ] = fc::raw::pack_to_vector( 1 );
     HIVE_REQUIRE_THROW( prop_op.validate(), fc::assert_exception );
+
+    BOOST_TEST_MESSAGE( "--- success when setting legacy sbd_interest_rate to zero" );
+    prop_op.props[ "sbd_interest_rate" ] = fc::raw::pack_to_vector( 0 );
+    prop_op.validate();
+
+    BOOST_TEST_MESSAGE( "--- failure when setting both aliases with mixed values" );
+    prop_op.props[ "hbd_interest_rate" ] = fc::raw::pack_to_vector( 1 );
+    HIVE_REQUIRE_THROW( prop_op.validate(), fc::assert_exception );
+
+    BOOST_TEST_MESSAGE( "--- success when setting both aliases to zero" );
+    prop_op.props[ "hbd_interest_rate" ] = fc::raw::pack_to_vector( 0 );
+    prop_op.validate();
 
     BOOST_TEST_MESSAGE( "--- failure when setting new hbd_exchange_rate with HBD / HIVE" );
     prop_op.props.erase( "hbd_interest_rate" );
+    prop_op.props.erase( "sbd_interest_rate" );
     prop_op.props[ "sbd_exchange_rate" ] = fc::raw::pack_to_vector( price( ASSET( "1.000 TESTS" ), ASSET( "10.000 TBD" ) ) );
     //ABW: works also with outdated "sbd_exchange_rate" instead of "hbd_exchange_rate"
     HIVE_REQUIRE_THROW( prop_op.validate(), fc::assert_exception );
@@ -8579,19 +8649,54 @@ BOOST_AUTO_TEST_CASE( witness_set_properties_apply )
     push_transaction( tx, signing_key );
     BOOST_REQUIRE( alice_witness.props.maximum_block_size == HIVE_MIN_BLOCK_SIZE_LIMIT + 1 );
 
-    // Setting hbd_interest_rate
+    // Setting non-zero hbd_interest_rate must fail
     prop_op.props.erase( "maximum_block_size" );
     prop_op.props[ "hbd_interest_rate" ] = fc::raw::pack_to_vector( 700 );
     tx.clear();
     tx.operations.push_back( prop_op );
+    HIVE_REQUIRE_ASSERT( push_transaction( tx, signing_key ), "hbd_interest_rate is fixed at 0" );
+
+    // Setting hbd_interest_rate to zero must succeed and remain zero
+    prop_op.props[ "hbd_interest_rate" ] = fc::raw::pack_to_vector( 0 );
+    tx.clear();
+    tx.operations.push_back( prop_op );
     push_transaction( tx, signing_key );
-    BOOST_REQUIRE( alice_witness.props.hbd_interest_rate == 700 );
+    BOOST_REQUIRE( alice_witness.props.hbd_interest_rate == 0 );
+
+    // Setting legacy non-zero sbd_interest_rate must fail
+    prop_op.props.erase( "hbd_interest_rate" );
+    prop_op.props[ "sbd_interest_rate" ] = fc::raw::pack_to_vector( 700 );
+    tx.clear();
+    tx.operations.push_back( prop_op );
+    HIVE_REQUIRE_ASSERT( push_transaction( tx, signing_key ), "hbd_interest_rate is fixed at 0" );
+
+    // Setting legacy sbd_interest_rate to zero must succeed and remain zero
+    prop_op.props[ "sbd_interest_rate" ] = fc::raw::pack_to_vector( 0 );
+    tx.clear();
+    tx.operations.push_back( prop_op );
+    push_transaction( tx, signing_key );
+    BOOST_REQUIRE( alice_witness.props.hbd_interest_rate == 0 );
+
+    // Setting mixed dual aliases must fail (legacy zero + canonical non-zero)
+    prop_op.props[ "sbd_interest_rate" ] = fc::raw::pack_to_vector( 0 );
+    prop_op.props[ "hbd_interest_rate" ] = fc::raw::pack_to_vector( 700 );
+    tx.clear();
+    tx.operations.push_back( prop_op );
+    HIVE_REQUIRE_ASSERT( push_transaction( tx, signing_key ), "hbd_interest_rate is fixed at 0" );
+
+    // Setting both aliases to zero must succeed and remain zero
+    prop_op.props[ "hbd_interest_rate" ] = fc::raw::pack_to_vector( 0 );
+    tx.clear();
+    tx.operations.push_back( prop_op );
+    push_transaction( tx, signing_key );
+    BOOST_REQUIRE( alice_witness.props.hbd_interest_rate == 0 );
 
     // Setting new signing_key
     private_key_type old_signing_key = signing_key;
     signing_key = generate_private_key( "new_key" );
     public_key_type alice_pub = signing_key.get_public_key();
     prop_op.props.erase( "hbd_interest_rate" );
+    prop_op.props.erase( "sbd_interest_rate" );
     prop_op.props[ "new_signing_key" ] = fc::raw::pack_to_vector( alice_pub );
     tx.clear();
     tx.operations.push_back( prop_op );

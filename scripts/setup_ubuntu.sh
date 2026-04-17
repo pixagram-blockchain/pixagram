@@ -64,10 +64,18 @@ install_all_dev_packages() {
   && \
   (if [ "$(lsb_release -rs | cut -d. -f1)" -ge 24 ]; then apt-get install -y python3-setuptools; else apt-get install -y python3-distutils; fi) && \
   apt-get clean && rm -r /var/lib/apt/lists/* && \
-  pip3 install --break-system-packages -U secp256k1prp
+  if [ "${SKIP_SECP256K1PRP:-0}" != "1" ]; then
+    pip3 install --break-system-packages -U secp256k1prp
+  else
+    echo "Skipping secp256k1prp install (SKIP_SECP256K1PRP=1)"
+  fi
 }
 
 preconfigure_faketime() {
+  if [ "${SKIP_FAKETIME:-0}" = "1" ]; then
+    echo "Skipping faketime install (SKIP_FAKETIME=1)"
+    return
+  fi
   git clone --depth 1 --branch bw_timer_settime_fix https://gitlab.syncad.com/bwrona/faketime.git
   pushd faketime && CFLAGS="-O2 -DFAKE_STATELESS=1" make
 
@@ -181,6 +189,5 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-
 
 

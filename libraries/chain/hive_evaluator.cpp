@@ -78,7 +78,8 @@ void copy_legacy_chain_properties( chain_properties& dest, const legacy_chain_pr
 {
   dest.account_creation_fee = src.account_creation_fee.to_asset< force_canon >();
   dest.maximum_block_size = src.maximum_block_size;
-  dest.hbd_interest_rate = src.hbd_interest_rate;
+  FC_ASSERT( src.hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
+  dest.hbd_interest_rate = 0;
 }
 
 void witness_update_evaluator::do_apply( const witness_update_operation& o )
@@ -187,14 +188,29 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
     }
   }
 
-  itr = o.props.find( "sbd_interest_rate" );
-  if(itr == o.props.end() && _db.has_hardfork(HIVE_HARDFORK_1_24))
-    itr = o.props.find( "hbd_interest_rate" );
+  flags.hbd_interest_changed = false;
 
-  flags.hbd_interest_changed = itr != o.props.end();
+  itr = o.props.find( "sbd_interest_rate" );
+  if( itr != o.props.end() )
+  {
+    uint16_t hbd_interest_rate = 0u;
+    fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
+    FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
+    flags.hbd_interest_changed = true;
+  }
+
+  itr = o.props.find( "hbd_interest_rate" );
+  if( itr != o.props.end() )
+  {
+    uint16_t hbd_interest_rate = 0u;
+    fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
+    FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
+    flags.hbd_interest_changed = true;
+  }
+
   if( flags.hbd_interest_changed )
   {
-    fc::raw::unpack_from_vector( itr->second, props.hbd_interest_rate );
+    props.hbd_interest_rate = 0;
   }
 
   itr = o.props.find( "account_subsidy_budget" );
@@ -250,7 +266,7 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
 
     if( flags.hbd_interest_changed )
     {
-      w.props.hbd_interest_rate = props.hbd_interest_rate;
+      w.props.hbd_interest_rate = 0;
     }
 
     if( flags.account_subsidy_budget_changed )

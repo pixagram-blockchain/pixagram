@@ -24,7 +24,7 @@ def test_witness(wallet: tt.Wallet) -> None:
         {
             "account_creation_fee": tt.Asset.from_legacy("2789.030 TESTS"),
             "maximum_block_size": 131072,
-            "hbd_interest_rate": 1000,
+            "hbd_interest_rate": 0,
         },
     )
 
