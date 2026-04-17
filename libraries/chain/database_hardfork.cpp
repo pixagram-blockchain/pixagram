@@ -421,6 +421,7 @@ void database::apply_hardfork( uint32_t hardfork )
       {
         gpo.proposal_fund_percent = HIVE_PROPOSAL_FUND_PERCENT_HF21;
         gpo.content_reward_percent = HIVE_CONTENT_REWARD_PERCENT_HF21;
+        gpo.vesting_reward_percent = 0;
         gpo.downvote_pool_percent = HIVE_DOWNVOTE_POOL_PERCENT_HF21;
         gpo.reverse_auction_seconds = HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF21;
       });
@@ -482,8 +483,9 @@ void database::apply_hardfork( uint32_t hardfork )
     {
       modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
       {
-        rfo.curation_reward_curve = linear;
-        rfo.author_reward_curve   = linear;
+        rfo.author_reward_curve = convergent_linear;
+        rfo.curation_reward_curve = convergent_square_root;
+        rfo.content_constant = HIVE_CONTENT_CONSTANT_HF21;
       });
       modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {

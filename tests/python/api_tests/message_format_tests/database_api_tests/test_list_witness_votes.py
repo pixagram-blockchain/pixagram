@@ -16,7 +16,7 @@ def test_list_witness_votes(node: tt.InitNode | tt.RemoteNode, should_prepare: b
             "alice",
             "http://url.html",
             tt.Account("alice").public_key,
-            {"account_creation_fee": tt.Asset.Test(28), "maximum_block_size": 131072, "hbd_interest_rate": 1000},
+            {"account_creation_fee": tt.Asset.Test(28), "maximum_block_size": 131072, "hbd_interest_rate": 0},
         )
         wallet.api.vote_for_witness("bob", "alice", True)
     votes = node.api.database.list_witness_votes(start=["", ""], limit=100, order="by_witness_account").votes

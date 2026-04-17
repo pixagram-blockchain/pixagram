@@ -252,7 +252,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 
 #define HIVE_MAX_ACCOUNT_WITNESS_VOTES        30
 
-#define HIVE_DEFAULT_HBD_INTEREST_RATE        (10*HIVE_1_PERCENT) ///< 10% APR
+#define HIVE_DEFAULT_HBD_INTEREST_RATE        0
 
 #define HIVE_INFLATION_RATE_START_PERCENT     (978) // Fixes block 7,000,000 to 9.5%
 #define HIVE_INFLATION_RATE_STOP_PERCENT      (95) // 0.95%
@@ -261,8 +261,8 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_VESTING_FUND_PERCENT_HF16        (15*HIVE_1_PERCENT) //15% of inflation, 1.425% inflation
 #define HIVE_PROPOSAL_FUND_PERCENT_HF0        (0)
 
-#define HIVE_CONTENT_REWARD_PERCENT_HF21      (65*HIVE_1_PERCENT)
-#define HIVE_PROPOSAL_FUND_PERCENT_HF21       (10*HIVE_1_PERCENT)
+#define HIVE_CONTENT_REWARD_PERCENT_HF21      (70*HIVE_1_PERCENT)
+#define HIVE_PROPOSAL_FUND_PERCENT_HF21       (15*HIVE_1_PERCENT)
 
 #define HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS (fc::to_uint128(0,503600561838938636ull))
 #define HIVE_CONTENT_CONSTANT_HF21            (fc::to_uint128(0,2000000000000ull))
@@ -423,7 +423,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_PENDING_TRANSACTION_EXECUTION_LIMIT fc::milliseconds(200)
 
 #define HIVE_CUSTOM_OP_ID_MAX_LENGTH          (32)
-#define HIVE_CUSTOM_OP_DATA_MAX_LENGTH        (8192)
+#define HIVE_CUSTOM_OP_DATA_MAX_LENGTH        (65536)
 #define HIVE_BENEFICIARY_LIMIT                (128)
 #define HIVE_COMMENT_TITLE_LIMIT              (256)
 

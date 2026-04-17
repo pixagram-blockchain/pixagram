@@ -325,19 +325,19 @@ namespace hive { namespace protocol {
     }
 
     itr = props.find( "sbd_interest_rate" );
-    if( itr == props.end() )
-      itr = props.find( "hbd_interest_rate" );
-
     if( itr != props.end() )
     {
       uint16_t hbd_interest_rate = 0u;
       fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
-      HIVE_PROTOCOL_NUMBER_ASSERT(
-        hbd_interest_rate >= 0 && "witness_set_properties_operation",
-        "hbd_interest_rate must be positive",
-        ("subject", hbd_interest_rate)
-      );
-      validate_number_in_100_percent_range(hbd_interest_rate, "hbd_interest_rate must not exceed 100%");
+      FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
+    }
+
+    itr = props.find( "hbd_interest_rate" );
+    if( itr != props.end() )
+    {
+      uint16_t hbd_interest_rate = 0u;
+      fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
+      FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
     }
 
     itr = props.find( "new_signing_key" );

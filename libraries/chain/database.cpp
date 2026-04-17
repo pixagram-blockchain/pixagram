@@ -80,6 +80,18 @@ long next_hf_time()
   return hfTime;
 }
 
+#ifndef IS_TEST_NET
+#ifndef PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR
+#error "Define PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR for non-testnet builds"
+#endif
+#ifndef PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR
+#error "Define PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR for non-testnet builds"
+#endif
+#ifndef PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR
+#error "Define PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR for non-testnet builds"
+#endif
+#endif
+
 namespace hive { namespace chain {
 
 struct object_schema_repr

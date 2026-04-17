@@ -429,8 +429,7 @@ namespace hive { namespace protocol {
       );
       HIVE_PROTOCOL_NUMBER_ASSERT( maximum_block_size >= HIVE_MIN_BLOCK_SIZE_LIMIT, "Maximum block size is set too low", ("subject", maximum_block_size)("min", HIVE_MIN_BLOCK_SIZE_LIMIT) );
       HIVE_PROTOCOL_NUMBER_ASSERT( maximum_block_size <= HIVE_MAX_BLOCK_SIZE, "Maximum block size is set too high", ("subject", maximum_block_size)("max", HIVE_MAX_BLOCK_SIZE) );
-      HIVE_PROTOCOL_NUMBER_ASSERT( hbd_interest_rate >= 0, "HBD interest rate cannot be negative", ("subject", hbd_interest_rate)("min", 0) );
-      validate_number_in_100_percent_range(hbd_interest_rate, "HBD interest rate in legacy chain properties exceeds 100%");
+      FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
     }
 
     HIVE_asset get_account_creation_fee() const { return HIVE_asset( account_creation_fee.amount ); }
@@ -1219,4 +1218,3 @@ FC_REFLECT( hive::protocol::delegate_vesting_shares_operation, (delegator)(deleg
 FC_REFLECT( hive::protocol::recurrent_transfer_operation, (from)(to)(amount)(memo)(recurrence)(executions)(extensions) );
 FC_REFLECT_TYPENAME( hive::protocol::recurrent_transfer_extension )
 FC_REFLECT( hive::protocol::witness_block_approve_operation, (witness)(block_id) );
-

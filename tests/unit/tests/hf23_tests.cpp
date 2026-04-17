@@ -1238,7 +1238,6 @@ BOOST_AUTO_TEST_CASE( hbd_test_02 )
 
     BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), HBD_asset( 0 ) );
     issue_funds( "alice", HBD_asset( 1'000'000 ) );
-    auto start_time = db->get_account( "alice" ).hbd_seconds_last_update;
     auto alice_hbd = get_hbd_balance( "alice" );
     BOOST_TEST_MESSAGE( "treasury_hbd = " << asset_to_string( db->get_treasury().get_hbd_balance() ) );
     BOOST_TEST_MESSAGE( "alice_hbd = " << asset_to_string( alice_hbd ) );
@@ -1250,24 +1249,8 @@ BOOST_AUTO_TEST_CASE( hbd_test_02 )
 
     auto& gpo = db->get_dynamic_global_properties();
 
-    BOOST_REQUIRE_GT( gpo.get_hbd_interest_rate(), 0 );
-
-    if(db->has_hardfork(HIVE_HARDFORK_1_25))
-    {
-      /// After HF 25 only HBD held on savings should get interest
-      BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), alice_hbd - HBD_asset( 1'000 ) );
-    }
-    else
-    {
-      auto interest_op = get_last_operations( 1 )[0].get< interest_operation >();
-
-      BOOST_REQUIRE_EQUAL( static_cast<uint64_t>(get_hbd_balance( "alice" ).amount.value),
-        alice_hbd.amount.value - HBD_asset( 1'000 ).amount.value +
-        fc::uint128_to_uint64( ( ( ( uint128_t( alice_hbd.amount.value ) * ( db->head_block_time() - start_time ).to_seconds() ) / HIVE_SECONDS_PER_YEAR ) *
-          gpo.get_hbd_interest_rate() ) / HIVE_100_PERCENT ) );
-      BOOST_REQUIRE_EQUAL( interest_op.owner, "alice" );
-      BOOST_REQUIRE_EQUAL( interest_op.interest, get_hbd_balance( "alice" ) - ( alice_hbd - HBD_asset( 1'000 ) ) );
-    }
+    BOOST_REQUIRE_EQUAL( gpo.get_hbd_interest_rate(), 0 );
+    BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), alice_hbd - HBD_asset( 1'000 ) );
 
     database_fixture::validate_database();
 

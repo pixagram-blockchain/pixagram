@@ -21,7 +21,7 @@ def test_witness(wallet: tt.OldWallet) -> None:
         "alice",
         "http:\\url.html",
         "STM6LLegbAgLAy28EHrffBVuANFWcFgmqRMW13wBmTExqFE9SCkg4",
-        {"account_creation_fee": "2789.030 TESTS", "maximum_block_size": 131072, "hbd_interest_rate": 1000},
+        {"account_creation_fee": "2789.030 TESTS", "maximum_block_size": 131072, "hbd_interest_rate": 0},
     )
 
     _result = wallet.api.get_active_witnesses(False)["witnesses"]
