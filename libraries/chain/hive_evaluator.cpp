@@ -188,28 +188,16 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
     }
   }
 
-  flags.hbd_interest_changed = false;
-
   itr = o.props.find( "sbd_interest_rate" );
-  if( itr != o.props.end() )
-  {
-    uint16_t hbd_interest_rate = 0u;
-    fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
-    FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
-    flags.hbd_interest_changed = true;
-  }
+  if( itr == o.props.end() && _db.has_hardfork( HIVE_HARDFORK_1_24 ) )
+    itr = o.props.find( "hbd_interest_rate" );
 
-  itr = o.props.find( "hbd_interest_rate" );
-  if( itr != o.props.end() )
-  {
-    uint16_t hbd_interest_rate = 0u;
-    fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
-    FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
-    flags.hbd_interest_changed = true;
-  }
-
+  flags.hbd_interest_changed = itr != o.props.end();
   if( flags.hbd_interest_changed )
   {
+    uint16_t hbd_interest_rate = 0u;
+    fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
+    FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
     props.hbd_interest_rate = 0;
   }
 

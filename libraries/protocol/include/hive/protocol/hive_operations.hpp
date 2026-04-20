@@ -488,7 +488,7 @@ namespace hive { namespace protocol {
       }
       FC_ASSERT( account_creation_fee.amount >= HIVE_MIN_ACCOUNT_CREATION_FEE);
       FC_ASSERT( maximum_block_size >= HIVE_MIN_BLOCK_SIZE_LIMIT);
-      FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
+      FC_ASSERT( hbd_interest_rate == 0u, "hbd_interest_rate is fixed at 0" );
     }
   };
 

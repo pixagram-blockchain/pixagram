@@ -47,6 +47,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 
 #define HIVE_INIT_SUPPLY                      int64_t(0)
 #define HIVE_HBD_INIT_SUPPLY                  int64_t(0)
+#define HIVE_INITIAL_VESTING_PRICE            (hive::protocol::price( hive::protocol::VEST_asset( 1800 ), hive::protocol::HIVE_asset( 1000 ) ))
 
 #endif /// USE_ALTERNATE_CHAIN_ID
 
