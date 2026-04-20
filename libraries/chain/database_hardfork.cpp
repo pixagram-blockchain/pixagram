@@ -440,7 +440,7 @@ void database::apply_hardfork( uint32_t hardfork )
 
       modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
       {
-        rfo.percent_curation_rewards = 50 * HIVE_1_PERCENT;
+        rfo.percent_curation_rewards = 40 * HIVE_1_PERCENT;
         rfo.author_reward_curve = convergent_linear;
         rfo.curation_reward_curve = convergent_square_root;
         rfo.content_constant = HIVE_CONTENT_CONSTANT_HF21;

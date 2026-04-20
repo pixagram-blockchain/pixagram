@@ -26,9 +26,11 @@ set( CMAKE_C_STANDARD_REQUIRED ON )
 set( GUI_CLIENT_EXECUTABLE_NAME Hive )
 set( CUSTOM_URL_SCHEME "gcs" )
 set( INSTALLER_APP_ID "68ad7005-8eee-49c9-95ce-9eed97e5b347" )
-set( PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR "" CACHE STRING "PIXA multisig public key 1" )
-set( PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR "" CACHE STRING "PIXA multisig public key 2" )
-set( PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR "" CACHE STRING "PIXA multisig public key 3" )
+# TODO(real-mainnet): re-enable 3-of-3 multisig for pixa.ico / pixa.fund by
+# uncommenting these cache variables and the matching block further down.
+#set( PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR "" CACHE STRING "PIXA multisig public key 1" )
+#set( PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR "" CACHE STRING "PIXA multisig public key 2" )
+#set( PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR "" CACHE STRING "PIXA multisig public key 3" )
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS "ON")
 set(CMAKE_VERBOSE_MAKEFILE "ON")
@@ -158,13 +160,9 @@ else( WIN32 ) # Apple AND Linux
     # liburing-dev does not provide default finduring cmake file, but rocksdb does
     # The io_uring engine is able to perform batch submissions and reaps through a single syscall,
     # and thus will improve the overall performance of the system on high-version Linux kernels above 5.x
-    if( APPLE )
-        message( STATUS "liburing is not available on macOS; building without io_uring support" )
-    else()
-        include(libraries/vendor/rocksdb/cmake/modules/Finduring.cmake)
-        if (NOT uring_FOUND)
-            message(FATAL_ERROR "Usage of the io_uring engine is preferred in this project")
-        endif()
+    include(libraries/vendor/rocksdb/cmake/modules/Finduring.cmake)
+    if (NOT uring_FOUND)
+        message(FATAL_ERROR "Usage of the io_uring engine is preferred in this project")
     endif()
 
 endif( WIN32 )
@@ -253,12 +251,22 @@ else()
   MESSAGE( STATUS "\n\n             CONFIGURED FOR HIVE NETWORK             \n\n" )
 endif()
 
-if( NOT BUILD_HIVE_TESTNET )
-  if( PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR STREQUAL "" OR
-      PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR STREQUAL "" OR
-      PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR STREQUAL "" )
-    message( FATAL_ERROR "Define PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR, PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR, and PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR for non-testnet builds" )
-  endif()
+# TODO(real-mainnet): re-enable 3-of-3 multisig for pixa.ico / pixa.fund by
+# uncommenting this block together with the cache variables near the top of this
+# file and the multisig branch in libraries/chain/database.cpp.
+#if( NOT BUILD_HIVE_TESTNET )
+#  if( PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR STREQUAL "" OR
+#      PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR STREQUAL "" OR
+#      PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR STREQUAL "" )
+#    message( FATAL_ERROR "Define PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR, PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR, and PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR for non-testnet builds" )
+#  endif()
+#
+#  add_compile_definitions(
+#    PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR="${PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR}"
+#    PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR="${PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR}"
+#    PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR="${PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR}"
+#  )
+#endif()
 
 set(INDENT_WIDTH 2 CACHE STRING "Determine how many spaces should be used for formating (by default 2)")
 find_program(PYTHON_3_6 "python3.6")

@@ -24,17 +24,20 @@
 
 #include "database_impl.hpp"
 
-#ifndef IS_TEST_NET
-#ifndef PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR
-#error "Define PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR for non-testnet builds"
-#endif
-#ifndef PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR
-#error "Define PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR for non-testnet builds"
-#endif
-#ifndef PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR
-#error "Define PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR for non-testnet builds"
-#endif
-#endif
+// TODO(real-mainnet): re-enable 3-of-3 multisig for pixa.ico / pixa.fund by
+// uncommenting this guard, the helpers below, and the multisig branch in
+// init_genesis(), plus the matching CMakeLists.txt block.
+//#ifndef IS_TEST_NET
+//#ifndef PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#ifndef PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#ifndef PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#endif
 
 namespace hive { namespace chain {
 
@@ -186,28 +189,30 @@ void database::init_schema()
   return;*/
 }
 
-namespace {
-
-public_key_type get_pixa_multisig_public_key( const char* test_seed, const char* configured_key )
-{
-#ifdef IS_TEST_NET
-  return fc::ecc::private_key::regenerate( fc::sha256::hash( std::string( test_seed ) ) ).get_public_key();
-#else
-  return public_key_type( configured_key );
-#endif
-}
-
-authority make_three_of_three_authority( const public_key_type& key1, const public_key_type& key2, const public_key_type& key3 )
-{
-  authority auth;
-  auth.weight_threshold = 3;
-  auth.add_authority( key1, 1 );
-  auth.add_authority( key2, 1 );
-  auth.add_authority( key3, 1 );
-  return auth;
-}
-
-} // anonymous namespace
+// TODO(real-mainnet): re-enable these helpers together with the multisig branch
+// in init_genesis() to restore 3-of-3 multisig for pixa.ico / pixa.fund.
+//namespace {
+//
+//public_key_type get_pixa_multisig_public_key( const char* test_seed, const char* configured_key )
+//{
+//#ifdef IS_TEST_NET
+//  return fc::ecc::private_key::regenerate( fc::sha256::hash( std::string( test_seed ) ) ).get_public_key();
+//#else
+//  return public_key_type( configured_key );
+//#endif
+//}
+//
+//authority make_three_of_three_authority( const public_key_type& key1, const public_key_type& key2, const public_key_type& key3 )
+//{
+//  authority auth;
+//  auth.weight_threshold = 3;
+//  auth.add_authority( key1, 1 );
+//  auth.add_authority( key2, 1 );
+//  auth.add_authority( key3, 1 );
+//  return auth;
+//}
+//
+//} // anonymous namespace
 
 void database::init_genesis()
 {
@@ -226,25 +231,31 @@ void database::init_genesis()
 
     // Create blockchain accounts
     public_key_type      init_public_key(HIVE_INIT_PUBLIC_KEY);
-#ifdef IS_TEST_NET
-    public_key_type      pixa_multisig_key1 = get_pixa_multisig_public_key( "pixa-multisig-key-1", nullptr );
-    public_key_type      pixa_multisig_key2 = get_pixa_multisig_public_key( "pixa-multisig-key-2", nullptr );
-    public_key_type      pixa_multisig_key3 = get_pixa_multisig_public_key( "pixa-multisig-key-3", nullptr );
-#else
-    public_key_type      pixa_multisig_key1 = get_pixa_multisig_public_key( "pixa-multisig-key-1", PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR );
-    public_key_type      pixa_multisig_key2 = get_pixa_multisig_public_key( "pixa-multisig-key-2", PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR );
-    public_key_type      pixa_multisig_key3 = get_pixa_multisig_public_key( "pixa-multisig-key-3", PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR );
-#endif
-    authority            pixa_multisig_authority = make_three_of_three_authority( pixa_multisig_key1, pixa_multisig_key2, pixa_multisig_key3 );
+// TODO(real-mainnet): re-enable 3-of-3 multisig for pixa.ico / pixa.fund by
+    // uncommenting this block (and the helpers at the top of the file) and
+    // replacing the init-key authority assignments below with pixa_multisig_authority.
+    //#ifdef IS_TEST_NET
+    //public_key_type      pixa_multisig_key1 = get_pixa_multisig_public_key( "pixa-multisig-key-1", nullptr );
+    //public_key_type      pixa_multisig_key2 = get_pixa_multisig_public_key( "pixa-multisig-key-2", nullptr );
+    //public_key_type      pixa_multisig_key3 = get_pixa_multisig_public_key( "pixa-multisig-key-3", nullptr );
+    //#else
+    //public_key_type      pixa_multisig_key1 = get_pixa_multisig_public_key( "pixa-multisig-key-1", PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR );
+    //public_key_type      pixa_multisig_key2 = get_pixa_multisig_public_key( "pixa-multisig-key-2", PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR );
+    //public_key_type      pixa_multisig_key3 = get_pixa_multisig_public_key( "pixa-multisig-key-3", PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR );
+    //#endif
+    //authority            pixa_multisig_authority = make_three_of_three_authority( pixa_multisig_key1, pixa_multisig_key2, pixa_multisig_key3 );
+    authority            pixa_genesis_authority;
+    pixa_genesis_authority.weight_threshold = 1;
+    pixa_genesis_authority.add_authority( init_public_key, 1 );
 
     create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME);
 
     create< account_authority_object >( [&]( account_authority_object& auth )
     {
       auth.account = PIXA_ICO_ACCOUNT;
-      auth.owner = pixa_multisig_authority;
-      auth.active = pixa_multisig_authority;
-      auth.posting = pixa_multisig_authority;
+      auth.owner = pixa_genesis_authority;
+      auth.active = pixa_genesis_authority;
+      auth.posting = pixa_genesis_authority;
     });
 
     create< account_object >( HIVE_MINER_ACCOUNT, HIVE_GENESIS_TIME );
@@ -280,9 +291,9 @@ void database::init_genesis()
     create< account_authority_object >([&](account_authority_object& auth)
     {
       auth.account = NEW_HIVE_TREASURY_ACCOUNT;
-      auth.owner = pixa_multisig_authority;
-      auth.active = pixa_multisig_authority;
-      auth.posting = pixa_multisig_authority;
+      auth.owner = pixa_genesis_authority;
+      auth.active = pixa_genesis_authority;
+      auth.posting = pixa_genesis_authority;
     } );
 
     create< account_object >( HIVE_TEMP_ACCOUNT, HIVE_GENESIS_TIME );

@@ -80,17 +80,20 @@ long next_hf_time()
   return hfTime;
 }
 
-#ifndef IS_TEST_NET
-#ifndef PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR
-#error "Define PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR for non-testnet builds"
-#endif
-#ifndef PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR
-#error "Define PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR for non-testnet builds"
-#endif
-#ifndef PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR
-#error "Define PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR for non-testnet builds"
-#endif
-#endif
+// TODO(real-mainnet): re-enable 3-of-3 multisig for pixa.ico / pixa.fund by
+// uncommenting this guard, the helpers below, and the multisig branch in
+// init_genesis(), plus the matching CMakeLists.txt block.
+//#ifndef IS_TEST_NET
+//#ifndef PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#ifndef PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#ifndef PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#endif
 
 namespace hive { namespace chain {
 
@@ -2439,7 +2442,7 @@ try {
     }
   }
 
-  if( feeds.size() >= HIVE_MIN_FEEDS )
+  if( feeds.size() >= std::max<size_t>( 1, wso.num_scheduled_witnesses / 3 ) )
   {
     std::sort( feeds.begin(), feeds.end() );
     auto median_feed = feeds[feeds.size()/2];

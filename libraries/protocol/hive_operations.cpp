@@ -325,14 +325,9 @@ namespace hive { namespace protocol {
     }
 
     itr = props.find( "sbd_interest_rate" );
-    if( itr != props.end() )
-    {
-      uint16_t hbd_interest_rate = 0u;
-      fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
-      FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
-    }
+    if( itr == props.end() )
+      itr = props.find( "hbd_interest_rate" );
 
-    itr = props.find( "hbd_interest_rate" );
     if( itr != props.end() )
     {
       uint16_t hbd_interest_rate = 0u;

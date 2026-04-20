@@ -429,7 +429,7 @@ namespace hive { namespace protocol {
       );
       HIVE_PROTOCOL_NUMBER_ASSERT( maximum_block_size >= HIVE_MIN_BLOCK_SIZE_LIMIT, "Maximum block size is set too low", ("subject", maximum_block_size)("min", HIVE_MIN_BLOCK_SIZE_LIMIT) );
       HIVE_PROTOCOL_NUMBER_ASSERT( maximum_block_size <= HIVE_MAX_BLOCK_SIZE, "Maximum block size is set too high", ("subject", maximum_block_size)("max", HIVE_MAX_BLOCK_SIZE) );
-      FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
+      FC_ASSERT( hbd_interest_rate == 0u, "hbd_interest_rate is fixed at 0" );
     }
 
     HIVE_asset get_account_creation_fee() const { return HIVE_asset( account_creation_fee.amount ); }
