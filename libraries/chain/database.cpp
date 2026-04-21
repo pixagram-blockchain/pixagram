@@ -6094,7 +6094,12 @@ void database::apply_hardfork( uint32_t hardfork )
   switch( hardfork )
   {
     case HIVE_HARDFORK_0_1:
-      perform_vesting_share_split( 1000000 );
+      // Pre-mainnet genesis uses post-HF0_1 VESTS precision, so the historical
+      // 1_000_000x share split would (a) overflow at Pixagram's genesis VESTS
+      // amounts and (b) rescale beyond the intended token supply. Apply with
+      // magnitude 1 to preserve the side effects (sets total_reward_shares2 = 0
+      // and touches vesting_withdraw_rate) without rescaling balances.
+      perform_vesting_share_split( 1 );
       break;
     case HIVE_HARDFORK_0_2:
       retally_witness_votes();
