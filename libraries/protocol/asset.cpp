@@ -461,18 +461,12 @@ uint32_t string_to_asset_num( const char* p, uint8_t decimals )
       }
       switch( name_u64 )
       {
-#ifndef IS_TEST_NET
-        /// Has same value as HIVE_SYMBOL_U64
-        case OBSOLETE_SYMBOL_U64:
-#endif /// IS_TEST_NET
+        // OBSOLETE_SYMBOL_U64 / OBD_SYMBOL_U64 are aliases of HIVE_SYMBOL_U64 /
+        // HBD_SYMBOL_U64 on both testnet and mainnet; no separate case needed.
         case HIVE_SYMBOL_U64:
           HIVE_PROTOCOL_ASSET_ASSERT( decimals == 3 && "HIVE", "Incorrect decimal places for HIVE asset", (decimals)("subject",  p) );
           asset_num = HIVE_ASSET_NUM_HIVE;
           break;
-#ifndef IS_TEST_NET
-        /// Has same value as HBD_SYMBOL_U64
-        case OBD_SYMBOL_U64:
-#endif ///IS_TEST_NET
         case HBD_SYMBOL_U64:
           HIVE_PROTOCOL_ASSET_ASSERT( decimals == 3 && "HBD", "Incorrect decimal places for HBD asset", (decimals)("subject",  p) );
           asset_num = HIVE_ASSET_NUM_HBD;
