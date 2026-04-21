@@ -414,8 +414,15 @@ void database::init_genesis()
       update_virtual_supply();
     }
 #else
-    // Nothing to do
-    create< feed_history_object >( [&]( feed_history_object& o ) {});
+    // Seed the feed history with an initial median price so conversions
+    // work before witnesses have published enough feeds. Rate: 1 PXS = 102 PIXA.
+    create< feed_history_object >( [&]( feed_history_object& o )
+    {
+      o.current_median_history = price( asset( 1000, HBD_SYMBOL ), asset( 102000, HIVE_SYMBOL ) );
+      o.market_median_history = o.current_median_history;
+      o.current_min_history = o.current_median_history;
+      o.current_max_history = o.current_median_history;
+    });
     FC_ASSERT( HIVE_INIT_SUPPLY == 0 && HIVE_HBD_INIT_SUPPLY == 0, "Wrong configuration" );
       // for mainnet these values must be 0, mirrornet should be compatible
 #endif
