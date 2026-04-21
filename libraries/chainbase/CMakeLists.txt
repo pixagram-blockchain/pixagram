@@ -63,7 +63,9 @@ if( CLANG_TIDY_EXE )
    )
 endif( CLANG_TIDY_EXE )
 
-add_subdirectory( test )
+if( BUILD_HIVE_TESTNET )
+  add_subdirectory( test )
+endif()
 
 install( TARGETS
    chainbase
