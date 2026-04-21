@@ -37,7 +37,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #else
 
 /// Mainnet
-#define HIVE_INIT_PUBLIC_KEY_STR              "PIX8GC13uCZbP44HzMLV6zPZGwVQ8Nt4Kji8PapsPiNq1BK153XTX"
+#define HIVE_INIT_PUBLIC_KEY_STR              "PIX6LLegbAgLAy28EHrffBVuANFWcFgmqRMW13wBmTExqFE9SCkg4"
 #define HIVE_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR HIVE_DEFAULT_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR
 
 #define HIVE_MIN_ROOT_COMMENT_INTERVAL        (fc::seconds(60*5)) // 5 minutes
@@ -147,7 +147,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #endif
 
 #ifndef HIVE_INIT_PUBLIC_KEY_STR
-# define HIVE_INIT_PUBLIC_KEY_STR              "PIX8GC13uCZbP44HzMLV6zPZGwVQ8Nt4Kji8PapsPiNq1BK153XTX"
+# define HIVE_INIT_PUBLIC_KEY_STR              "PIX6LLegbAgLAy28EHrffBVuANFWcFgmqRMW13wBmTExqFE9SCkg4"
 #endif
 
 #ifdef USE_ALTERNATE_CHAIN_ID
