@@ -271,7 +271,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_PROPOSAL_FUND_PERCENT_HF21       (15*HIVE_1_PERCENT)
 
 #define HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS (fc::to_uint128(0,503600561838938636ull))
-#define HIVE_CONTENT_CONSTANT_HF21            (fc::to_uint128(0,2000000000000ull))
+#define HIVE_CONTENT_CONSTANT_HF21            (fc::to_uint128(0,200000000ull))
 
 #define HIVE_MINER_PAY_PERCENT                (HIVE_1_PERCENT) // 1%
 #define HIVE_MAX_RATION_DECAY_RATE            (1000000)
