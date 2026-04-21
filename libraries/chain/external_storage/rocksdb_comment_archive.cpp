@@ -1,6 +1,7 @@
 
 #include <hive/chain/hive_object_types.hpp>
 #include <hive/chain/index.hpp>
+#include <chainbase/chainbase.inl>
 
 #include <hive/chain/util/type_registrar_definition.hpp>
 
@@ -211,3 +212,8 @@ void rocksdb_comment_archive::flush()
 } }
 
 HIVE_DEFINE_TYPE_REGISTRAR_REGISTER_TYPE( hive::chain::volatile_comment_index )
+
+// Explicit template instantiations for chainbase::database methods
+template const chainbase::generic_index<hive::chain::volatile_comment_index>& chainbase::database::get_index<hive::chain::volatile_comment_index>() const;
+template chainbase::generic_index<hive::chain::volatile_comment_index>& chainbase::database::get_mutable_index<hive::chain::volatile_comment_index>();
+
