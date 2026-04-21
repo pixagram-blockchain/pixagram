@@ -197,7 +197,7 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
   {
     uint16_t hbd_interest_rate = 0u;
     fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
-    FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
+    FC_ASSERT( hbd_interest_rate == 0ull, "hbd_interest_rate is fixed at 0" );
     props.hbd_interest_rate = 0;
   }
 
