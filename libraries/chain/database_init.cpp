@@ -290,7 +290,19 @@ void database::init_genesis()
     create< account_object >( NEW_HIVE_TREASURY_ACCOUNT, HIVE_GENESIS_TIME );
     create< account_authority_object >([&](account_authority_object& auth)
     {
+      // No keys: HF21 (which fires at block 1 on a fresh chain) calls
+      // lock_account() on the treasury and wipes any authority we'd set
+      // here. Funds leave the treasury only via DAO proposal payments.
       auth.account = NEW_HIVE_TREASURY_ACCOUNT;
+      auth.owner.weight_threshold = 1;
+      auth.active.weight_threshold = 1;
+      auth.posting.weight_threshold = 1;
+    } );
+
+    create< account_object >( PIXA_TEAM_ACCOUNT, HIVE_GENESIS_TIME );
+    create< account_authority_object >([&](account_authority_object& auth)
+    {
+      auth.account = PIXA_TEAM_ACCOUNT;
       auth.owner = pixa_genesis_authority;
       auth.active = pixa_genesis_authority;
       auth.posting = pixa_genesis_authority;
@@ -323,6 +335,12 @@ void database::init_genesis()
         w.owner        = account_name;
         w.signing_key  = init_public_key;
         w.schedule = witness_object::miner;
+        // Genesis-only override: account creation is free at launch so the
+        // network can bootstrap. Direct chainbase write bypasses the global
+        // HIVE_MIN_ACCOUNT_CREATION_FEE validation; once witnesses come
+        // online and call witness_set_properties_operation any new fee they
+        // publish must satisfy that minimum.
+        w.props.account_creation_fee = asset( 0, HIVE_SYMBOL );
       } );
     };
 
@@ -334,34 +352,28 @@ void database::init_genesis()
       init_witness( witness );
 #endif
 
-    // "steem" account was used as system account even before it was officially created; that bug
-    // didn't have effect on the blockchain by chance, but caused problems during optimizations, so
-    // now the account is officially created as system account (with all the same features it had -
-    // there is not much difference between mined account and genesis one, just creation time);
-    // the following transaction mined that account officially:
-    // https://hiveblocks.com/tx/46ddcba847f2297d13e32be07d72d15c530a7271
+    // The "steem" account exists as a placeholder so legacy code paths that
+    // call get_account("steem") (e.g. the pre-HF11 recovery_account fallback)
+    // don't fail at lookup. Pixagram is not a Steem fork; the account has no
+    // keys and its authority is unsatisfiable so nobody can ever sign as it.
     {
       const char* STEEM_ACCOUNT_NAME = "steem";
-      auto STEEM_PUBLIC_KEY = public_key_type( HIVE_STEEM_PUBLIC_KEY_STR );
-      create< account_object >( STEEM_ACCOUNT_NAME, STEEM_PUBLIC_KEY, HIVE_GENESIS_TIME, HIVE_GENESIS_TIME, true, nullptr, true, VEST_asset( 0 ) );
+      create< account_object >( STEEM_ACCOUNT_NAME, public_key_type(), HIVE_GENESIS_TIME, HIVE_GENESIS_TIME, true, nullptr, true, VEST_asset( 0 ) );
       create< account_authority_object >( [&]( account_authority_object& auth )
       {
         auth.account = STEEM_ACCOUNT_NAME;
-#ifdef USE_ALTERNATE_CHAIN_ID
-        auth.owner = authority( 1, STEEM_PUBLIC_KEY, 1, init_public_key, 1 );
-#else
-        auth.owner = authority( 1, STEEM_PUBLIC_KEY, 1 );
-#endif
-        auth.active = auth.owner;
-        auth.posting = auth.owner;
+        auth.owner.weight_threshold = 1;
+        auth.active.weight_threshold = 1;
+        auth.posting.weight_threshold = 1;
       } );
     }
 
     const auto& dgpo = create< dynamic_global_property_object >( HIVE_INIT_MINER_NAME );
-    const VEST_asset ico_vests( asset( 50000000000000ll, VESTS_SYMBOL ) );
-    const VEST_asset fund_vests( asset( 25000000000000ll, VESTS_SYMBOL ) );
+    const VEST_asset ico_vests( asset( 50000000000000ll, VESTS_SYMBOL ) );    // 50 M PP for pixa.rex (sales)
+    const VEST_asset team_vests( asset( 25000000000000ll, VESTS_SYMBOL ) );   // 25 M PP for pixa.team
+    const HBD_asset  omnibus_hbd( asset( 245098039ll, HBD_SYMBOL ) );         // ~245 098 PXS = 25 M PIXA-equivalent of 25 M VESTS (1:1 vesting price) at genesis median 1 PXS = 102 PIXA
     const HIVE_asset ico_fund = ico_vests * HIVE_INITIAL_VESTING_PRICE;
-    const HIVE_asset fund_fund = fund_vests * HIVE_INITIAL_VESTING_PRICE;
+    const HIVE_asset team_fund = team_vests * HIVE_INITIAL_VESTING_PRICE;
 
     modify( get_account( PIXA_ICO_ACCOUNT ), [&]( account_object& a )
     {
@@ -370,18 +382,27 @@ void database::init_genesis()
 
     modify( get_account( NEW_HIVE_TREASURY_ACCOUNT ), [&]( account_object& a )
     {
-      a.vesting_shares = fund_vests;
+      // Treasury holds liquid PXS only - VESTS would be locked unspendable
+      // by HF21's lock_account, and the proposal payout pipeline draws
+      // exclusively from hbd_balance.
+      a.hbd_balance = omnibus_hbd;
+    } );
+
+    modify( get_account( PIXA_TEAM_ACCOUNT ), [&]( account_object& a )
+    {
+      a.vesting_shares = team_vests;
     } );
 
     modify( dgpo, [&]( dynamic_global_property_object& gpo )
     {
-      gpo.total_vesting_shares += ico_vests + fund_vests;
-      gpo.total_vesting_fund_hive += ico_fund + fund_fund;
-      gpo.current_supply += ico_fund + fund_fund;
-      gpo.virtual_supply += ico_fund + fund_fund;
+      gpo.total_vesting_shares += ico_vests + team_vests;
+      gpo.total_vesting_fund_hive += ico_fund + team_fund;
+      gpo.current_supply += ico_fund + team_fund;
+      gpo.current_hbd_supply += omnibus_hbd;
     } );
-    create< hardfork_property_object >( HIVE_GENESIS_TIME );
 
+    // Seed feed history BEFORE update_virtual_supply (which reads it via
+    // get_feed_history to convert PXS -> PIXA-equivalent for virtual_supply).
 #if defined(IS_TEST_NET) || defined(HIVE_CONVERTER_ICEBERG_PLUGIN_ENABLED)
     create< feed_history_object >( [&]( feed_history_object& o )
     {
@@ -390,6 +411,27 @@ void database::init_genesis()
       o.current_min_history = o.current_median_history;
       o.current_max_history = o.current_median_history;
     } );
+#else
+    // Mainnet seed: 1 PXS = 102 PIXA so PXS-denominated allocations have a
+    // PIXA-equivalent for conversions before witnesses publish their feeds.
+    create< feed_history_object >( [&]( feed_history_object& o )
+    {
+      o.current_median_history = price( asset( 1000, HBD_SYMBOL ), asset( 102000, HIVE_SYMBOL ) );
+      o.market_median_history = o.current_median_history;
+      o.current_min_history = o.current_median_history;
+      o.current_max_history = o.current_median_history;
+    });
+#endif
+
+    // Create hardfork_property_object BEFORE update_virtual_supply (which
+    // reads it via get_hardfork_property_object).
+    create< hardfork_property_object >( HIVE_GENESIS_TIME );
+
+    // Recompute virtual_supply now that current_supply (PIXA) and
+    // current_hbd_supply (PXS) have been seeded; uses the genesis median feed.
+    update_virtual_supply();
+
+#if defined(IS_TEST_NET) || defined(HIVE_CONVERTER_ICEBERG_PLUGIN_ENABLED)
     // issue initial token supply to balance of first miner
     if( HIVE_INIT_SUPPLY != 0 || HIVE_HBD_INIT_SUPPLY != 0 )
     {
@@ -414,15 +456,6 @@ void database::init_genesis()
       update_virtual_supply();
     }
 #else
-    // Seed the feed history with an initial median price so conversions
-    // work before witnesses have published enough feeds. Rate: 1 PXS = 102 PIXA.
-    create< feed_history_object >( [&]( feed_history_object& o )
-    {
-      o.current_median_history = price( asset( 1000, HBD_SYMBOL ), asset( 102000, HIVE_SYMBOL ) );
-      o.market_median_history = o.current_median_history;
-      o.current_min_history = o.current_median_history;
-      o.current_max_history = o.current_median_history;
-    });
     FC_ASSERT( HIVE_INIT_SUPPLY == 0 && HIVE_HBD_INIT_SUPPLY == 0, "Wrong configuration" );
       // for mainnet these values must be 0, mirrornet should be compatible
 #endif
@@ -435,6 +468,9 @@ void database::init_genesis()
     {
       FC_TODO( "Copied from witness_schedule.cpp, do we want to abstract this to a separate function?" );
       wso.current_shuffled_witnesses[0] = HIVE_INIT_MINER_NAME;
+      // Seed median to match initminer's genesis override so account creation
+      // is free from block 1, before the first witness-schedule recomputation.
+      wso.median_props.account_creation_fee = asset( 0, HIVE_SYMBOL );
       util::rd_system_params account_subsidy_system_params;
       account_subsidy_system_params.resource_unit = HIVE_ACCOUNT_SUBSIDY_PRECISION;
       account_subsidy_system_params.decay_per_time_unit_denom_shift = HIVE_RD_DECAY_DENOM_SHIFT;

@@ -79,7 +79,7 @@ SHELL ["/bin/bash", "-c"]
 # Get everything from cwd as sources to be built.
 COPY --chown=hived:users . /home/hived/source
 
-RUN <<-EOF
+RUN --mount=type=cache,target=/home/hived_admin/build,uid=2000,gid=100,sharing=locked <<-EOF
   set -e
 
   # If SCCACHE_REDIS is empty, unset it so sccache uses local disk cache
@@ -92,12 +92,14 @@ RUN <<-EOF
   sudo mkdir -p "${INSTALLATION_DIR}"
   sudo chown hived:users "${INSTALLATION_DIR}"
 
+  # Reuses the cached build directory across rebuilds so ninja can do
+  # incremental compilation. --clean-after-build intentionally dropped;
+  # keeping the .o/.a files is the whole point of the cache mount.
   ./source/${HIVE_SUBDIR}/scripts/build.sh --source-dir="./source/${HIVE_SUBDIR}" --binary-dir="./build" \
   --cmake-arg="-DBUILD_HIVE_TESTNET=${BUILD_HIVE_TESTNET}" \
   --cmake-arg="-DHIVE_CONVERTER_BUILD=${HIVE_CONVERTER_BUILD}" \
   --cmake-arg="-DHIVE_LINT=${HIVE_LINT}" \
-  --flat-binary-directory="${INSTALLATION_DIR}" \
-  --clean-after-build
+  --flat-binary-directory="${INSTALLATION_DIR}"
 
   # Show sccache statistics to verify distributed caching is working
   if command -v sccache &> /dev/null; then

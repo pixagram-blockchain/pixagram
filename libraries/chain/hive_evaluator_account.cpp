@@ -138,7 +138,7 @@ const account_object& create_account( database& db, const account_name_type& nam
   }
   else
   {
-    recovery_account = &db.get_account( "steem" ); //not using find_account to make sure "steem" already exists
+    recovery_account = &db.get_account( HIVE_INIT_MINER_NAME ); //legacy pre-HF11 fallback; on Pixagram defaults to initminer rather than the locked-out steem account
   }
 
   int64_t rc_adjustment_from_fee = 0; // accounts created prior to HF20 have all RC related data set during HF20
