@@ -47,7 +47,9 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 
 #define HIVE_INIT_SUPPLY                      int64_t(0)
 #define HIVE_HBD_INIT_SUPPLY                  int64_t(0)
-#define HIVE_INITIAL_VESTING_PRICE            (hive::protocol::price( hive::protocol::VEST_asset( 1800 ), hive::protocol::HIVE_asset( 1000 ) ))
+// 1:1 in display units: VEST_asset(1000) raw = 0.001000 VESTS, HIVE_asset(1) raw = 0.001 HIVE.
+// Multiplication: amount_VESTS * 1 / 1000 yields raw HIVE = display HIVE = display VESTS.
+#define HIVE_INITIAL_VESTING_PRICE            (hive::protocol::price( hive::protocol::VEST_asset( 1000 ), hive::protocol::HIVE_asset( 1 ) ))
 
 #endif /// USE_ALTERNATE_CHAIN_ID
 
@@ -271,7 +273,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_PROPOSAL_FUND_PERCENT_HF21       (15*HIVE_1_PERCENT)
 
 #define HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS (fc::to_uint128(0,503600561838938636ull))
-#define HIVE_CONTENT_CONSTANT_HF21            (fc::to_uint128(0,200000000ull))
+#define HIVE_CONTENT_CONSTANT_HF21            (fc::to_uint128(0,2500ull))
 
 #define HIVE_MINER_PAY_PERCENT                (HIVE_1_PERCENT) // 1%
 #define HIVE_MAX_RATION_DECAY_RATE            (1000000)
@@ -475,8 +477,9 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 //note that old account is still considered a treasury (cannot be reused for other purposes), just all funds and actions are redirected to new one
 //DO NOT USE the following constants anywhere other than inside database::get_treasury_name()
 #define OBSOLETE_TREASURY_ACCOUNT             "steem.dao"
-#define NEW_HIVE_TREASURY_ACCOUNT             "pixa.fund"
-#define PIXA_ICO_ACCOUNT                      "pixa.ico"
+#define NEW_HIVE_TREASURY_ACCOUNT             "pixa.omnibus" //foundation
+#define PIXA_ICO_ACCOUNT                      "pixa.rex"     //Pixa Operations S.A. (Panama) - sells tokens
+#define PIXA_TEAM_ACCOUNT                     "pixa.team"    //team and advisors
 ///@}
 
 /// HIVE PROPOSAL SYSTEM support
