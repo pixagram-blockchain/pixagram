@@ -119,7 +119,7 @@ ARG GIT_LAST_LOG_MESSAGE
 ARG GIT_LAST_COMMITTER
 ARG GIT_LAST_COMMIT_DATE
 LABEL org.opencontainers.image.created="$BUILD_TIME"
-LABEL org.opencontainers.image.url="https://pixagram.io/"
+LABEL org.opencontainers.image.url="https://pixagram.com/"
 #LABEL org.opencontainers.image.documentation="https://gitlab.syncad.com/hive/hive"
 #LABEL org.opencontainers.image.source="https://gitlab.syncad.com/hive/hive"
 LABEL org.opencontainers.image.version="${VERSION}"

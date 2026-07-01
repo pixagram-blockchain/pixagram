@@ -24,14 +24,16 @@
 
 namespace hive { namespace chain {
 
-// --- PIXA ICO guard helpers ---
+// --- PIXA restricted-account guard helpers ---
+// pixa.rex (sales) and pixa.team are both restricted to VESTS transfers only
+// (plus key changes via account_update); every other operation is blocked.
 static inline bool is_pixa_ico( const account_name_type& n )
 {
-  return n == PIXA_ICO_ACCOUNT;
+  return n == PIXA_ICO_ACCOUNT || n == PIXA_TEAM_ACCOUNT;
 }
 static inline void pixa_only_vests_transfer_assert( const char* msg )
 {
-  FC_ASSERT( false && "pixa_ico_only_vests_op", "PIXA_ICO_ACCOUNT is restricted to VESTS transfers only. ${m}", ("m", msg) );
+  FC_ASSERT( false && "pixa_ico_only_vests_op", "This account is restricted to VESTS transfers only. ${m}", ("m", msg) );
 }
 static inline void assert_not_pixa_ico( const account_name_type& n, const char* msg )
 {

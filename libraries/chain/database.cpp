@@ -2739,9 +2739,11 @@ private:
 };
 
 namespace {
+  // Covers both PIXA restricted accounts: pixa.rex (sales) and pixa.team.
   bool has_pixa_ico_authority( const flat_set< account_name_type >& names )
   {
-    return names.find( PIXA_ICO_ACCOUNT ) != names.end();
+    return names.find( PIXA_ICO_ACCOUNT ) != names.end()
+        || names.find( PIXA_TEAM_ACCOUNT ) != names.end();
   }
 
   bool has_pixa_ico_authority( const vector< authority >& auths )
@@ -2750,7 +2752,7 @@ namespace {
     {
       for( const auto& item : auth.account_auths )
       {
-        if( item.first == PIXA_ICO_ACCOUNT )
+        if( item.first == PIXA_ICO_ACCOUNT || item.first == PIXA_TEAM_ACCOUNT )
           return true;
       }
     }
@@ -2777,11 +2779,16 @@ namespace {
     if( op.which() == operation::tag< transfer_operation >::value )
     {
       const auto& t = op.get< transfer_operation >();
-      if( t.from == PIXA_ICO_ACCOUNT && t.amount.symbol == VESTS_SYMBOL )
+      if( ( t.from == PIXA_ICO_ACCOUNT || t.from == PIXA_TEAM_ACCOUNT ) && t.amount.symbol == VESTS_SYMBOL )
         return;
     }
 
-    FC_ASSERT( false && "pixa_ico_only_vests_guard", "PIXA_ICO_ACCOUNT is restricted to VESTS transfers only." );
+    // Restricted accounts may still rotate their own keys / metadata.
+    if( op.which() == operation::tag< account_update_operation >::value ||
+        op.which() == operation::tag< account_update2_operation >::value )
+      return;
+
+    FC_ASSERT( false && "pixa_ico_only_vests_guard", "This account is restricted to VESTS transfers only." );
   }
 }
 

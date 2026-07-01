@@ -244,18 +244,44 @@ void database::init_genesis()
     //public_key_type      pixa_multisig_key3 = get_pixa_multisig_public_key( "pixa-multisig-key-3", PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR );
     //#endif
     //authority            pixa_multisig_authority = make_three_of_three_authority( pixa_multisig_key1, pixa_multisig_key2, pixa_multisig_key3 );
-    authority            pixa_genesis_authority;
-    pixa_genesis_authority.weight_threshold = 1;
-    pixa_genesis_authority.add_authority( init_public_key, 1 );
+    // Pixa genesis 3-of-3 multisig authorities: each account is controlled by
+    // three independent signers and all three signatures are required
+    // (weight_threshold == 3). The memo key is a single key (not consensus)
+    // taken from signer 1 of each account.
+    const auto make_3of3 = []( const char* k1, const char* k2, const char* k3 )
+    {
+      authority a;
+      a.weight_threshold = 3;
+      a.add_authority( public_key_type( k1 ), 1 );
+      a.add_authority( public_key_type( k2 ), 1 );
+      a.add_authority( public_key_type( k3 ), 1 );
+      return a;
+    };
 
-    create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME);
+    const char* const shared_owner   = "PIX6qJvwdeDeJDm5Ptrt9BY2eYAZf4aEvz9XVHh6Cftf662BJuxj1";
+    const char* const shared_active  = "PIX5C2PUgkcCKqKF9qnjpdDN7W81WFBQJ8fztovKagxfNY1J2Wq4f";
+    const char* const shared_posting = "PIX5rfoYqxrbrP6N5CtuKYxkGzBgPkoxPncQ7in2U79295SkKNYzF";
+
+    // pixa.rex (sales) = signer A + signer C + shared 3rd signer (3-of-3)
+    const authority       rex_owner    = make_3of3( "PIX7shSDjmHEh92k7HpQYbybkFTADWmEXRDKoif7Jvb5iF5jEHaYU", "PIX7Lt6S6P8HdsEfqNcrBTP3bFh1YzYe56vwob5jbzUNeeMCuT9C3", shared_owner );
+    const authority       rex_active   = make_3of3( "PIX7gjCNL1in3wGegHNyotNBoGRNLwsvikR8RP9CnZ31vJwZeWfBQ", "PIX83xNxX2U8dBaN5PPDwHGh9u1Zxtto8XhhC9Vw94XexMjqmHzvP", shared_active );
+    const authority       rex_posting  = make_3of3( "PIX5txMcE2dixT9P9KyYKpA1SekdxohKerLfCHfveEnRtN3UUoY87", "PIX6dF1d6S2ecPU6H78Et9UrxtjaytzbCnG8388cCHFdrCkK9p5W6", shared_posting );
+    const public_key_type rex_memo(  "PIX7Ayd2fuB5jZiRgTSYrnPtyHLcbnjcRroyrLkz583f25Mg6HDjZ" );
+
+    // pixa.team (team & advisors) = signer B + signer D + shared 3rd signer (3-of-3)
+    const authority       team_owner   = make_3of3( "PIX83ovWsjRHfv6etHrCzhL9G2y5erPfR9hu1HrmM1Kovkt5M4L3g", "PIX8gnbap2sVBeqKB1pVpY8jKuQzWDsKQGntqk9X7HFtiBsqUVLCt", shared_owner );
+    const authority       team_active  = make_3of3( "PIX8T5ojvK68jskmpCcCCz8vZkdkZSXBcfui8TgZWR8DwLWdwkrp1", "PIX66rqGuYEX191c3rJZgmzrn6oYvoGMYGxpfeEYibZbsL6rNv5YF", shared_active );
+    const authority       team_posting = make_3of3( "PIX6tzxK4jmrqwycqKiC8o1dDWzYE9TxdpNsXzxSrrSzstKpkQcSw", "PIX6KWCvi5VoegJSEMYsBf8H1HTQGNa9VAxmaB83ErzebBd8q6Cvw", shared_posting );
+    const public_key_type team_memo( "PIX7UTD895dL6n9DsZYkCHtKmSEzNX2ZEQ7V5adYC7VaKjznnrCEz" );
+
+    create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME, rex_memo );
 
     create< account_authority_object >( [&]( account_authority_object& auth )
     {
       auth.account = PIXA_ICO_ACCOUNT;
-      auth.owner = pixa_genesis_authority;
-      auth.active = pixa_genesis_authority;
-      auth.posting = pixa_genesis_authority;
+      auth.owner = rex_owner;
+      auth.active = rex_active;
+      auth.posting = rex_posting;
     });
 
     create< account_object >( HIVE_MINER_ACCOUNT, HIVE_GENESIS_TIME );
@@ -299,13 +325,13 @@ void database::init_genesis()
       auth.posting.weight_threshold = 1;
     } );
 
-    create< account_object >( PIXA_TEAM_ACCOUNT, HIVE_GENESIS_TIME );
+    create< account_object >( PIXA_TEAM_ACCOUNT, HIVE_GENESIS_TIME, team_memo );
     create< account_authority_object >([&](account_authority_object& auth)
     {
       auth.account = PIXA_TEAM_ACCOUNT;
-      auth.owner = pixa_genesis_authority;
-      auth.active = pixa_genesis_authority;
-      auth.posting = pixa_genesis_authority;
+      auth.owner = team_owner;
+      auth.active = team_active;
+      auth.posting = team_posting;
     } );
 
     create< account_object >( HIVE_TEMP_ACCOUNT, HIVE_GENESIS_TIME );
@@ -369,7 +395,7 @@ void database::init_genesis()
     }
 
     const auto& dgpo = create< dynamic_global_property_object >( HIVE_INIT_MINER_NAME );
-    const VEST_asset ico_vests( asset( 50000000000000ll, VESTS_SYMBOL ) );    // 50 M PP for pixa.rex (sales)
+    const VEST_asset ico_vests( asset( 75000000000000ll, VESTS_SYMBOL ) );    // 75 M PP for pixa.rex (sales)
     const VEST_asset team_vests( asset( 25000000000000ll, VESTS_SYMBOL ) );   // 25 M PP for pixa.team
     const HBD_asset  omnibus_hbd( asset( 245098039ll, HBD_SYMBOL ) );         // ~245 098 PXS = 25 M PIXA-equivalent of 25 M VESTS (1:1 vesting price) at genesis median 1 PXS = 102 PIXA
     const HIVE_asset ico_fund = ico_vests * HIVE_INITIAL_VESTING_PRICE;
