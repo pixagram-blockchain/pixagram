@@ -54,7 +54,7 @@ WORKDIR /home/hived
 # This image includes: build toolchain, sccache, Pythons 3.8 - 3.14, glibc 2.28, Docker CLI, hived user
 FROM ${CI_BASE_IMAGE} AS build
 
-ARG BUILD_HIVE_TESTNET=ON
+ARG BUILD_HIVE_TESTNET=OFF
 ENV BUILD_HIVE_TESTNET=${BUILD_HIVE_TESTNET}
 
 ARG HIVE_CONVERTER_BUILD=OFF
