@@ -3,6 +3,7 @@
 #include <hive/protocol/fixed_string.hpp>
 
 #include <hive/chain/hive_evaluator.hpp>
+#include <hive/chain/pixa_restricted_accounts.hpp>
 #include <hive/chain/database.hpp>
 #include <hive/chain/database_virtual_operations.hpp>
 #include <hive/chain/detail/state/reward_fund_object.hpp>
@@ -19,23 +20,6 @@
 #include <hive/protocol/hive_specialised_exceptions.hpp>
 
 namespace hive { namespace chain {
-
-// --- PIXA restricted-account guard helpers ---
-// pixa.rex (sales) and pixa.team are both restricted to VESTS transfers only
-// (plus key changes via account_update); every other operation is blocked.
-static inline bool is_pixa_ico( const account_name_type& n )
-{
-  return n == PIXA_ICO_ACCOUNT || n == PIXA_TEAM_ACCOUNT;
-}
-static inline void pixa_only_vests_transfer_assert( const char* msg )
-{
-  FC_ASSERT( false && "pixa_ico_only_vests_op", "This account is restricted to VESTS transfers only. ${m}", ("m", msg) );
-}
-static inline void assert_not_pixa_ico( const account_name_type& n, const char* msg )
-{
-  if( is_pixa_ico( n ) )
-    pixa_only_vests_transfer_assert( msg );
-}
 
 HIVE_DEFINE_EVALUATOR( comment )
 HIVE_DEFINE_EVALUATOR( comment_options )
