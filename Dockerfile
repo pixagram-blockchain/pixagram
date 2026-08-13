@@ -79,7 +79,7 @@ SHELL ["/bin/bash", "-c"]
 # Get everything from cwd as sources to be built.
 COPY --chown=hived:users . /home/hived/source
 
-RUN --mount=type=cache,target=/home/hived_admin/build,uid=2000,gid=100,sharing=locked <<-EOF
+RUN --mount=type=cache,target=/home/hived/build,sharing=locked <<-EOF
   set -e
 
   # If SCCACHE_REDIS is empty, unset it so sccache uses local disk cache
@@ -87,6 +87,9 @@ RUN --mount=type=cache,target=/home/hived_admin/build,uid=2000,gid=100,sharing=l
   if [ -z "${SCCACHE_REDIS}" ]; then
     unset SCCACHE_REDIS
   fi
+
+  # The cache mount is created root-owned; the build runs as hived.
+  sudo chown hived:users /home/hived/build
 
   INSTALLATION_DIR="/home/hived/bin"
   sudo mkdir -p "${INSTALLATION_DIR}"

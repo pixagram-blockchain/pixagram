@@ -50,7 +50,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_HBD_INIT_SUPPLY                  int64_t(0)
 // 1:1 in display units: VEST_asset(1000) raw = 0.001000 VESTS, HIVE_asset(1) raw = 0.001 HIVE.
 // Multiplication: amount_VESTS * 1 / 1000 yields raw HIVE = display HIVE = display VESTS.
-#define HIVE_INITIAL_VESTING_PRICE            (hive::protocol::price( hive::protocol::VEST_asset( 1000 ), hive::protocol::HIVE_asset( 1 ) ))
+#define HIVE_INITIAL_VESTING_PRICE            (hive::protocol::VEST_price( 1000, 1 ))
 
 #endif /// USE_ALTERNATE_CHAIN_ID
 

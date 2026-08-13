@@ -616,53 +616,72 @@ BOOST_AUTO_TEST_CASE( verify_account_authority_test )
 
 BOOST_AUTO_TEST_CASE( pixa_genesis_accounts_test )
 { try {
-  const auto pixa_multisig_key1 = generate_private_key( "pixa-multisig-key-1" );
-  const auto pixa_multisig_key2 = generate_private_key( "pixa-multisig-key-2" );
-  const auto pixa_multisig_key3 = generate_private_key( "pixa-multisig-key-3" );
-  const authority pixa_multisig_authority( 3,
-    pixa_multisig_key1.get_public_key(), 1,
-    pixa_multisig_key2.get_public_key(), 1,
-    pixa_multisig_key3.get_public_key(), 1 );
+  const auto accounts = database_api->find_accounts(
+    { { PIXA_ICO_ACCOUNT, PIXA_TEAM_ACCOUNT, NEW_HIVE_TREASURY_ACCOUNT }, true } );
+  BOOST_REQUIRE_EQUAL( accounts.accounts.size(), 3u );
 
-  const auto accounts = database_api->find_accounts( { { PIXA_ICO_ACCOUNT, NEW_HIVE_TREASURY_ACCOUNT }, true } );
-  BOOST_REQUIRE_EQUAL( accounts.accounts.size(), 2u );
-
-  const auto& pixa_ico = accounts.accounts.at( 0 );
-  const auto& pixa_fund = accounts.accounts.at( 1 );
-
-  BOOST_REQUIRE_EQUAL( pixa_ico.name, PIXA_ICO_ACCOUNT );
-  BOOST_REQUIRE_EQUAL( pixa_ico.vesting_shares, asset( 50000000000000ll, VESTS_SYMBOL ) );
-  BOOST_REQUIRE_EQUAL( pixa_ico.owner, pixa_multisig_authority );
-  BOOST_REQUIRE_EQUAL( pixa_ico.active, pixa_multisig_authority );
-  BOOST_REQUIRE_EQUAL( pixa_ico.posting, pixa_multisig_authority );
-
-  BOOST_REQUIRE_EQUAL( pixa_fund.name, NEW_HIVE_TREASURY_ACCOUNT );
-  BOOST_REQUIRE_EQUAL( pixa_fund.vesting_shares, asset( 25000000000000ll, VESTS_SYMBOL ) );
-  BOOST_REQUIRE_EQUAL( pixa_fund.owner, pixa_multisig_authority );
-  BOOST_REQUIRE_EQUAL( pixa_fund.active, pixa_multisig_authority );
-  BOOST_REQUIRE_EQUAL( pixa_fund.posting, pixa_multisig_authority );
-
-  const flat_set< public_key_type > all_keys = {
-    pixa_multisig_key1.get_public_key(),
-    pixa_multisig_key2.get_public_key(),
-    pixa_multisig_key3.get_public_key()
-  };
-  const flat_set< public_key_type > missing_one_key = {
-    pixa_multisig_key1.get_public_key(),
-    pixa_multisig_key2.get_public_key()
-  };
-
-  const auto check_account = [&]( const account_name_type& account )
+  const auto find = [&]( const account_name_type& name ) -> const auto&
   {
-    for( const auto level : { authority_level::active, authority_level::owner, authority_level::posting } )
+    const auto it = std::find_if( accounts.accounts.begin(), accounts.accounts.end(),
+      [&]( const auto& a ) { return a.name == name; } );
+    BOOST_REQUIRE( it != accounts.accounts.end() );
+    return *it;
+  };
+
+  const auto& pixa_rex = find( PIXA_ICO_ACCOUNT );
+  const auto& pixa_team = find( PIXA_TEAM_ACCOUNT );
+  const auto& treasury = find( NEW_HIVE_TREASURY_ACCOUNT );
+
+  BOOST_REQUIRE_EQUAL( pixa_rex.vesting_shares, VEST_asset( 75000000000000ll ) );
+  BOOST_REQUIRE_EQUAL( pixa_team.vesting_shares, VEST_asset( 25000000000000ll ) );
+
+  // Treasury holds liquid PXS only - VESTS would be locked unspendable by HF21.
+  BOOST_REQUIRE_EQUAL( treasury.hbd_balance, HBD_asset( 245098039ll ) );
+  BOOST_REQUIRE_EQUAL( treasury.vesting_shares, VEST_asset( 0 ) );
+
+  // Both allocation accounts are 3-of-3 multisig on every authority level.
+  const auto check_3of3 = [&]( const authority& auth )
+  {
+    BOOST_REQUIRE_EQUAL( auth.weight_threshold, 3u );
+    BOOST_REQUIRE_EQUAL( auth.key_auths.size(), 3u );
+    BOOST_REQUIRE( auth.account_auths.empty() );
+    for( const auto& key_auth : auth.key_auths )
+      BOOST_REQUIRE_EQUAL( key_auth.second, 1u );
+  };
+
+  const auto check_account = [&]( const auto& account )
+  {
+    for( const auto& auth : { account.owner, account.active, account.posting } )
+      check_3of3( auth );
+
+    // All three signatures required: the full key set validates, any two do not.
+    const auto keys_of = [&]( const authority& auth )
     {
-      BOOST_CHECK( database_api->verify_account_authority( { account, all_keys, level } ).valid );
-      BOOST_CHECK( not database_api->verify_account_authority( { account, missing_one_key, level } ).valid );
+      flat_set< public_key_type > keys;
+      for( const auto& key_auth : auth.key_auths )
+        keys.insert( key_auth.first );
+      return keys;
+    };
+
+    const std::pair< authority_level, authority > levels[] = {
+      { authority_level::owner, account.owner },
+      { authority_level::active, account.active },
+      { authority_level::posting, account.posting }
+    };
+
+    for( const auto& level : levels )
+    {
+      auto all_keys = keys_of( level.second );
+      BOOST_CHECK( database_api->verify_account_authority( { account.name, all_keys, level.first } ).valid );
+
+      auto missing_one_key = all_keys;
+      missing_one_key.erase( missing_one_key.begin() );
+      BOOST_CHECK( not database_api->verify_account_authority( { account.name, missing_one_key, level.first } ).valid );
     }
   };
 
-  check_account( PIXA_ICO_ACCOUNT );
-  check_account( NEW_HIVE_TREASURY_ACCOUNT );
+  check_account( pixa_rex );
+  check_account( pixa_team );
 
   validate_database();
 } FC_LOG_AND_RETHROW() }
@@ -699,19 +718,26 @@ BOOST_AUTO_TEST_CASE( pixa_genesis_dgpo_accounting_test )
 { try {
   const auto gpo = db->get_dynamic_global_properties();
 
-  const VEST_asset ico_vests( asset( 50000000000000ll, VESTS_SYMBOL ) );
-  const VEST_asset fund_vests( asset( 25000000000000ll, VESTS_SYMBOL ) );
+  const VEST_asset ico_vests( 75000000000000ll );
+  const VEST_asset team_vests( 25000000000000ll );
+  const HBD_asset  omnibus_hbd( 245098039ll );
   const HIVE_asset ico_fund = ico_vests * HIVE_INITIAL_VESTING_PRICE;
-  const HIVE_asset fund_fund = fund_vests * HIVE_INITIAL_VESTING_PRICE;
-  const auto expected_total_vesting_shares = asset( HIVE_INITIAL_VESTING, HIVE_SYMBOL ) * HIVE_INITIAL_VESTING_PRICE + ico_vests + fund_vests;
-  const auto expected_total_vesting_fund_hive = asset( HIVE_INITIAL_VESTING, HIVE_SYMBOL ) + ico_fund + fund_fund;
-  const auto expected_current_supply = asset( INITIAL_TEST_SUPPLY, HIVE_SYMBOL ) + ico_fund + fund_fund;
-  const auto expected_current_hbd_supply = asset( HBD_INITIAL_TEST_SUPPLY, HBD_SYMBOL );
-  const auto expected_virtual_supply = expected_current_supply + expected_current_hbd_supply * price( asset( 1, HBD_SYMBOL ), asset( 1, HIVE_SYMBOL ) );
+  const HIVE_asset team_fund = team_vests * HIVE_INITIAL_VESTING_PRICE;
+
+  const HIVE_asset to_vest( HIVE_INITIAL_VESTING );
+  const VEST_asset initial_vests( to_vest * HIVE_INITIAL_VESTING_PRICE );
+
+  const auto expected_total_vesting_shares = initial_vests + ico_vests + team_vests;
+  const auto expected_total_vesting_fund_hive = to_vest + ico_fund + team_fund;
+  const auto expected_current_supply = INITIAL_TEST_SUPPLY + ico_fund + team_fund;
+  const auto expected_current_hbd_supply = HBD_INITIAL_TEST_SUPPLY + omnibus_hbd;
+  const auto expected_virtual_supply = expected_current_supply
+    + expected_current_hbd_supply * db->get_feed_history().current_median_history;
 
   BOOST_REQUIRE_EQUAL( gpo.total_vesting_shares, expected_total_vesting_shares );
   BOOST_REQUIRE_EQUAL( gpo.total_vesting_fund_hive, expected_total_vesting_fund_hive );
   BOOST_REQUIRE_EQUAL( gpo.current_supply, expected_current_supply );
+  BOOST_REQUIRE_EQUAL( gpo.current_hbd_supply, expected_current_hbd_supply );
   BOOST_REQUIRE_EQUAL( gpo.virtual_supply, expected_virtual_supply );
 } FC_LOG_AND_RETHROW() }
 

@@ -23,6 +23,7 @@
 #include <limits>
 
 namespace hive { namespace chain {
+  using fc::uint128_t;
 
 // --- PIXA restricted-account guard helpers ---
 // pixa.rex (sales) and pixa.team are both restricted to VESTS transfers only
@@ -56,7 +57,6 @@ static inline void assert_not_pixa_ico( const authority& auth, const char* msg )
       pixa_only_vests_transfer_assert( msg );
   }
 }
-  using fc::uint128_t;
 
 HIVE_DEFINE_EVALUATOR( witness_update )
 HIVE_DEFINE_EVALUATOR( witness_set_properties )

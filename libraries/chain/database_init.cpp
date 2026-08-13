@@ -231,19 +231,6 @@ void database::init_genesis()
 
     // Create blockchain accounts
     public_key_type      init_public_key(HIVE_INIT_PUBLIC_KEY);
-// TODO(real-mainnet): re-enable 3-of-3 multisig for pixa.ico / pixa.fund by
-    // uncommenting this block (and the helpers at the top of the file) and
-    // replacing the init-key authority assignments below with pixa_multisig_authority.
-    //#ifdef IS_TEST_NET
-    //public_key_type      pixa_multisig_key1 = get_pixa_multisig_public_key( "pixa-multisig-key-1", nullptr );
-    //public_key_type      pixa_multisig_key2 = get_pixa_multisig_public_key( "pixa-multisig-key-2", nullptr );
-    //public_key_type      pixa_multisig_key3 = get_pixa_multisig_public_key( "pixa-multisig-key-3", nullptr );
-    //#else
-    //public_key_type      pixa_multisig_key1 = get_pixa_multisig_public_key( "pixa-multisig-key-1", PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR );
-    //public_key_type      pixa_multisig_key2 = get_pixa_multisig_public_key( "pixa-multisig-key-2", PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR );
-    //public_key_type      pixa_multisig_key3 = get_pixa_multisig_public_key( "pixa-multisig-key-3", PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR );
-    //#endif
-    //authority            pixa_multisig_authority = make_three_of_three_authority( pixa_multisig_key1, pixa_multisig_key2, pixa_multisig_key3 );
     // Pixa genesis 3-of-3 multisig authorities: each account is controlled by
     // three independent signers and all three signatures are required
     // (weight_threshold == 3). The memo key is a single key (not consensus)
@@ -366,7 +353,7 @@ void database::init_genesis()
         // HIVE_MIN_ACCOUNT_CREATION_FEE validation; once witnesses come
         // online and call witness_set_properties_operation any new fee they
         // publish must satisfy that minimum.
-        w.props.account_creation_fee = asset( 0, HIVE_SYMBOL );
+        w.props.account_creation_fee = HIVE_asset( 0 );
       } );
     };
 
@@ -442,7 +429,7 @@ void database::init_genesis()
     // PIXA-equivalent for conversions before witnesses publish their feeds.
     create< feed_history_object >( [&]( feed_history_object& o )
     {
-      o.current_median_history = price( asset( 1000, HBD_SYMBOL ), asset( 102000, HIVE_SYMBOL ) );
+      o.current_median_history = HBD_price( 1000, 102000 );
       o.market_median_history = o.current_median_history;
       o.current_min_history = o.current_median_history;
       o.current_max_history = o.current_median_history;
@@ -496,7 +483,7 @@ void database::init_genesis()
       wso.current_shuffled_witnesses[0] = HIVE_INIT_MINER_NAME;
       // Seed median to match initminer's genesis override so account creation
       // is free from block 1, before the first witness-schedule recomputation.
-      wso.median_props.account_creation_fee = asset( 0, HIVE_SYMBOL );
+      wso.median_props.account_creation_fee = HIVE_asset( 0 );
       util::rd_system_params account_subsidy_system_params;
       account_subsidy_system_params.resource_unit = HIVE_ACCOUNT_SUBSIDY_PRECISION;
       account_subsidy_system_params.decay_per_time_unit_denom_shift = HIVE_RD_DECAY_DENOM_SHIFT;
