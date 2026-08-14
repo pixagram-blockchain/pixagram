@@ -2,7 +2,7 @@ name: "CodeQL"
 
 on:
   push:
-    branches: [ master, develop, g-maintenance ]
+    branches: [ main ]
     paths-ignore:
       - '**/*.md'
       - '**/*.txt'
@@ -23,7 +23,7 @@ jobs:
         language: [ 'cpp' ]
 
     runs-on: ${{ matrix.os }}
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/main'
         
     steps:
     - name: Checkout repository
