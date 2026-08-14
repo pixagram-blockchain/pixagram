@@ -109,7 +109,7 @@ def prepare_blocklog_with_comments_and_votes(output_block_log_directory: Path) -
             witness_name,
             "http://url.html",
             tt.Account(witness_name).public_key,
-            {"account_creation_fee": tt.Asset.Test(3), "maximum_block_size": 2097152, "hbd_interest_rate": 1000},
+            {"account_creation_fee": tt.Asset.Test(3), "maximum_block_size": 2097152, "hbd_interest_rate": 0},
             broadcast=False,
         )
         init_node.api.network_broadcast.broadcast_transaction(trx=trx)

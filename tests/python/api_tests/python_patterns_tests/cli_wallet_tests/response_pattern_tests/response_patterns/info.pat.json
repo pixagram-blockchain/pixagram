@@ -12,7 +12,7 @@
   "downvote_pool_percent": 0,
   "early_voting_seconds": 0,
   "hardfork_version": "0.13.0",
-  "hbd_interest_rate": 1000,
+  "hbd_interest_rate": 0,
   "hbd_print_rate": 10000,
   "hbd_start_percent": 200,
   "hbd_stop_percent": 500,

@@ -50,7 +50,7 @@ void new_chain_banner( const chain::database& db )
     "********************************\n"
     "*                              *\n"
     "*   ------- NEW CHAIN ------   *\n"
-    "*   -   Welcome to Hive!   -   *\n"
+    "*   -   Welcome to Pixagram!   -   *\n"
     "*   ------------------------   *\n"
     "*                              *\n"
     "********************************\n");

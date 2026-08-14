@@ -187,7 +187,12 @@ void database::apply_hardfork( uint32_t hardfork )
   switch( hardfork )
   {
     case HIVE_HARDFORK_0_1:
-      perform_vesting_share_split( 1000000 );
+      // Pre-mainnet genesis uses post-HF0_1 VESTS precision, so the historical
+      // 1_000_000x share split would (a) overflow at Pixagram's genesis VESTS
+      // amounts and (b) rescale beyond the intended token supply. Apply with
+      // magnitude 1 to preserve the side effects (sets total_reward_shares2 = 0
+      // and touches vesting_withdraw_rate) without rescaling balances.
+      perform_vesting_share_split( 1 );
       break;
     case HIVE_HARDFORK_0_2:
       retally_witness_votes();
@@ -421,6 +426,7 @@ void database::apply_hardfork( uint32_t hardfork )
       {
         gpo.proposal_fund_percent = HIVE_PROPOSAL_FUND_PERCENT_HF21;
         gpo.content_reward_percent = HIVE_CONTENT_REWARD_PERCENT_HF21;
+        gpo.vesting_reward_percent = 0;
         gpo.downvote_pool_percent = HIVE_DOWNVOTE_POOL_PERCENT_HF21;
         gpo.reverse_auction_seconds = HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF21;
       });
@@ -439,7 +445,7 @@ void database::apply_hardfork( uint32_t hardfork )
 
       modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
       {
-        rfo.percent_curation_rewards = 50 * HIVE_1_PERCENT;
+        rfo.percent_curation_rewards = 40 * HIVE_1_PERCENT;
         rfo.author_reward_curve = convergent_linear;
         rfo.curation_reward_curve = convergent_square_root;
         rfo.content_constant = HIVE_CONTENT_CONSTANT_HF21;
@@ -482,8 +488,9 @@ void database::apply_hardfork( uint32_t hardfork )
     {
       modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
       {
-        rfo.curation_reward_curve = linear;
-        rfo.author_reward_curve   = linear;
+        rfo.author_reward_curve = convergent_linear;
+        rfo.curation_reward_curve = convergent_square_root;
+        rfo.content_constant = HIVE_CONTENT_CONSTANT_HF21;
       });
       modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {

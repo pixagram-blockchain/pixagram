@@ -1709,12 +1709,23 @@ BOOST_AUTO_TEST_CASE( hbd_interest )
 
     BOOST_TEST_MESSAGE( "Testing interest over smallest interest period" );
 
-    convert_operation op;
     signed_transaction tx;
+    auto assert_no_new_interest_operations = [&]( size_t ops_before )
+    {
+      const auto& op_idx = db->get_index< hive::plugins::account_history_rocksdb::volatile_operation_index, by_id >();
+      size_t idx_pos = 0;
+      for( auto it = op_idx.begin(); it != op_idx.end(); ++it, ++idx_pos )
+      {
+        if( idx_pos < ops_before )
+          continue;
+
+        const operation op = fc::raw::unpack_from_buffer< operation >( it->serialized_op );
+        BOOST_REQUIRE_NE( op.which(), operation::tag< interest_operation >::value );
+      }
+    };
 
     issue_funds( "alice", HBD_asset( 31'903 ) );
 
-    auto start_time = db->get_account( "alice" ).hbd_seconds_last_update;
     auto alice_hbd = get_hbd_balance( "alice" );
 
     generate_blocks( db->head_block_time() + fc::seconds( HIVE_HBD_INTEREST_COMPOUND_INTERVAL_SEC ), true );
@@ -1726,29 +1737,18 @@ BOOST_AUTO_TEST_CASE( hbd_interest )
     tx.operations.clear();
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
     tx.operations.push_back( transfer );
+    const auto ops_before_first_trigger = db->get_index< hive::plugins::account_history_rocksdb::volatile_operation_index, by_id >().size();
     push_transaction( tx, alice_private_key );
+    assert_no_new_interest_operations( ops_before_first_trigger );
 
     auto& gpo = db->get_dynamic_global_properties();
-    BOOST_REQUIRE_GT( gpo.get_hbd_interest_rate(), 0 );
-
-    if(db->has_hardfork(HIVE_HARDFORK_1_25))
-    {
-      /// After HF 25 only HBD held on savings should get interest
-      BOOST_REQUIRE_EQUAL( get_hbd_balance("alice"), alice_hbd - HBD_asset( 1'000 ) );
-    }
-    else
-    {
-      auto interest_op = get_last_operations( 1 )[0].get< interest_operation >();
-      BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), alice_hbd - HBD_asset( 1'000 ) + HBD_asset( fc::uint128_to_int64( ( ( ( uint128_t( alice_hbd.amount.value ) * ( db->head_block_time() - start_time ).to_seconds() ) / HIVE_SECONDS_PER_YEAR ) * gpo.get_hbd_interest_rate() ) / HIVE_100_PERCENT ) ) );
-      BOOST_REQUIRE_EQUAL( interest_op.owner, "alice" );
-      BOOST_REQUIRE_EQUAL( interest_op.interest, get_hbd_balance( "alice" ) - ( alice_hbd - HBD_asset( 1'000 ) ) );
-    }
+    BOOST_REQUIRE_EQUAL( gpo.get_hbd_interest_rate(), 0 );
+    BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), alice_hbd - HBD_asset( 1'000 ) );
 
     validate_database();
 
     BOOST_TEST_MESSAGE( "Testing interest under interest period" );
 
-    start_time = db->get_account( "alice" ).hbd_seconds_last_update;
     alice_hbd = get_hbd_balance( "alice" );
 
     generate_blocks( db->head_block_time() + fc::seconds( HIVE_HBD_INTEREST_COMPOUND_INTERVAL_SEC / 2 ), true );
@@ -1756,14 +1756,15 @@ BOOST_AUTO_TEST_CASE( hbd_interest )
     tx.operations.clear();
     tx.operations.push_back( transfer );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
+    const auto ops_before_second_trigger = db->get_index< hive::plugins::account_history_rocksdb::volatile_operation_index, by_id >().size();
     push_transaction( tx, alice_private_key );
+    assert_no_new_interest_operations( ops_before_second_trigger );
 
+    BOOST_REQUIRE_EQUAL( gpo.get_hbd_interest_rate(), 0 );
     BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), alice_hbd - HBD_asset( 1'000 ) );
     validate_database();
 
-    auto alice_coindays = uint128_t( alice_hbd.amount.value ) * ( db->head_block_time() - start_time ).to_seconds();
     alice_hbd = get_hbd_balance( "alice" );
-    start_time = db->get_account( "alice" ).hbd_seconds_last_update;
 
     BOOST_TEST_MESSAGE( "Testing longer interest period" );
 
@@ -1772,17 +1773,12 @@ BOOST_AUTO_TEST_CASE( hbd_interest )
     tx.operations.clear();
     tx.operations.push_back( transfer );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
+    const auto ops_before_third_trigger = db->get_index< hive::plugins::account_history_rocksdb::volatile_operation_index, by_id >().size();
     push_transaction( tx, alice_private_key );
+    assert_no_new_interest_operations( ops_before_third_trigger );
 
-    if(db->has_hardfork(HIVE_HARDFORK_1_25))
-    {
-      /// After HF 25 only HBD held on savings should get interest
-      BOOST_REQUIRE_EQUAL( get_hbd_balance("alice"), alice_hbd - HBD_asset( 1'000 ) );
-    }
-    else
-    {
-      BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), alice_hbd - HBD_asset( 1'000 ) + HBD_asset( fc::uint128_to_int64( ( ( ( uint128_t( alice_hbd.amount.value ) * ( db->head_block_time() - start_time ).to_seconds() + alice_coindays ) / HIVE_SECONDS_PER_YEAR ) * gpo.get_hbd_interest_rate() ) / HIVE_100_PERCENT ) ) );
-    }
+    BOOST_REQUIRE_EQUAL( gpo.get_hbd_interest_rate(), 0 );
+    BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), alice_hbd - HBD_asset( 1'000 ) );
 
     validate_database();
   }
@@ -1791,8 +1787,6 @@ BOOST_AUTO_TEST_CASE( hbd_interest )
 
 BOOST_AUTO_TEST_CASE(hbd_savings_interest)
 {
-  using hive::protocol::legacy_asset;
-
   try
   {
     ACTORS((alice))
@@ -1810,7 +1804,6 @@ BOOST_AUTO_TEST_CASE(hbd_savings_interest)
 
     issue_funds("alice", HBD_asset( 3'000 ));
 
-    auto start_time = db->get_account("alice").savings_hbd_seconds_last_update;
     auto alice_hbd = get_hbd_balance("alice");
 
     BOOST_REQUIRE_EQUAL( alice_hbd, HBD_asset( 3'000 ) );
@@ -1823,57 +1816,65 @@ BOOST_AUTO_TEST_CASE(hbd_savings_interest)
     BOOST_REQUIRE_EQUAL( get_hbd_balance("alice"), HBD_asset( 3'000 ) );
 
     transfer_to_savings_operation transfer;
+    auto assert_no_new_interest_operations = [&]( size_t ops_before )
+    {
+      const auto& op_idx = db->get_index< hive::plugins::account_history_rocksdb::volatile_operation_index, by_id >();
+      size_t idx_pos = 0;
+      for( auto it = op_idx.begin(); it != op_idx.end(); ++it, ++idx_pos )
+      {
+        if( idx_pos < ops_before )
+          continue;
+
+        const operation op = fc::raw::unpack_from_buffer< operation >( it->serialized_op );
+        BOOST_REQUIRE_NE( op.which(), operation::tag< interest_operation >::value );
+      }
+    };
+
     transfer.to = "alice";
     transfer.from = "alice";
     transfer.memo = "Interest trigger";
     transfer.amount = ASSET("1.000 TBD");
 
     /// This op is needed to trigger interest payment...
+    const auto ops_before_first_trigger = db->get_index< hive::plugins::account_history_rocksdb::volatile_operation_index, by_id >().size();
     push_transaction(transfer, alice_private_key);
     generate_block();
+    assert_no_new_interest_operations( ops_before_first_trigger );
 
     auto& gpo = db->get_dynamic_global_properties();
-    BOOST_REQUIRE_GT( gpo.get_hbd_interest_rate(), 0 );
-
-    BOOST_TEST_MESSAGE( "Alice HDB saving balance: " + asset_to_string( get_hbd_savings("alice") ) );
-
-    auto interest_op = get_last_operations(2)[1].get< interest_operation >();
-    BOOST_REQUIRE_EQUAL( get_hbd_savings("alice"), alice_hbd_savings + HBD_asset( 1'000 )
-      + HBD_asset( fc::uint128_to_int64((((uint128_t(alice_hbd_savings.amount.value) * (db->head_block_time() - start_time).to_seconds()) / HIVE_SECONDS_PER_YEAR) * gpo.get_hbd_interest_rate()) / HIVE_100_PERCENT)) );
-    BOOST_REQUIRE_EQUAL( interest_op.owner, "alice" );
-    BOOST_REQUIRE_EQUAL( interest_op.interest, get_hbd_savings("alice") - (alice_hbd_savings + HBD_asset( 1'000 )) );
-
-    BOOST_TEST_MESSAGE( "Alice got HDB saving interests: " + asset_to_string( interest_op.interest ) );
+    BOOST_REQUIRE_EQUAL( gpo.get_hbd_interest_rate(), 0 );
+    BOOST_REQUIRE_EQUAL( get_hbd_savings( "alice" ), alice_hbd_savings + HBD_asset( 1'000 ) );
 
     validate_database();
 
     BOOST_TEST_MESSAGE("Testing savings interest under interest period");
 
-    start_time = db->get_account("alice").savings_hbd_seconds_last_update;
     alice_hbd_savings = get_hbd_savings("alice");
 
     generate_blocks(db->head_block_time() + fc::seconds(HIVE_HBD_INTEREST_COMPOUND_INTERVAL_SEC / 2), true);
     
     /// This op is needed to trigger interest payment...
+    const auto ops_before_second_trigger = db->get_index< hive::plugins::account_history_rocksdb::volatile_operation_index, by_id >().size();
     push_transaction(transfer, alice_private_key);
+    assert_no_new_interest_operations( ops_before_second_trigger );
 
     BOOST_REQUIRE_EQUAL( get_hbd_savings("alice"), alice_hbd_savings + HBD_asset( 1'000 ) );
 
     validate_database();
 
-    auto alice_coindays = uint128_t(alice_hbd_savings.amount.value) * (db->head_block_time() - start_time).to_seconds();
     alice_hbd_savings = get_hbd_savings("alice");
-    start_time = db->get_account("alice").savings_hbd_seconds_last_update;
 
     BOOST_TEST_MESSAGE("Testing savings interest for longer period");
 
     generate_blocks(db->head_block_time() + fc::seconds((HIVE_HBD_INTEREST_COMPOUND_INTERVAL_SEC * 7) / 3), true);
     
     /// This op is needed to trigger interest payment...
+    const auto ops_before_third_trigger = db->get_index< hive::plugins::account_history_rocksdb::volatile_operation_index, by_id >().size();
     push_transaction(transfer, alice_private_key);
+    assert_no_new_interest_operations( ops_before_third_trigger );
 
-    BOOST_REQUIRE_EQUAL( get_hbd_savings("alice"), alice_hbd_savings + HBD_asset( 1'000 )
-      + HBD_asset( fc::uint128_to_int64((((uint128_t(alice_hbd_savings.amount.value) * (db->head_block_time() - start_time).to_seconds() + alice_coindays) / HIVE_SECONDS_PER_YEAR) * gpo.get_hbd_interest_rate()) / HIVE_100_PERCENT)) );
+    BOOST_REQUIRE_EQUAL( gpo.get_hbd_interest_rate(), 0 );
+    BOOST_REQUIRE_EQUAL( get_hbd_savings( "alice" ), alice_hbd_savings + HBD_asset( 1'000 ) );
 
     validate_database();
   }

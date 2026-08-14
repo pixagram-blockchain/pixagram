@@ -51,7 +51,7 @@ void update_global_witness_properties( database& db, const witness_schedule_obje
   db.modify( dgpo, [&]( dynamic_global_property_object& _dgpo )
   {
     _dgpo.maximum_block_size = wso.median_props.maximum_block_size;
-    _dgpo.hbd_interest_rate = wso.median_props.hbd_interest_rate;
+    _dgpo.hbd_interest_rate = 0;
   } );
 } FC_CAPTURE_AND_RETHROW() }
 
@@ -77,13 +77,6 @@ void update_median_witness_props(database& db, const witness_schedule_object& ws
     return a->props.maximum_block_size < b->props.maximum_block_size;
   } );
   uint32_t median_maximum_block_size = active[active.size()/2]->props.maximum_block_size;
-
-  /// sort them by hbd_interest_rate
-  std::sort( active.begin(), active.end(), [&]( const witness_object* a, const witness_object* b )
-  {
-    return a->props.hbd_interest_rate < b->props.hbd_interest_rate;
-  } );
-  uint16_t median_hbd_interest_rate = active[active.size()/2]->props.hbd_interest_rate;
 
   /// sort them by account_subsidy_budget
   std::sort( active.begin(), active.end(), [&]( const witness_object* a, const witness_object* b )
@@ -131,7 +124,7 @@ void update_median_witness_props(database& db, const witness_schedule_object& ws
   {
     _wso.median_props.account_creation_fee       = median_account_creation_fee;
     _wso.median_props.maximum_block_size         = median_maximum_block_size;
-    _wso.median_props.hbd_interest_rate          = median_hbd_interest_rate;
+    _wso.median_props.hbd_interest_rate          = 0;
     _wso.median_props.account_subsidy_budget     = median_account_subsidy_budget;
     _wso.median_props.account_subsidy_decay      = median_account_subsidy_decay;
 

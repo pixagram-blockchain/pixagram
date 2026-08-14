@@ -31,7 +31,7 @@ def test_try_to_sign_witness_block_approve_operation_by_non_witness_authority(
     prepared_node: tt.InitNode, wallet: tt.Wallet, alice: WitnessAccount
 ) -> None:
     # test case 1.2 from https://gitlab.syncad.com/hive/hive/-/issues/645
-    alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 1000)
+    alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 0)
     alice.check_if_account_has_witness_role(expected_witness_role=True)
     alice.rc_manabar.update()
     # alice's block signing key have to be changed for using different authority (all alice's keys rn are the same)

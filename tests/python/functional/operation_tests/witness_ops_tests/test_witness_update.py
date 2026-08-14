@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from beekeepy.exceptions import ErrorInResponseError
 
 import test_tools as tt
 
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 @pytest.mark.testnet()
 def test_become_a_witness(prepared_node: tt.InitNode, wallet: tt.Wallet, alice: WitnessAccount) -> None:
     # test case 1.1 from https://gitlab.syncad.com/hive/hive/-/issues/634
-    trx = alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 1000)
+    trx = alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 0)
     alice.assert_if_rc_current_mana_was_reduced(trx)
     alice.check_if_account_has_witness_role(expected_witness_role=True)
 
@@ -21,7 +22,7 @@ def test_become_a_witness(prepared_node: tt.InitNode, wallet: tt.Wallet, alice: 
 @pytest.mark.testnet()
 def test_resign_from_witness_role(prepared_node: tt.InitNode, wallet: tt.Wallet, alice: WitnessAccount) -> None:
     # test case 2.1 from https://gitlab.syncad.com/hive/hive/-/issues/634
-    trx = alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 1000)
+    trx = alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 0)
     alice.assert_if_rc_current_mana_was_reduced(trx)
     alice.check_if_account_has_witness_role(expected_witness_role=True)
     trx = alice.resign_from_witness_role()
@@ -34,13 +35,13 @@ def test_resign_from_witness_role(prepared_node: tt.InitNode, wallet: tt.Wallet,
     [
         {"new_url": "http://new-url.html"},
         {"new_maximum_block_size": 131070},
-        {"new_hbd_interest_rate": 1111},
+        {"new_hbd_interest_rate": 0},
         {"new_block_signing_key": tt.Account("alice-new").public_key},
         {"new_account_creation_fee": tt.Asset.Test(31)},
         {
             "new_url": "http://new-url.html",
             "new_maximum_block_size": 131070,
-            "new_hbd_interest_rate": 1111,
+            "new_hbd_interest_rate": 0,
             "new_block_signing_key": tt.Account("alice-new").public_key,
             "new_account_creation_fee": tt.Asset.Test(31),
         },
@@ -51,8 +52,31 @@ def test_update_witness_properties(
     prepared_node: tt.InitNode, wallet: tt.Wallet, alice: WitnessAccount, update_witness_properties_args: dict
 ) -> None:
     # test cases 3.1 - 3.5 from https://gitlab.syncad.com/hive/hive/-/issues/634
-    trx = alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 1000)
+    trx = alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 0)
     alice.assert_if_rc_current_mana_was_reduced(trx)
     alice.check_if_account_has_witness_role(expected_witness_role=True)
     trx = alice.update_witness_properties(**update_witness_properties_args)
     alice.assert_if_rc_current_mana_was_reduced(trx)
+
+
+@pytest.mark.testnet()
+def test_become_a_witness_rejects_non_zero_hbd_interest_rate(
+    prepared_node: tt.InitNode, wallet: tt.Wallet, alice: WitnessAccount
+) -> None:
+    with pytest.raises(ErrorInResponseError) as error:
+        alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 1)
+
+    assert "hbd_interest_rate is fixed at 0" in error.value.error
+
+
+@pytest.mark.testnet()
+def test_update_witness_properties_rejects_non_zero_hbd_interest_rate(
+    prepared_node: tt.InitNode, wallet: tt.Wallet, alice: WitnessAccount
+) -> None:
+    alice.become_witness("http://url.html", tt.Asset.Test(28), 131072, 0)
+    alice.check_if_account_has_witness_role(expected_witness_role=True)
+
+    with pytest.raises(ErrorInResponseError) as error:
+        alice.update_witness_properties(new_hbd_interest_rate=1)
+
+    assert "hbd_interest_rate is fixed at 0" in error.value.error

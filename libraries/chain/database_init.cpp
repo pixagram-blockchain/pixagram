@@ -24,6 +24,21 @@
 
 #include "database_impl.hpp"
 
+// TODO(real-mainnet): re-enable 3-of-3 multisig for pixa.ico / pixa.fund by
+// uncommenting this guard, the helpers below, and the multisig branch in
+// init_genesis(), plus the matching CMakeLists.txt block.
+//#ifndef IS_TEST_NET
+//#ifndef PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#ifndef PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#ifndef PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#endif
+
 namespace hive { namespace chain {
 
 void database::initialize_evaluators()
@@ -174,6 +189,31 @@ void database::init_schema()
   return;*/
 }
 
+// TODO(real-mainnet): re-enable these helpers together with the multisig branch
+// in init_genesis() to restore 3-of-3 multisig for pixa.ico / pixa.fund.
+//namespace {
+//
+//public_key_type get_pixa_multisig_public_key( const char* test_seed, const char* configured_key )
+//{
+//#ifdef IS_TEST_NET
+//  return fc::ecc::private_key::regenerate( fc::sha256::hash( std::string( test_seed ) ) ).get_public_key();
+//#else
+//  return public_key_type( configured_key );
+//#endif
+//}
+//
+//authority make_three_of_three_authority( const public_key_type& key1, const public_key_type& key2, const public_key_type& key3 )
+//{
+//  authority auth;
+//  auth.weight_threshold = 3;
+//  auth.add_authority( key1, 1 );
+//  auth.add_authority( key2, 1 );
+//  auth.add_authority( key3, 1 );
+//  return auth;
+//}
+//
+//} // anonymous namespace
+
 void database::init_genesis()
 {
   try
@@ -191,6 +231,45 @@ void database::init_genesis()
 
     // Create blockchain accounts
     public_key_type      init_public_key(HIVE_INIT_PUBLIC_KEY);
+    // Pixa genesis 3-of-3 multisig authorities: each account is controlled by
+    // three independent signers and all three signatures are required
+    // (weight_threshold == 3). The memo key is a single key (not consensus)
+    // taken from signer 1 of each account.
+    const auto make_3of3 = []( const char* k1, const char* k2, const char* k3 )
+    {
+      authority a;
+      a.weight_threshold = 3;
+      a.add_authority( public_key_type( k1 ), 1 );
+      a.add_authority( public_key_type( k2 ), 1 );
+      a.add_authority( public_key_type( k3 ), 1 );
+      return a;
+    };
+
+    const char* const shared_owner   = "PIX6qJvwdeDeJDm5Ptrt9BY2eYAZf4aEvz9XVHh6Cftf662BJuxj1";
+    const char* const shared_active  = "PIX5C2PUgkcCKqKF9qnjpdDN7W81WFBQJ8fztovKagxfNY1J2Wq4f";
+    const char* const shared_posting = "PIX5rfoYqxrbrP6N5CtuKYxkGzBgPkoxPncQ7in2U79295SkKNYzF";
+
+    // pixa.rex (sales) = signer A + signer C + shared 3rd signer (3-of-3)
+    const authority       rex_owner    = make_3of3( "PIX7shSDjmHEh92k7HpQYbybkFTADWmEXRDKoif7Jvb5iF5jEHaYU", "PIX7Lt6S6P8HdsEfqNcrBTP3bFh1YzYe56vwob5jbzUNeeMCuT9C3", shared_owner );
+    const authority       rex_active   = make_3of3( "PIX7gjCNL1in3wGegHNyotNBoGRNLwsvikR8RP9CnZ31vJwZeWfBQ", "PIX83xNxX2U8dBaN5PPDwHGh9u1Zxtto8XhhC9Vw94XexMjqmHzvP", shared_active );
+    const authority       rex_posting  = make_3of3( "PIX5txMcE2dixT9P9KyYKpA1SekdxohKerLfCHfveEnRtN3UUoY87", "PIX6dF1d6S2ecPU6H78Et9UrxtjaytzbCnG8388cCHFdrCkK9p5W6", shared_posting );
+    const public_key_type rex_memo(  "PIX7Ayd2fuB5jZiRgTSYrnPtyHLcbnjcRroyrLkz583f25Mg6HDjZ" );
+
+    // pixa.team (team & advisors) = signer B + signer D + shared 3rd signer (3-of-3)
+    const authority       team_owner   = make_3of3( "PIX83ovWsjRHfv6etHrCzhL9G2y5erPfR9hu1HrmM1Kovkt5M4L3g", "PIX8gnbap2sVBeqKB1pVpY8jKuQzWDsKQGntqk9X7HFtiBsqUVLCt", shared_owner );
+    const authority       team_active  = make_3of3( "PIX8T5ojvK68jskmpCcCCz8vZkdkZSXBcfui8TgZWR8DwLWdwkrp1", "PIX66rqGuYEX191c3rJZgmzrn6oYvoGMYGxpfeEYibZbsL6rNv5YF", shared_active );
+    const authority       team_posting = make_3of3( "PIX6tzxK4jmrqwycqKiC8o1dDWzYE9TxdpNsXzxSrrSzstKpkQcSw", "PIX6KWCvi5VoegJSEMYsBf8H1HTQGNa9VAxmaB83ErzebBd8q6Cvw", shared_posting );
+    const public_key_type team_memo( "PIX7UTD895dL6n9DsZYkCHtKmSEzNX2ZEQ7V5adYC7VaKjznnrCEz" );
+
+    create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME, rex_memo );
+
+    create< account_authority_object >( [&]( account_authority_object& auth )
+    {
+      auth.account = PIXA_ICO_ACCOUNT;
+      auth.owner = rex_owner;
+      auth.active = rex_active;
+      auth.posting = rex_posting;
+    });
 
     create< account_object >( HIVE_MINER_ACCOUNT, HIVE_GENESIS_TIME );
     create< account_authority_object >( [&]( account_authority_object& auth )
@@ -219,15 +298,28 @@ void database::init_genesis()
       auth.active.weight_threshold = 1;
       auth.posting.weight_threshold = 1;
     } );
+#endif
+
     create< account_object >( NEW_HIVE_TREASURY_ACCOUNT, HIVE_GENESIS_TIME );
     create< account_authority_object >([&](account_authority_object& auth)
     {
+      // No keys: HF21 (which fires at block 1 on a fresh chain) calls
+      // lock_account() on the treasury and wipes any authority we'd set
+      // here. Funds leave the treasury only via DAO proposal payments.
       auth.account = NEW_HIVE_TREASURY_ACCOUNT;
       auth.owner.weight_threshold = 1;
       auth.active.weight_threshold = 1;
       auth.posting.weight_threshold = 1;
     } );
-#endif
+
+    create< account_object >( PIXA_TEAM_ACCOUNT, HIVE_GENESIS_TIME, team_memo );
+    create< account_authority_object >([&](account_authority_object& auth)
+    {
+      auth.account = PIXA_TEAM_ACCOUNT;
+      auth.owner = team_owner;
+      auth.active = team_active;
+      auth.posting = team_posting;
+    } );
 
     create< account_object >( HIVE_TEMP_ACCOUNT, HIVE_GENESIS_TIME );
     create< account_authority_object >( [&]( account_authority_object& auth )
@@ -256,6 +348,12 @@ void database::init_genesis()
         w.owner        = account_name;
         w.signing_key  = init_public_key;
         w.schedule = witness_object::miner;
+        // Genesis-only override: account creation is free at launch so the
+        // network can bootstrap. Direct chainbase write bypasses the global
+        // HIVE_MIN_ACCOUNT_CREATION_FEE validation; once witnesses come
+        // online and call witness_set_properties_operation any new fee they
+        // publish must satisfy that minimum.
+        w.props.account_creation_fee = HIVE_asset( 0 );
       } );
     };
 
@@ -267,32 +365,57 @@ void database::init_genesis()
       init_witness( witness );
 #endif
 
-    // "steem" account was used as system account even before it was officially created; that bug
-    // didn't have effect on the blockchain by chance, but caused problems during optimizations, so
-    // now the account is officially created as system account (with all the same features it had -
-    // there is not much difference between mined account and genesis one, just creation time);
-    // the following transaction mined that account officially:
-    // https://hiveblocks.com/tx/46ddcba847f2297d13e32be07d72d15c530a7271
+    // The "steem" account exists as a placeholder so legacy code paths that
+    // call get_account("steem") (e.g. the pre-HF11 recovery_account fallback)
+    // don't fail at lookup. Pixagram is not a Steem fork; the account has no
+    // keys and its authority is unsatisfiable so nobody can ever sign as it.
     {
       const char* STEEM_ACCOUNT_NAME = "steem";
-      auto STEEM_PUBLIC_KEY = public_key_type( HIVE_STEEM_PUBLIC_KEY_STR );
-      create< account_object >( STEEM_ACCOUNT_NAME, STEEM_PUBLIC_KEY, HIVE_GENESIS_TIME, HIVE_GENESIS_TIME, true, nullptr, true, VEST_asset( 0 ) );
+      create< account_object >( STEEM_ACCOUNT_NAME, public_key_type(), HIVE_GENESIS_TIME, HIVE_GENESIS_TIME, true, nullptr, true, VEST_asset( 0 ) );
       create< account_authority_object >( [&]( account_authority_object& auth )
       {
         auth.account = STEEM_ACCOUNT_NAME;
-#ifdef USE_ALTERNATE_CHAIN_ID
-        auth.owner = authority( 1, STEEM_PUBLIC_KEY, 1, init_public_key, 1 );
-#else
-        auth.owner = authority( 1, STEEM_PUBLIC_KEY, 1 );
-#endif
-        auth.active = auth.owner;
-        auth.posting = auth.owner;
+        auth.owner.weight_threshold = 1;
+        auth.active.weight_threshold = 1;
+        auth.posting.weight_threshold = 1;
       } );
     }
 
     const auto& dgpo = create< dynamic_global_property_object >( HIVE_INIT_MINER_NAME );
-    create< hardfork_property_object >( HIVE_GENESIS_TIME );
+    const VEST_asset ico_vests( asset( 75000000000000ll, VESTS_SYMBOL ) );    // 75 M PP for pixa.rex (sales)
+    const VEST_asset team_vests( asset( 25000000000000ll, VESTS_SYMBOL ) );   // 25 M PP for pixa.team
+    const HBD_asset  omnibus_hbd( asset( 245098039ll, HBD_SYMBOL ) );         // ~245 098 PXS = 25 M PIXA-equivalent of 25 M VESTS (1:1 vesting price) at genesis median 1 PXS = 102 PIXA
+    const HIVE_asset ico_fund = ico_vests * HIVE_INITIAL_VESTING_PRICE;
+    const HIVE_asset team_fund = team_vests * HIVE_INITIAL_VESTING_PRICE;
 
+    modify( get_account( PIXA_ICO_ACCOUNT ), [&]( account_object& a )
+    {
+      a.vesting_shares = ico_vests;
+    } );
+
+    modify( get_account( NEW_HIVE_TREASURY_ACCOUNT ), [&]( account_object& a )
+    {
+      // Treasury holds liquid PXS only - VESTS would be locked unspendable
+      // by HF21's lock_account, and the proposal payout pipeline draws
+      // exclusively from hbd_balance.
+      a.hbd_balance = omnibus_hbd;
+    } );
+
+    modify( get_account( PIXA_TEAM_ACCOUNT ), [&]( account_object& a )
+    {
+      a.vesting_shares = team_vests;
+    } );
+
+    modify( dgpo, [&]( dynamic_global_property_object& gpo )
+    {
+      gpo.total_vesting_shares += ico_vests + team_vests;
+      gpo.total_vesting_fund_hive += ico_fund + team_fund;
+      gpo.current_supply += ico_fund + team_fund;
+      gpo.current_hbd_supply += omnibus_hbd;
+    } );
+
+    // Seed feed history BEFORE update_virtual_supply (which reads it via
+    // get_feed_history to convert PXS -> PIXA-equivalent for virtual_supply).
 #if defined(IS_TEST_NET) || defined(HIVE_CONVERTER_ICEBERG_PLUGIN_ENABLED)
     create< feed_history_object >( [&]( feed_history_object& o )
     {
@@ -301,6 +424,27 @@ void database::init_genesis()
       o.current_min_history = o.current_median_history;
       o.current_max_history = o.current_median_history;
     } );
+#else
+    // Mainnet seed: 1 PXS = 102 PIXA so PXS-denominated allocations have a
+    // PIXA-equivalent for conversions before witnesses publish their feeds.
+    create< feed_history_object >( [&]( feed_history_object& o )
+    {
+      o.current_median_history = HBD_price( 1000, 102000 );
+      o.market_median_history = o.current_median_history;
+      o.current_min_history = o.current_median_history;
+      o.current_max_history = o.current_median_history;
+    });
+#endif
+
+    // Create hardfork_property_object BEFORE update_virtual_supply (which
+    // reads it via get_hardfork_property_object).
+    create< hardfork_property_object >( HIVE_GENESIS_TIME );
+
+    // Recompute virtual_supply now that current_supply (PIXA) and
+    // current_hbd_supply (PXS) have been seeded; uses the genesis median feed.
+    update_virtual_supply();
+
+#if defined(IS_TEST_NET) || defined(HIVE_CONVERTER_ICEBERG_PLUGIN_ENABLED)
     // issue initial token supply to balance of first miner
     if( HIVE_INIT_SUPPLY != 0 || HIVE_HBD_INIT_SUPPLY != 0 )
     {
@@ -325,8 +469,6 @@ void database::init_genesis()
       update_virtual_supply();
     }
 #else
-    // Nothing to do
-    create< feed_history_object >( [&]( feed_history_object& o ) {});
     FC_ASSERT( HIVE_INIT_SUPPLY == 0 && HIVE_HBD_INIT_SUPPLY == 0, "Wrong configuration" );
       // for mainnet these values must be 0, mirrornet should be compatible
 #endif
@@ -339,6 +481,9 @@ void database::init_genesis()
     {
       FC_TODO( "Copied from witness_schedule.cpp, do we want to abstract this to a separate function?" );
       wso.current_shuffled_witnesses[0] = HIVE_INIT_MINER_NAME;
+      // Seed median to match initminer's genesis override so account creation
+      // is free from block 1, before the first witness-schedule recomputation.
+      wso.median_props.account_creation_fee = HIVE_asset( 0 );
       util::rd_system_params account_subsidy_system_params;
       account_subsidy_system_params.resource_unit = HIVE_ACCOUNT_SUBSIDY_PRECISION;
       account_subsidy_system_params.decay_per_time_unit_denom_shift = HIVE_RD_DECAY_DENOM_SHIFT;

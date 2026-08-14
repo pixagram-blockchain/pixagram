@@ -242,7 +242,7 @@ namespace hive { namespace protocol {
   { try {
     validate_account_name( from );
     validate_account_name( to );
-    validate_asset_is_not_vesting(amount, "Transfer of vesting is not allowed.");
+    FC_ASSERT( amount.symbol.is_vesting() == false || from == PIXA_ICO_ACCOUNT || from == PIXA_TEAM_ACCOUNT, "Transfer of vesting is not allowed except from the ICO/team accounts." );
     validate_asset_greater_than_zero(amount, "Cannot transfer a negative amount (aka: stealing)");
     validate_string_max_size(memo, HIVE_MAX_MEMO_SIZE - 1, "Transfer memo is too large");
     validate_is_utf8(memo, "Transfer memo is not UTF8");
@@ -332,12 +332,7 @@ namespace hive { namespace protocol {
     {
       uint16_t hbd_interest_rate = 0u;
       fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
-      HIVE_PROTOCOL_NUMBER_ASSERT(
-        hbd_interest_rate >= 0 && "witness_set_properties_operation",
-        "hbd_interest_rate must be positive",
-        ("subject", hbd_interest_rate)
-      );
-      validate_number_in_100_percent_range(hbd_interest_rate, "hbd_interest_rate must not exceed 100%");
+      FC_ASSERT( hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
     }
 
     itr = props.find( "new_signing_key" );

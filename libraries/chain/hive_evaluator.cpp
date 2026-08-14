@@ -3,6 +3,7 @@
 #include <hive/protocol/fixed_string.hpp>
 
 #include <hive/chain/hive_evaluator.hpp>
+#include <hive/chain/pixa_restricted_accounts.hpp>
 #include <hive/chain/database.hpp>
 #include <hive/chain/database_virtual_operations.hpp>
 #include <hive/chain/custom_operation_interpreter.hpp>
@@ -24,6 +25,13 @@
 
 namespace hive { namespace chain {
   using fc::uint128_t;
+
+// The assertion tag below must exist exactly once in the chain library, so this
+// is the single out-of-line definition; every other user includes the header.
+void pixa_only_vests_transfer_assert( const char* msg )
+{
+  FC_ASSERT( false && "pixa_ico_only_vests_op", "This account is restricted to VESTS transfers only. ${m}", ("m", msg) );
+}
 
 HIVE_DEFINE_EVALUATOR( witness_update )
 HIVE_DEFINE_EVALUATOR( witness_set_properties )
@@ -56,7 +64,8 @@ void copy_legacy_chain_properties( chain_properties& dest, const legacy_chain_pr
 {
   dest.account_creation_fee = src.get_account_creation_fee();
   dest.maximum_block_size = src.maximum_block_size;
-  dest.hbd_interest_rate = src.hbd_interest_rate;
+  FC_ASSERT( src.hbd_interest_rate == 0, "hbd_interest_rate is fixed at 0" );
+  dest.hbd_interest_rate = 0;
 }
 
 void witness_update_evaluator::do_apply( const witness_update_operation& o )
@@ -147,11 +156,17 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
     fc::raw::unpack_from_vector( itr->second, props.maximum_block_size );
 
   itr = o.props.find( "sbd_interest_rate" );
-  if(itr == o.props.end() && _db.has_hardfork(HIVE_HARDFORK_1_24))
+  if( itr == o.props.end() && _db.has_hardfork( HIVE_HARDFORK_1_24 ) )
     itr = o.props.find( "hbd_interest_rate" );
+
   flags.hbd_interest_changed = itr != o.props.end();
   if( flags.hbd_interest_changed )
-    fc::raw::unpack_from_vector( itr->second, props.hbd_interest_rate );
+  {
+    uint16_t hbd_interest_rate = 0u;
+    fc::raw::unpack_from_vector( itr->second, hbd_interest_rate );
+    FC_ASSERT( hbd_interest_rate == 0ull, "hbd_interest_rate is fixed at 0" );
+    props.hbd_interest_rate = 0;
+  }
 
   itr = o.props.find( "account_subsidy_budget" );
   flags.account_subsidy_budget_changed = itr != o.props.end();
@@ -190,7 +205,10 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
     if( flags.max_block_changed )
       w.props.maximum_block_size = props.maximum_block_size;
     if( flags.hbd_interest_changed )
-      w.props.hbd_interest_rate = props.hbd_interest_rate;
+    {
+      w.props.hbd_interest_rate = 0;
+    }
+
     if( flags.account_subsidy_budget_changed )
       w.props.account_subsidy_budget = props.account_subsidy_budget;
     if( flags.account_subsidy_decay_changed )
@@ -209,6 +227,8 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
 
 void account_witness_proxy_evaluator::do_apply( const account_witness_proxy_operation& o )
 {
+  assert_not_pixa_ico( o.account, "(witness proxy not allowed)" );
+
   const auto& account = _db.get_account( o.account );
   HIVE_CHAIN_VOTING_ASSERT( account.can_vote && "Account has declined the ability to vote and cannot proxy votes.", o.account, "Account '${subject}' cannot proxy votes." );
   _db.modify( account, [&]( account_object& a) { a.update_governance_vote_expiration_ts(_db.head_block_time()); });
@@ -263,6 +283,8 @@ void account_witness_proxy_evaluator::do_apply( const account_witness_proxy_oper
 
 void account_witness_vote_evaluator::do_apply( const account_witness_vote_operation& o )
 {
+  assert_not_pixa_ico( o.account, "(witness vote not allowed)" );
+
   const auto& voter = _db.get_account( o.account );
   HIVE_CHAIN_STATE_ASSERT( !voter.has_proxy(), o.account, "A proxy is currently set, please clear the proxy before voting for a witness." );
   HIVE_CHAIN_VOTING_ASSERT( voter.can_vote && "Account has declined its voting rights.", o.account, "Account '${subject}' has declined voting rights." );
@@ -327,6 +349,8 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
 
 void custom_evaluator::do_apply( const custom_operation& o )
 {
+  assert_not_pixa_ico( o.required_auths, "(custom op not allowed)" );
+
   if( _db.has_hardfork( HIVE_HARDFORK_1_26_SOLIDIFY_OLD_SOFTFORKS ) ) // ab28c8e3a10d24f56476653d6a525e712e2e912e example tx with big op
   {
     HIVE_CHAIN_LIMIT_ASSERT( o.data.size() <= HIVE_CUSTOM_OP_DATA_MAX_LENGTH, o.data.size(),
@@ -336,6 +360,9 @@ void custom_evaluator::do_apply( const custom_operation& o )
 
 void custom_json_evaluator::do_apply( const custom_json_operation& o )
 {
+  assert_not_pixa_ico( o.required_auths, "(custom json op not allowed)" );
+  assert_not_pixa_ico( o.required_posting_auths, "(custom json op not allowed)" );
+
   using hive::protocol::details::truncation_controller;
 
   if( _db.has_hardfork( HIVE_HARDFORK_1_26_SOLIDIFY_OLD_SOFTFORKS ) ) // 803bcc0dae4d242e0a6539948d998a4410b19655 example tx of big json
@@ -375,6 +402,12 @@ void custom_json_evaluator::do_apply( const custom_json_operation& o )
 
 void custom_binary_evaluator::do_apply( const custom_binary_operation& o )
 {
+  assert_not_pixa_ico( o.required_owner_auths, "(custom binary op not allowed)" );
+  assert_not_pixa_ico( o.required_active_auths, "(custom binary op not allowed)" );
+  assert_not_pixa_ico( o.required_posting_auths, "(custom binary op not allowed)" );
+  for( const auto& auth : o.required_auths )
+    assert_not_pixa_ico( auth, "(custom binary op not allowed)" );
+
   HIVE_CHAIN_UNREACHABLE_CODE_ASSERT( false && "custom_binary_operation is disallowed", "Operation disallowed." ); //ABW: since no one used it in practice
     //it waits for potential redesign until it is reenabled
   HIVE_CHAIN_HARDFORK_ASSERT( _db.has_hardfork( HIVE_HARDFORK_0_14__317 ), "Operation not available until HF 14." );

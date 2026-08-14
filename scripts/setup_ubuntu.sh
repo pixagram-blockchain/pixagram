@@ -87,6 +87,10 @@ install_all_dev_packages() {
 }
 
 preconfigure_faketime() {
+  if [ "${SKIP_FAKETIME:-0}" = "1" ]; then
+    echo "Skipping faketime install (SKIP_FAKETIME=1)"
+    return
+  fi
   git clone --depth 1 --branch bw_timer_settime_fix https://gitlab.syncad.com/hive/faketime.git
   pushd faketime && CFLAGS="-O2 -DFAKE_STATELESS=1" make
 
@@ -190,6 +194,5 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-
 
 

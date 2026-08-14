@@ -3,6 +3,7 @@
 #include <hive/protocol/fixed_string.hpp>
 
 #include <hive/chain/hive_evaluator.hpp>
+#include <hive/chain/pixa_restricted_accounts.hpp>
 #include <hive/chain/database.hpp>
 #include <hive/chain/database_virtual_operations.hpp>
 #include <hive/chain/detail/state/reward_fund_object.hpp>
@@ -172,7 +173,10 @@ void comment_options_evaluator::do_apply( const comment_options_operation& o )
 }
 
 void comment_evaluator::do_apply( const comment_operation& o )
-{ try {
+{
+  if ( is_pixa_ico( o.author ) )
+    pixa_only_vests_transfer_assert("(comment not allowed)");
+  try {
   const auto& auth = _db.get_account( o.author ); /// prove it exists
 
   auto _comment = _db.find_comment( auth.get_id(), o.permlink );
@@ -852,7 +856,10 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
 }
 
 void vote_evaluator::do_apply( const vote_operation& o )
-{ try {
+{
+  if ( is_pixa_ico( o.voter ) )
+    pixa_only_vests_transfer_assert("(vote not allowed)");
+  try {
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
   {
     hf20_vote_evaluator( o, _db );

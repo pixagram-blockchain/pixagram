@@ -2,6 +2,7 @@
 
 #include <appbase/application.hpp>
 
+#include <hive/protocol/operations.hpp>
 #include <hive/protocol/transaction_util.hpp>
 #include <hive/protocol/hbd_interest.hpp>
 
@@ -78,6 +79,21 @@ long next_hf_time()
 
   return hfTime;
 }
+
+// TODO(real-mainnet): re-enable 3-of-3 multisig for pixa.ico / pixa.fund by
+// uncommenting this guard, the helpers below, and the multisig branch in
+// init_genesis(), plus the matching CMakeLists.txt block.
+//#ifndef IS_TEST_NET
+//#ifndef PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY1_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#ifndef PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY2_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#ifndef PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR
+//#error "Define PIXA_MULTISIG_KEY3_PUBLIC_KEY_STR for non-testnet builds"
+//#endif
+//#endif
 
 namespace hive { namespace chain {
 
@@ -2426,7 +2442,7 @@ try {
     }
   }
 
-  if( feeds.size() >= HIVE_MIN_FEEDS )
+  if( feeds.size() >= std::max<size_t>( 1, wso.num_scheduled_witnesses / 3 ) )
   {
     std::sort( feeds.begin(), feeds.end() );
     auto median_feed = feeds[feeds.size()/2];
@@ -2722,6 +2738,60 @@ private:
   const struct operation_notification** _storage = nullptr;
 };
 
+namespace {
+  // Covers both PIXA restricted accounts: pixa.rex (sales) and pixa.team.
+  bool has_pixa_ico_authority( const flat_set< account_name_type >& names )
+  {
+    return names.find( PIXA_ICO_ACCOUNT ) != names.end()
+        || names.find( PIXA_TEAM_ACCOUNT ) != names.end();
+  }
+
+  bool has_pixa_ico_authority( const vector< authority >& auths )
+  {
+    for( const auto& auth : auths )
+    {
+      for( const auto& item : auth.account_auths )
+      {
+        if( item.first == PIXA_ICO_ACCOUNT || item.first == PIXA_TEAM_ACCOUNT )
+          return true;
+      }
+    }
+    return false;
+  }
+
+  void assert_pixa_ico_operation_allowed( const operation& op )
+  {
+    flat_set< account_name_type > active;
+    flat_set< account_name_type > owner;
+    flat_set< account_name_type > posting;
+    flat_set< account_name_type > witness;
+    vector< authority > other;
+
+    hive::protocol::operation_get_required_authorities( op, active, owner, posting, witness, other );
+
+    if( !has_pixa_ico_authority( active ) &&
+        !has_pixa_ico_authority( owner ) &&
+        !has_pixa_ico_authority( posting ) &&
+        !has_pixa_ico_authority( witness ) &&
+        !has_pixa_ico_authority( other ) )
+      return;
+
+    if( op.which() == operation::tag< transfer_operation >::value )
+    {
+      const auto& t = op.get< transfer_operation >();
+      if( ( t.from == PIXA_ICO_ACCOUNT || t.from == PIXA_TEAM_ACCOUNT ) && t.amount.symbol == VESTS_SYMBOL )
+        return;
+    }
+
+    // Restricted accounts may still rotate their own keys / metadata.
+    if( op.which() == operation::tag< account_update_operation >::value ||
+        op.which() == operation::tag< account_update2_operation >::value )
+      return;
+
+    FC_ASSERT( false && "pixa_ico_only_vests_guard", "This account is restricted to VESTS transfers only." );
+  }
+}
+
 void database_impl::apply_operation(const operation& op)
 {
   operation_notification note = create_operation_notification( op );
@@ -2736,6 +2806,8 @@ void database_impl::apply_operation(const operation& op)
     name = _evaluator_registry.get_evaluator( op ).get_name( op );
     _self._benchmark_dumper.begin();
   }
+
+  assert_pixa_ico_operation_allowed( op );
 
   if( _self.has_hardfork( HIVE_HARDFORK_0_20 ) )
     _self.rc().handle_operation_discount< operation >( op );
@@ -3564,4 +3636,3 @@ database::node_status_t database::get_node_status()
 }
 
 } } //hive::chain
-

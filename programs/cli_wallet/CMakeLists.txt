@@ -13,8 +13,11 @@ endif()
 set_target_properties(cli_wallet PROPERTIES ENABLE_EXPORTS true)
 
 target_link_libraries( cli_wallet PRIVATE
-                        "-static-libstdc++ -static-libgcc"
                         graphene_net hive_chain hive_protocol hive_utilities hive_wallet condenser_api_plugin wallet_bridge_api_plugin fc ${CMAKE_DL_LIBS} ${PLATFORM_SPECIFIC_LIBS} )
+
+if( UNIX AND NOT APPLE )
+  target_link_options( cli_wallet PRIVATE -static-libstdc++ -static-libgcc )
+endif()
 
 if( CLANG_TIDY_EXE )
    set_target_properties(

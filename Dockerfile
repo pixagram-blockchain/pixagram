@@ -66,6 +66,9 @@ ENV HIVE_LINT=${HIVE_LINT}
 ARG HIVE_SUBDIR=.
 ENV HIVE_SUBDIR=${HIVE_SUBDIR}
 
+ARG HIVE_BUILD_JOBS
+ENV HIVE_BUILD_JOBS=${HIVE_BUILD_JOBS}
+
 ARG SCCACHE_REDIS=""
 ENV SCCACHE_REDIS=${SCCACHE_REDIS}
 
@@ -76,7 +79,7 @@ SHELL ["/bin/bash", "-c"]
 # Get everything from cwd as sources to be built.
 COPY --chown=hived:users . /home/hived/source
 
-RUN <<-EOF
+RUN --mount=type=cache,target=/home/hived/build,sharing=locked <<-EOF
   set -e
 
   # If SCCACHE_REDIS is empty, unset it so sccache uses local disk cache
@@ -85,16 +88,21 @@ RUN <<-EOF
     unset SCCACHE_REDIS
   fi
 
+  # The cache mount is created root-owned; the build runs as hived.
+  sudo chown hived:users /home/hived/build
+
   INSTALLATION_DIR="/home/hived/bin"
   sudo mkdir -p "${INSTALLATION_DIR}"
   sudo chown hived:users "${INSTALLATION_DIR}"
 
+  # Reuses the cached build directory across rebuilds so ninja can do
+  # incremental compilation. --clean-after-build intentionally dropped;
+  # keeping the .o/.a files is the whole point of the cache mount.
   ./source/${HIVE_SUBDIR}/scripts/build.sh --source-dir="./source/${HIVE_SUBDIR}" --binary-dir="./build" \
   --cmake-arg="-DBUILD_HIVE_TESTNET=${BUILD_HIVE_TESTNET}" \
   --cmake-arg="-DHIVE_CONVERTER_BUILD=${HIVE_CONVERTER_BUILD}" \
   --cmake-arg="-DHIVE_LINT=${HIVE_LINT}" \
-  --flat-binary-directory="${INSTALLATION_DIR}" \
-  --clean-after-build
+  --flat-binary-directory="${INSTALLATION_DIR}"
 
   # Show sccache statistics to verify distributed caching is working
   if command -v sccache &> /dev/null; then
@@ -114,14 +122,14 @@ ARG GIT_LAST_LOG_MESSAGE
 ARG GIT_LAST_COMMITTER
 ARG GIT_LAST_COMMIT_DATE
 LABEL org.opencontainers.image.created="$BUILD_TIME"
-LABEL org.opencontainers.image.url="https://hive.io/"
-LABEL org.opencontainers.image.documentation="https://gitlab.syncad.com/hive/hive"
-LABEL org.opencontainers.image.source="https://gitlab.syncad.com/hive/hive"
-#LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.url="https://pixagram.com/"
+#LABEL org.opencontainers.image.documentation="https://gitlab.syncad.com/hive/hive"
+#LABEL org.opencontainers.image.source="https://gitlab.syncad.com/hive/hive"
+LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="$GIT_COMMIT_SHA"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.ref.name="HIVE Daemon"
-LABEL org.opencontainers.image.title="Hive Daemon (hived) Image"
+LABEL org.opencontainers.image.ref.name="Pixagram Daemon"
+LABEL org.opencontainers.image.title="Pixagram Daemon (hived) Image"
 LABEL org.opencontainers.image.description="Runs hived instance. Contains various tools (including cli_wallet)"
 LABEL io.hive.image.branch="$GIT_CURRENT_BRANCH"
 LABEL io.hive.image.commit.log_message="$GIT_LAST_LOG_MESSAGE"

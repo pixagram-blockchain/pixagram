@@ -60,7 +60,7 @@
     },
     "account_subsidy_budget": 797,
     "account_subsidy_decay": 347321,
-    "hbd_interest_rate": 1000,
+    "hbd_interest_rate": 0,
     "maximum_block_size": 65536
   },
   "min_witness_account_subsidy_decay": 0,

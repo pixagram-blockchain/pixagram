@@ -18,7 +18,7 @@
     "account_creation_fee": "3.000 HIVE",
     "account_subsidy_budget": 797,
     "account_subsidy_decay": 347321,
-    "hbd_interest_rate": 1000,
+    "hbd_interest_rate": 0,
     "maximum_block_size": 65536
   },
   "running_version": "0.13.0",
