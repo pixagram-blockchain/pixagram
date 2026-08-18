@@ -245,21 +245,21 @@ void database::init_genesis()
       return a;
     };
 
-    const char* const shared_owner   = "PIX6qJvwdeDeJDm5Ptrt9BY2eYAZf4aEvz9XVHh6Cftf662BJuxj1";
-    const char* const shared_active  = "PIX5C2PUgkcCKqKF9qnjpdDN7W81WFBQJ8fztovKagxfNY1J2Wq4f";
-    const char* const shared_posting = "PIX5rfoYqxrbrP6N5CtuKYxkGzBgPkoxPncQ7in2U79295SkKNYzF";
+    const char* const shared_owner   = "PIX75hHsAAqhkmbr2pWbXn1vsvr3PRgyx6tHRJBpA5N1hp1Vthaco";
+    const char* const shared_active  = "PIX8G2M2bsDbNNHutc96sXSjB6RgwMi5a9dwYwFGqSFLsYy4D42B3";
+    const char* const shared_posting = "PIX8PXgrgPDFZV9xeZKhFpUk2eJCeh2qHNEtD1tgRXdJ7YYNxgrYN";
 
     // pixa.rex (sales) = signer A + signer C + shared 3rd signer (3-of-3)
-    const authority       rex_owner    = make_3of3( "PIX7shSDjmHEh92k7HpQYbybkFTADWmEXRDKoif7Jvb5iF5jEHaYU", "PIX7Lt6S6P8HdsEfqNcrBTP3bFh1YzYe56vwob5jbzUNeeMCuT9C3", shared_owner );
-    const authority       rex_active   = make_3of3( "PIX7gjCNL1in3wGegHNyotNBoGRNLwsvikR8RP9CnZ31vJwZeWfBQ", "PIX83xNxX2U8dBaN5PPDwHGh9u1Zxtto8XhhC9Vw94XexMjqmHzvP", shared_active );
-    const authority       rex_posting  = make_3of3( "PIX5txMcE2dixT9P9KyYKpA1SekdxohKerLfCHfveEnRtN3UUoY87", "PIX6dF1d6S2ecPU6H78Et9UrxtjaytzbCnG8388cCHFdrCkK9p5W6", shared_posting );
-    const public_key_type rex_memo(  "PIX7Ayd2fuB5jZiRgTSYrnPtyHLcbnjcRroyrLkz583f25Mg6HDjZ" );
+    const authority       rex_owner    = make_3of3( "PIX59byAgVv77TwmADzsbnu8FA6BqDN5bCNFbJC7x2nQnKiNMfgTv", "PIX7u8cqq22hHzKzi3hGnPEQxeYcvUxK9zu5pbqJPzeMXxt1JJScB", shared_owner );
+    const authority       rex_active   = make_3of3( "PIX83FkdNTduEweHBBp9ombdF6GZE1RTCNCno36TSv3KxtLHCMPsi", "PIX7hZGJvAmYhRkxz64n7hzVDf73sAMPgkNZSaKsCncW5m5yinyoK", shared_active );
+    const authority       rex_posting  = make_3of3( "PIX7qKJvBkMoAjqnt7CUsx7CSjvcHzTwBGXByeuiG6vb4AE532NHN", "PIX7DRsi6FyfPAYrtWWydqUb4eoSKt24pyKWGnS1qhGFcL6t1MhER", shared_posting );
+    const public_key_type rex_memo(  "PIX5kMDaZdiLqaE5gFDwE4ie9PGvXe1J9yDyezHhWei3qJE3GDS1j" );
 
     // pixa.team (team & advisors) = signer B + signer D + shared 3rd signer (3-of-3)
-    const authority       team_owner   = make_3of3( "PIX83ovWsjRHfv6etHrCzhL9G2y5erPfR9hu1HrmM1Kovkt5M4L3g", "PIX8gnbap2sVBeqKB1pVpY8jKuQzWDsKQGntqk9X7HFtiBsqUVLCt", shared_owner );
-    const authority       team_active  = make_3of3( "PIX8T5ojvK68jskmpCcCCz8vZkdkZSXBcfui8TgZWR8DwLWdwkrp1", "PIX66rqGuYEX191c3rJZgmzrn6oYvoGMYGxpfeEYibZbsL6rNv5YF", shared_active );
-    const authority       team_posting = make_3of3( "PIX6tzxK4jmrqwycqKiC8o1dDWzYE9TxdpNsXzxSrrSzstKpkQcSw", "PIX6KWCvi5VoegJSEMYsBf8H1HTQGNa9VAxmaB83ErzebBd8q6Cvw", shared_posting );
-    const public_key_type team_memo( "PIX7UTD895dL6n9DsZYkCHtKmSEzNX2ZEQ7V5adYC7VaKjznnrCEz" );
+    const authority       team_owner   = make_3of3( "PIX5xyaAasUNGsSgAFBjbhsAfNz3ouSxuGfTRjBKJLmrogp3kCsjN", "PIX7wer24ameAxo37KftBWuzaCMeRUybcVtYAokiEu2ksLdbmLtdK", shared_owner );
+    const authority       team_active  = make_3of3( "PIX6XNMz2C2smo5tzLfYziQpkz1e3apXQG4YHJBkRGm9426Kr6ZDD", "PIX7TMqA9JBDe9qYNLCvoaDyqGga1Yx8993o6U7aB2uSepGE2fnvt", shared_active );
+    const authority       team_posting = make_3of3( "PIX6D4SVPEf1YFUhK3gfq3u53Sfmy3GhTf8NvfUn8xuvQXiEbRnaM", "PIX5w8bqbjwvfypCYje6p8T4NjptRNwqJg2e2WuDUW9eyZWRqjHFc", shared_posting );
+    const public_key_type team_memo( "PIX7EoXL9gboyYtcrA1dPR6ydVzyUySSi9qetikKVMeQkdMzhDzzi" );
 
     create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME, rex_memo );
 
