@@ -232,7 +232,7 @@ void database::init_genesis()
     // Create blockchain accounts
     public_key_type      init_public_key(HIVE_INIT_PUBLIC_KEY);
     // Pixa genesis 3-of-3 multisig authorities: each account is controlled by
-    // three independent signers and all three signatures are required
+    // three independent signers (no key shared between accounts) and all three signatures are required
     // (weight_threshold == 3). The memo key is a single key (not consensus)
     // taken from signer 1 of each account.
     const auto make_3of3 = []( const char* k1, const char* k2, const char* k3 )
@@ -245,20 +245,25 @@ void database::init_genesis()
       return a;
     };
 
-    const char* const shared_owner   = "PIX75hHsAAqhkmbr2pWbXn1vsvr3PRgyx6tHRJBpA5N1hp1Vthaco";
-    const char* const shared_active  = "PIX8G2M2bsDbNNHutc96sXSjB6RgwMi5a9dwYwFGqSFLsYy4D42B3";
-    const char* const shared_posting = "PIX8PXgrgPDFZV9xeZKhFpUk2eJCeh2qHNEtD1tgRXdJ7YYNxgrYN";
+    // Third signer: an independent key set PER ACCOUNT (no key is shared between
+    // pixa.rex and pixa.team), matching how signers 1 and 2 are already split.
+    const char* const rex_third_owner    = "PIX7shxAh9SG6LxKpBUNQyaJedwd4mL6rzKSgVHxN1PXbU7RLBGB4";
+    const char* const rex_third_active   = "PIX6e7FArdMXzj9SyEUJ3EEmhAEZroxtGR5wdcpKNZPE1KJGoFyJL";
+    const char* const rex_third_posting  = "PIX7W5a5FBkFqM8oM6NmV6yF1VVJxLxRNFkQ8Coq6PyJR356HUPmG";
+    const char* const team_third_owner   = "PIX7iZ271detfswRoV6Mrvwf1o935a4JQq6J5TxGJpBp65yAKdWtP";
+    const char* const team_third_active  = "PIX8AAgFTrsTHNhsfot24g6FZbZbxudKjcqHokJvam9GEdcuwiyEi";
+    const char* const team_third_posting = "PIX5WGfVBxUfwCkXLA3yKCHDnFRzDD5ySE6QpqZRuJ8WN2MPd78b6";
 
-    // pixa.rex (sales) = signer A + signer C + shared 3rd signer (3-of-3)
-    const authority       rex_owner    = make_3of3( "PIX59byAgVv77TwmADzsbnu8FA6BqDN5bCNFbJC7x2nQnKiNMfgTv", "PIX7u8cqq22hHzKzi3hGnPEQxeYcvUxK9zu5pbqJPzeMXxt1JJScB", shared_owner );
-    const authority       rex_active   = make_3of3( "PIX83FkdNTduEweHBBp9ombdF6GZE1RTCNCno36TSv3KxtLHCMPsi", "PIX7hZGJvAmYhRkxz64n7hzVDf73sAMPgkNZSaKsCncW5m5yinyoK", shared_active );
-    const authority       rex_posting  = make_3of3( "PIX7qKJvBkMoAjqnt7CUsx7CSjvcHzTwBGXByeuiG6vb4AE532NHN", "PIX7DRsi6FyfPAYrtWWydqUb4eoSKt24pyKWGnS1qhGFcL6t1MhER", shared_posting );
+    // pixa.rex (sales) = matias + mathiew + rex third signer (3-of-3)
+    const authority       rex_owner    = make_3of3( "PIX59byAgVv77TwmADzsbnu8FA6BqDN5bCNFbJC7x2nQnKiNMfgTv", "PIX7u8cqq22hHzKzi3hGnPEQxeYcvUxK9zu5pbqJPzeMXxt1JJScB", rex_third_owner );
+    const authority       rex_active   = make_3of3( "PIX83FkdNTduEweHBBp9ombdF6GZE1RTCNCno36TSv3KxtLHCMPsi", "PIX7hZGJvAmYhRkxz64n7hzVDf73sAMPgkNZSaKsCncW5m5yinyoK", rex_third_active );
+    const authority       rex_posting  = make_3of3( "PIX7qKJvBkMoAjqnt7CUsx7CSjvcHzTwBGXByeuiG6vb4AE532NHN", "PIX7DRsi6FyfPAYrtWWydqUb4eoSKt24pyKWGnS1qhGFcL6t1MhER", rex_third_posting );
     const public_key_type rex_memo(  "PIX5kMDaZdiLqaE5gFDwE4ie9PGvXe1J9yDyezHhWei3qJE3GDS1j" );
 
-    // pixa.team (team & advisors) = signer B + signer D + shared 3rd signer (3-of-3)
-    const authority       team_owner   = make_3of3( "PIX5xyaAasUNGsSgAFBjbhsAfNz3ouSxuGfTRjBKJLmrogp3kCsjN", "PIX7wer24ameAxo37KftBWuzaCMeRUybcVtYAokiEu2ksLdbmLtdK", shared_owner );
-    const authority       team_active  = make_3of3( "PIX6XNMz2C2smo5tzLfYziQpkz1e3apXQG4YHJBkRGm9426Kr6ZDD", "PIX7TMqA9JBDe9qYNLCvoaDyqGga1Yx8993o6U7aB2uSepGE2fnvt", shared_active );
-    const authority       team_posting = make_3of3( "PIX6D4SVPEf1YFUhK3gfq3u53Sfmy3GhTf8NvfUn8xuvQXiEbRnaM", "PIX5w8bqbjwvfypCYje6p8T4NjptRNwqJg2e2WuDUW9eyZWRqjHFc", shared_posting );
+    // pixa.team (team & advisors) = matias + mathiew + team third signer (3-of-3)
+    const authority       team_owner   = make_3of3( "PIX5xyaAasUNGsSgAFBjbhsAfNz3ouSxuGfTRjBKJLmrogp3kCsjN", "PIX7wer24ameAxo37KftBWuzaCMeRUybcVtYAokiEu2ksLdbmLtdK", team_third_owner );
+    const authority       team_active  = make_3of3( "PIX6XNMz2C2smo5tzLfYziQpkz1e3apXQG4YHJBkRGm9426Kr6ZDD", "PIX7TMqA9JBDe9qYNLCvoaDyqGga1Yx8993o6U7aB2uSepGE2fnvt", team_third_active );
+    const authority       team_posting = make_3of3( "PIX6D4SVPEf1YFUhK3gfq3u53Sfmy3GhTf8NvfUn8xuvQXiEbRnaM", "PIX5w8bqbjwvfypCYje6p8T4NjptRNwqJg2e2WuDUW9eyZWRqjHFc", team_third_posting );
     const public_key_type team_memo( "PIX7EoXL9gboyYtcrA1dPR6ydVzyUySSi9qetikKVMeQkdMzhDzzi" );
 
     create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME, rex_memo );
