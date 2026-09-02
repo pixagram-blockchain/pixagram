@@ -150,11 +150,11 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #endif
 
 #ifdef USE_ALTERNATE_CHAIN_ID
-#define HIVE_GENESIS_TIME                     (fc::time_point_sec(configuration_data.get_hf_time(0, 1787572800)))
+#define HIVE_GENESIS_TIME                     (fc::time_point_sec(configuration_data.get_hf_time(0, 1788523200)))
 #else
-#define HIVE_GENESIS_TIME                     (fc::time_point_sec(1787572800)) // Monday, August 24, 2026 12:00:00 PM UTC
+#define HIVE_GENESIS_TIME                     (fc::time_point_sec(1788523200)) // Friday, September 4, 2026 12:00:00 PM UTC
 #endif
-#define HIVE_MINING_TIME                      (fc::time_point_sec(1787576400)) // Monday, August 24, 2026 1:00:00 PM UTC
+#define HIVE_MINING_TIME                      (fc::time_point_sec(1788523200)) // Friday, September 4, 2026 12:00:00 PM UTC (same as genesis - this constant is never read by consensus code, only echoed by get_config)
 #define HIVE_CASHOUT_WINDOW_SECONDS_PRE_HF12  (60*60*24)    /// 1 day
 #define HIVE_CASHOUT_WINDOW_SECONDS_PRE_HF17  (60*60*12)    /// 12 hours
 #define HIVE_CASHOUT_WINDOW_SECONDS           (60*60*24*7)  /// 7 days
