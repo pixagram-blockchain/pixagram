@@ -39,7 +39,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #else
 
 /// Mainnet
-#define HIVE_INIT_PUBLIC_KEY_STR              "PIX6LLegbAgLAy28EHrffBVuANFWcFgmqRMW13wBmTExqFE9SCkg4"
+#define HIVE_INIT_PUBLIC_KEY_STR              "PIX7J9nSaLkdSgcXufXmdn8Gm686rhbt9P8nJDzpePykUHSqZmw7Y"
 #define HIVE_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR HIVE_DEFAULT_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR
 
 #define HIVE_MIN_ROOT_COMMENT_INTERVAL        (fc::seconds(60*5)) // 5 minutes
@@ -146,15 +146,15 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #endif
 
 #ifndef HIVE_INIT_PUBLIC_KEY_STR
-# define HIVE_INIT_PUBLIC_KEY_STR              "PIX6LLegbAgLAy28EHrffBVuANFWcFgmqRMW13wBmTExqFE9SCkg4"
+# define HIVE_INIT_PUBLIC_KEY_STR              "PIX7J9nSaLkdSgcXufXmdn8Gm686rhbt9P8nJDzpePykUHSqZmw7Y"
 #endif
 
 #ifdef USE_ALTERNATE_CHAIN_ID
-#define HIVE_GENESIS_TIME                     (fc::time_point_sec(configuration_data.get_hf_time(0, 1458835200)))
+#define HIVE_GENESIS_TIME                     (fc::time_point_sec(configuration_data.get_hf_time(0, 1788523200)))
 #else
-#define HIVE_GENESIS_TIME                     (fc::time_point_sec(1458835200)) // Friday, January 1, 2016 12:00:00 AM UTC
+#define HIVE_GENESIS_TIME                     (fc::time_point_sec(1788523200)) // Friday, September 4, 2026 12:00:00 PM UTC
 #endif
-#define HIVE_MINING_TIME                      (fc::time_point_sec(1458838800)) // Thursday, March 24, 2016 4:00:00 PM UTC
+#define HIVE_MINING_TIME                      (fc::time_point_sec(1788523200)) // Friday, September 4, 2026 12:00:00 PM UTC (same as genesis - this constant is never read by consensus code, only echoed by get_config)
 #define HIVE_CASHOUT_WINDOW_SECONDS_PRE_HF12  (60*60*24)    /// 1 day
 #define HIVE_CASHOUT_WINDOW_SECONDS_PRE_HF17  (60*60*12)    /// 12 hours
 #define HIVE_CASHOUT_WINDOW_SECONDS           (60*60*24*7)  /// 7 days
