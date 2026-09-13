@@ -288,7 +288,7 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
     // value until HF29 is applied. That way an upgraded node reproduces a 1.28.7 node's state
     // exactly, field for field, right up to the fork itself.
     const uint32_t hardfork_vote_quorum = pixa_hardfork_quorum( wso.num_scheduled_witnesses );
-    const uint32_t majority_version_quorum = db.has_hardfork( HIVE_HARDFORK_1_29 )
+    const uint32_t majority_version_quorum = db.has_hardfork( HIVE_HARDFORK_1_29_HARDFORK_QUORUM )
       ? hardfork_vote_quorum : uint32_t( wso.hardfork_required_witnesses );
 
     if( hpo.current_hardfork_version == HIVE_HARDFORK_0_22_VERSION )
@@ -411,7 +411,7 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
 
     // Keep the API-visible copy of the quorum in step with the witness count. Descriptive only;
     // the tallies above always recompute it.
-    if( db.has_hardfork( HIVE_HARDFORK_1_29 ) )
+    if( db.has_hardfork( HIVE_HARDFORK_1_29_HARDFORK_QUORUM ) )
       _wso.hardfork_required_witnesses = pixa_hardfork_quorum( _wso.num_scheduled_witnesses );
   } );
 
