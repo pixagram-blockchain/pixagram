@@ -529,15 +529,16 @@ void database::apply_hardfork( uint32_t hardfork )
       // recent_claims about 1.2 million times too large; every author payout since has been
       // rounded away as dust. See PIXA_HF29_RECENT_CLAIMS for how the value was derived.
       //
-      // min() rather than assignment: the reset must never *raise* the denominator, so a chain
-      // whose fund has already grown past the target is left alone. The zero case covers a
-      // fresh chain - builds that skip the mainnet seeds start at 0, and a zero denominator
-      // hands the entire pool to whichever post cashes out first.
+      // min() rather than assignment: the reset must never *raise* the denominator. Any chain
+      // that ran the HF17/19/21 seeds - mainnet and alphanet alike - comes down from 5.036e17 to
+      // the target; a fund that is already at or below it is left alone. That includes a fund
+      // still at zero: only IS_TEST_NET builds skip the seeds, and the unit tests are written
+      // against an empty fund.
       const auto& post_rf = get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME );
       const uint128_t target = PIXA_HF29_RECENT_CLAIMS;
       modify( post_rf, [&]( reward_fund_object& rfo )
       {
-        rfo.recent_claims = ( rfo.recent_claims == 0 ) ? target : std::min( rfo.recent_claims, target );
+        rfo.recent_claims = std::min( rfo.recent_claims, target );
         rfo.last_update = head_block_time();
       } );
       ilog( "HF29: post reward fund recent_claims is now ${claims}", ( "claims", post_rf.recent_claims ) );
