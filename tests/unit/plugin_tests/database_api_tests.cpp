@@ -6,6 +6,7 @@
 #include "../db_fixture/hived_fixture.hpp"
 
 #include <hive/chain/detail/state/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/feed_history_object.hpp>
 
 using namespace hive::chain;
 using namespace hive::protocol;
@@ -632,12 +633,12 @@ BOOST_AUTO_TEST_CASE( pixa_genesis_accounts_test )
   const auto& pixa_team = find( PIXA_TEAM_ACCOUNT );
   const auto& treasury = find( NEW_HIVE_TREASURY_ACCOUNT );
 
-  BOOST_REQUIRE_EQUAL( pixa_rex.vesting_shares, VEST_asset( 75000000000000ll ) );
-  BOOST_REQUIRE_EQUAL( pixa_team.vesting_shares, VEST_asset( 25000000000000ll ) );
+  BOOST_REQUIRE_EQUAL( pixa_rex.vesting_shares, VEST_asset( 75000000000000ll ).to_asset() );
+  BOOST_REQUIRE_EQUAL( pixa_team.vesting_shares, VEST_asset( 25000000000000ll ).to_asset() );
 
   // Treasury holds liquid PXS only - VESTS would be locked unspendable by HF21.
-  BOOST_REQUIRE_EQUAL( treasury.hbd_balance, HBD_asset( 245098039ll ) );
-  BOOST_REQUIRE_EQUAL( treasury.vesting_shares, VEST_asset( 0 ) );
+  BOOST_REQUIRE_EQUAL( treasury.hbd_balance, HBD_asset( 245098039ll ).to_asset() );
+  BOOST_REQUIRE_EQUAL( treasury.vesting_shares, VEST_asset( 0 ).to_asset() );
 
   // Both allocation accounts are 3-of-3 multisig on every authority level.
   const auto check_3of3 = [&]( const authority& auth )
@@ -663,6 +664,7 @@ BOOST_AUTO_TEST_CASE( pixa_genesis_accounts_test )
       return keys;
     };
 
+    using hive::plugins::database_api::authority_level;
     const std::pair< authority_level, authority > levels[] = {
       { authority_level::owner, account.owner },
       { authority_level::active, account.active },
@@ -716,7 +718,7 @@ BOOST_FIXTURE_TEST_SUITE( database_api_genesis_tests, database_api_genesis_fixtu
 
 BOOST_AUTO_TEST_CASE( pixa_genesis_dgpo_accounting_test )
 { try {
-  const auto gpo = db->get_dynamic_global_properties();
+  const auto& gpo = db->get_dynamic_global_properties();
 
   const VEST_asset ico_vests( 75000000000000ll );
   const VEST_asset team_vests( 25000000000000ll );
