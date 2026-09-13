@@ -1843,7 +1843,7 @@ BOOST_AUTO_TEST_CASE( witness_update_validate )
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
 
     op.props.hbd_interest_rate = 0;
-    HIVE_REQUIRE_NO_THROW( op.validate() );
+    BOOST_REQUIRE_NO_THROW( op.validate() );
 
     validate_database();
   }
