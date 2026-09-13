@@ -66,7 +66,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 
 #ifdef IS_TEST_NET
 
-#define HIVE_BLOCKCHAIN_VERSION             ( version(1, 28, 6) ) /// no new HF atm
+#define HIVE_BLOCKCHAIN_VERSION             ( version(1, 29, 0) )
 
 #define OLD_CHAIN_ID                          (fc::sha256::hash("testnet"))
 #define HIVE_CHAIN_ID                         (fc::sha256::hash("testnet"))
@@ -135,12 +135,12 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 
 #ifdef USE_ALTERNATE_CHAIN_ID
   /// Mirrornet
-  #define HIVE_BLOCKCHAIN_VERSION               ( version(1, 28, 6) )
+  #define HIVE_BLOCKCHAIN_VERSION               ( version(1, 29, 0) )
   #define OLD_CHAIN_ID                          fc::sha256()
   #define HIVE_CHAIN_ID                         fc::sha256("4200000000000000000000000000000000000000000000000000000000000000")
 #else
   /// Hive mainnet
-  #define HIVE_BLOCKCHAIN_VERSION               ( version(1, 28, 7) )
+  #define HIVE_BLOCKCHAIN_VERSION               ( version(1, 29, 0) )
   #define OLD_CHAIN_ID                          fc::sha256()
   #define HIVE_CHAIN_ID                         fc::sha256("706978616772616d000000000000000000000000000000000000000000000000")
 #endif
@@ -269,6 +269,28 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 
 #define HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS (fc::to_uint128(0,503600561838938636ull))
 #define HIVE_CONTENT_CONSTANT_HF21            (fc::to_uint128(0,2500ull))
+
+/**
+ * Pixagram HF29: the value the post reward fund's `recent_claims` denominator is reset to.
+ *
+ * HF17, HF19 and HF21 each seed `recent_claims` with a snapshot taken from Steem/Hive mainnet,
+ * and all three ran at block 1 on this chain, so the fund started life with a denominator
+ * 5.036e17 - roughly 1.2 million times the scale of the claims Pixagram actually produces.
+ * Every author payout therefore came out below HIVE_MIN_PAYOUT_HBD and was zeroed outright by
+ * `util::get_rshare_reward()`, consuming the rshares for nothing.
+ *
+ * The reset value is
+ *
+ *     max( HIVE_RECENT_RSHARES_DECAY_TIME_HF19 * D , 99 * C_top )
+ *
+ * measured over the pending cashout window on 2026-09-13:
+ *   D     = 7.1e11 claims/day  -> 15 d * D = 1.06e13
+ *   C_top = 2.78e11 (largest single pending claim) -> 99 * C_top = 2.75e13
+ *
+ * The second term binds, and states a rule that is easy to check: no single post can take more
+ * than 1% of the reward pool at activation. Rounded to 2.75e13.
+ */
+#define PIXA_HF29_RECENT_CLAIMS               (fc::to_uint128(0,27500000000000ull))
 
 #define HIVE_MINER_PAY_PERCENT                (HIVE_1_PERCENT) // 1%
 #define HIVE_MAX_RATION_DECAY_RATE            (1000000)

@@ -279,6 +279,18 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
 
     const auto& hpo = db.get_hardfork_property_object();
 
+    // The hardfork-vote tally has to use the scaled quorum from the moment this binary starts
+    // running: the threshold HF29 fixes is the very threshold that gates HF29. It only ever
+    // touches next_hardfork / next_hardfork_time, which do not affect block validity, so a
+    // 1.28.7 node and a 1.29.0 node keep accepting each other's blocks until HF29 applies.
+    //
+    // The majority-version tally has no bearing on activation, so it keeps using the stored
+    // value until HF29 is applied. That way an upgraded node reproduces a 1.28.7 node's state
+    // exactly, field for field, right up to the fork itself.
+    const uint32_t hardfork_vote_quorum = pixa_hardfork_quorum( wso.num_scheduled_witnesses );
+    const uint32_t majority_version_quorum = db.has_hardfork( HIVE_HARDFORK_1_29 )
+      ? hardfork_vote_quorum : uint32_t( wso.hardfork_required_witnesses );
+
     if( hpo.current_hardfork_version == HIVE_HARDFORK_0_22_VERSION )
     {
       if( hpo.next_hardfork != HIVE_HARDFORK_0_23_VERSION )
@@ -300,7 +312,7 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
       {
         witnesses_on_version += ver_itr->second;
 
-        if( witnesses_on_version >= wso.hardfork_required_witnesses )
+        if( witnesses_on_version >= static_cast< int >( majority_version_quorum ) )
         {
           majority_version = ver_itr->first;
           break;
@@ -313,7 +325,20 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
 
       while( hf_itr != hardfork_version_votes.end() )
       {
-        if( hf_itr->second >= wso.hardfork_required_witnesses )
+        // Ignore votes for a hardfork the chain has already passed. Witnesses created after
+        // genesis carry a default (0.0.0, HIVE_GENESIS_TIME) vote that nobody ever cast, and
+        // until HF29 exists block_producer cannot replace it: adjust_hardfork_version_vote()
+        // looks up _hardfork_versions.versions[ last_hardfork + 1 ], which runs off the end of
+        // the array while last_hardfork == HIVE_NUM_HARDFORKS. With the quorum scaled down to
+        // the real witness count those stale votes would otherwise outnumber the genuine ones
+        // and pin next_hardfork to a version that was applied at block 1.
+        if( std::get< 0 >( hf_itr->first ) <= hpo.current_hardfork_version )
+        {
+          ++hf_itr;
+          continue;
+        }
+
+        if( hf_itr->second >= hardfork_vote_quorum )
         {
           const auto& hfp = db.get_hardfork_property_object();
           if( hfp.next_hardfork != std::get<0>( hf_itr->first ) ||
@@ -383,6 +408,11 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
     _wso.current_virtual_time = new_virtual_time;
     _wso.next_shuffle_block_num = db.head_block_num() + _wso.num_scheduled_witnesses;
     _wso.majority_version = majority_version;
+
+    // Keep the API-visible copy of the quorum in step with the witness count. Descriptive only;
+    // the tallies above always recompute it.
+    if( db.has_hardfork( HIVE_HARDFORK_1_29 ) )
+      _wso.hardfork_required_witnesses = pixa_hardfork_quorum( _wso.num_scheduled_witnesses );
   } );
 
   update_median_witness_props(db, wso);
