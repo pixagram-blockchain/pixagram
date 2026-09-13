@@ -8,6 +8,9 @@
 #include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object.hpp>
 
+// HIVE_CONTENT_CONSTANT_HF0 expands to an unqualified uint128_t
+using fc::uint128_t;
+
 using namespace hive::chain;
 using namespace hive::protocol;
 
