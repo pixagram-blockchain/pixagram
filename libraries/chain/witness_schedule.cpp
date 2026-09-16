@@ -284,9 +284,9 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
     // touches next_hardfork / next_hardfork_time, which do not affect block validity, so a
     // 1.28.7 node and a 1.29.0 node keep accepting each other's blocks until HF29 applies.
     //
-    // The majority-version tally has no bearing on activation, so it keeps using the stored
-    // value until HF29 is applied. That way an upgraded node reproduces a 1.28.7 node's state
-    // exactly, field for field, right up to the fork itself.
+    // The majority-version tally has no bearing on activation, so it keeps using the legacy
+    // stored threshold until HF29 is applied. This does not make pre-HF state field-for-field
+    // identical: upgraded nodes can already record different next_hardfork metadata.
     const uint32_t hardfork_vote_quorum = pixa_hardfork_quorum( wso.num_scheduled_witnesses );
     const uint32_t majority_version_quorum = db.has_hardfork( HIVE_HARDFORK_1_29_HARDFORK_QUORUM )
       ? hardfork_vote_quorum : uint32_t( wso.hardfork_required_witnesses );
@@ -326,12 +326,11 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
       while( hf_itr != hardfork_version_votes.end() )
       {
         // Ignore votes for a hardfork the chain has already passed. Witnesses created after
-        // genesis carry a default (0.0.0, HIVE_GENESIS_TIME) vote that nobody ever cast, and
-        // until HF29 exists block_producer cannot replace it: adjust_hardfork_version_vote()
-        // looks up _hardfork_versions.versions[ last_hardfork + 1 ], which runs off the end of
-        // the array while last_hardfork == HIVE_NUM_HARDFORKS. With the quorum scaled down to
-        // the real witness count those stale votes would otherwise outnumber the genuine ones
-        // and pin next_hardfork to a version that was applied at block 1.
+        // genesis can carry a default (0.0.0, HIVE_GENESIS_TIME) vote that nobody cast. The
+        // 1.28.7 version comparison masks the patch component, so the previously suspected
+        // last_hardfork + 1 array access is not reached for this case. Skipping already-applied
+        // tuples keeps them out of the scaled tally; they also cannot permanently defeat a
+        // future version-and-time tuple once that tuple reaches the simultaneous quorum.
         if( std::get< 0 >( hf_itr->first ) <= hpo.current_hardfork_version )
         {
           ++hf_itr;

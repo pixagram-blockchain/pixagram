@@ -18,9 +18,12 @@ namespace hive { namespace chain {
 
 
 clean_database_fixture::clean_database_fixture( 
-  uint16_t shared_file_size_in_mb, fc::optional<uint32_t> hardfork, bool init_ah_plugin, int block_log_split )
+  uint16_t shared_file_size_in_mb, fc::optional<uint32_t> hardfork, bool init_ah_plugin, int block_log_split,
+  uint32_t num_witnesses )
 {
   try {
+
+  FC_ASSERT( num_witnesses >= HIVE_NUM_INIT_MINERS && num_witnesses <= HIVE_MAX_WITNESSES );
 
   configuration_data.set_initial_asset_supply( INITIAL_TEST_SUPPLY, HBD_INITIAL_TEST_SUPPLY );
   configuration_data.allow_not_enough_rc = true;
@@ -64,7 +67,7 @@ clean_database_fixture::clean_database_fixture(
   vest( HIVE_INIT_MINER_NAME, HIVE_asset( 10'000 ) );
 
   // Fill up the rest of the required miners
-  for( int i = HIVE_NUM_INIT_MINERS; i < HIVE_MAX_WITNESSES; i++ )
+  for( uint32_t i = HIVE_NUM_INIT_MINERS; i < num_witnesses; i++ )
   {
     account_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), init_account_pub_key );
     fund( HIVE_INIT_MINER_NAME + fc::to_string( i ), HIVE_MIN_PRODUCER_REWARD );
@@ -117,8 +120,8 @@ pruned_database_fixture::~pruned_database_fixture()
 {
 }
 
-hardfork_database_fixture::hardfork_database_fixture( uint16_t shared_file_size_in_mb, uint32_t hardfork )
-                            : clean_database_fixture( shared_file_size_in_mb, hardfork )
+hardfork_database_fixture::hardfork_database_fixture( uint16_t shared_file_size_in_mb, uint32_t hardfork, uint32_t num_witnesses )
+                            : clean_database_fixture( shared_file_size_in_mb, hardfork, true, 9999, num_witnesses )
 {
 }
 

@@ -50,6 +50,8 @@ struct database_api_fixture_basic : hived_fixture
     {
       const private_key_type account_key = generate_private_key( witness_name );
       const private_key_type witness_key = generate_private_key( witness_name + "_witness" );
+      // Account creation alone provides too little RC at Pixagram's vesting price.
+      vest( witness_name, HIVE_asset( 10'000'000 ) );
       witness_create( witness_name, account_key, witness_name + ".com", witness_key.get_public_key(), 1000 );
       witness_plugin->add_signing_key( witness_key );
     };
@@ -75,8 +77,9 @@ struct database_api_fixture_basic : hived_fixture
     {
       std::string name = "voter" + std::to_string(i);
       auto key = generate_private_key( name );
-      fund( name, HIVE_asset( 10'000'000 ) );
-      vest( name, "", HIVE_asset( 10'000'000 / i ), key );
+      // The funded creator pays for vesting so a new account needs no RC to
+      // bootstrap. Keep descending vote weights and enough RC for ten votes.
+      vest( name, HIVE_asset( 100'000'000 / i ) );
       op.account = name;
       for( int v = 1; v <= i; ++v )
       {
@@ -618,7 +621,9 @@ BOOST_AUTO_TEST_CASE( verify_account_authority_test )
 
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( pixa_genesis_accounts_test )
+// Initial allocations must be inspected before the normal API fixture produces a day
+// of blocks and adds inflation to the treasury. Keep the exact genesis assertions.
+BOOST_FIXTURE_TEST_CASE( pixa_genesis_accounts_test, database_api_genesis_fixture )
 { try {
   const auto accounts = database_api->find_accounts(
     { { PIXA_ICO_ACCOUNT, PIXA_TEAM_ACCOUNT, NEW_HIVE_TREASURY_ACCOUNT }, true } );

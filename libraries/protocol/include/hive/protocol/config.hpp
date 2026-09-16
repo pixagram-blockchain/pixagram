@@ -287,8 +287,9 @@ using namespace hive::protocol::testnet_blockchain_configuration;
  *   D     = 7.1e11 claims/day  -> 15 d * D = 1.06e13
  *   C_top = 2.78e11 (largest single pending claim) -> 99 * C_top = 2.75e13
  *
- * The second term binds, and states a rule that is easy to check: no single post can take more
- * than 1% of the reward pool at activation. Rounded to 2.75e13.
+ * The second term binds in that snapshot and calibrates the reset near a 1% share for the
+ * largest then-pending claim. It is not a protocol-enforced payout cap: claims, decay and votes
+ * continue to change the denominator and each post's eventual share. Rounded to 2.75e13.
  */
 #define PIXA_HF29_RECENT_CLAIMS               (fc::to_uint128(0,27500000000000ull))
 
