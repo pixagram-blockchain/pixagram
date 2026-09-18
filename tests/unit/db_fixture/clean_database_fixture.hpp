@@ -11,7 +11,8 @@ struct clean_database_fixture : public hived_fixture
   clean_database_fixture( 
     uint16_t shared_file_size_in_mb = shared_file_size_big,
     fc::optional<uint32_t> hardfork = fc::optional<uint32_t>(),
-    bool init_ah_plugin = true, int block_log_split = 9999 );
+    bool init_ah_plugin = true, int block_log_split = 9999,
+    uint32_t num_witnesses = HIVE_MAX_WITNESSES );
   virtual ~clean_database_fixture();
 
   void validate_database();
@@ -29,7 +30,8 @@ struct pruned_database_fixture : public clean_database_fixture
 
 struct hardfork_database_fixture : public clean_database_fixture
 {
-  hardfork_database_fixture( uint16_t shared_file_size_in_mb = shared_file_size_big, uint32_t hardfork = HIVE_BLOCKCHAIN_VERSION.minor_v() );
+  hardfork_database_fixture( uint16_t shared_file_size_in_mb = shared_file_size_big,
+    uint32_t hardfork = HIVE_BLOCKCHAIN_VERSION.minor_v(), uint32_t num_witnesses = HIVE_MAX_WITNESSES );
   virtual ~hardfork_database_fixture();
 };
 

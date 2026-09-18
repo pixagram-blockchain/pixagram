@@ -109,6 +109,9 @@ void database::init_hardforks()
   FC_ASSERT( HIVE_HARDFORK_1_28 == 28, "Invalid hardfork configuration" );
   _hardfork_versions.times[ HIVE_HARDFORK_1_28 ] = fc::time_point_sec( HIVE_HARDFORK_1_28_TIME );
   _hardfork_versions.versions[ HIVE_HARDFORK_1_28 ] = HIVE_HARDFORK_1_28_VERSION;
+  FC_ASSERT( HIVE_HARDFORK_1_29 == 29, "Invalid hardfork configuration" );
+  _hardfork_versions.times[ HIVE_HARDFORK_1_29 ] = fc::time_point_sec( HIVE_HARDFORK_1_29_TIME );
+  _hardfork_versions.versions[ HIVE_HARDFORK_1_29 ] = HIVE_HARDFORK_1_29_VERSION;
 }
 
 void database::process_hardforks()
@@ -517,6 +520,43 @@ void database::apply_hardfork( uint32_t hardfork )
     case HIVE_HARDFORK_1_28:
     {
       remove_proposal_votes_for_accounts_without_voting_rights();
+      break;
+    }
+    case HIVE_HARDFORK_1_29:
+    {
+      // Bring the post reward fund's denominator back to this chain's scale. HF17/19/21
+      // seed production funds from Steem/Hive mainnet snapshots. Running them at genesis
+      // imported a denominator far larger than Pixagram's launch voting activity, reducing
+      // ordinary post payouts to dust. See PIXA_HF29_RECENT_CLAIMS for the calibration.
+      //
+      // min() rather than assignment: the reset must never *raise* the denominator. Any chain
+      // that still exceeds the target is reduced; a fund already at or below it is left alone.
+      // That includes a fund still at zero: IS_TEST_NET builds skip the mainnet seeds, so
+      // tests explicitly exercise both seeded and empty funds.
+      const auto& post_rf = get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME );
+      const uint128_t target = PIXA_HF29_RECENT_CLAIMS;
+      modify( post_rf, [&]( reward_fund_object& rfo )
+      {
+        rfo.recent_claims = std::min( rfo.recent_claims, target );
+        rfo.last_update = head_block_time();
+      } );
+      ilog( "HF29: post reward fund recent_claims is now ${claims}", ( "claims", post_rf.recent_claims ) );
+
+      // Record the scaled quorum that the witness schedule now uses, so it is visible over the
+      // API. This stored value is descriptive after HF29: witness_schedule.cpp recomputes the
+      // quorum from the scheduled-witness count instead of using this field as its next input,
+      // which would ratchet the requirement lower on repeated updates.
+      modify( get_witness_schedule_object(), [&]( witness_schedule_object& wso )
+      {
+        wso.hardfork_required_witnesses = pixa_hardfork_quorum( wso.num_scheduled_witnesses );
+      } );
+      if( has_hardfork( HIVE_HARDFORK_1_26_FUTURE_WITNESS_SCHEDULE ) )
+      {
+        modify( get_future_witness_schedule_object(), [&]( witness_schedule_object& wso )
+        {
+          wso.hardfork_required_witnesses = pixa_hardfork_quorum( wso.num_scheduled_witnesses );
+        } );
+      }
       break;
     }
     default:

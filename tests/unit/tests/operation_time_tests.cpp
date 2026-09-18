@@ -191,8 +191,10 @@ BOOST_AUTO_TEST_CASE( comment_payout_dust )
     ACTORS( (alice)(bob) )
     generate_block();
 
-    vest( "alice", HIVE_asset( 10'000 ) );
-    vest( "bob", HIVE_asset( 10'000 ) );
+    // Pixagram's vesting price needs substantially more HIVE than the original
+    // Hive fixture for both votes to exceed HIVE_VOTE_DUST_THRESHOLD.
+    vest( "alice", HIVE_asset( 3'000'000'000 ) );
+    vest( "bob", HIVE_asset( 3'000'000'000 ) );
 
     set_price_feed( HBD_price( 1000, 1000 ) );
 
@@ -242,11 +244,19 @@ BOOST_AUTO_TEST_CASE( comment_payout_dust )
     push_transaction( tx, bob_post_key );
     validate_database();
 
+    const auto* alice_cashout = db->find_comment_cashout( *db->get_comment( "alice", string( "test" ) ) );
+    const auto* bob_cashout = db->find_comment_cashout( *db->get_comment( "bob", string( "test" ) ) );
+    BOOST_REQUIRE_GT( alice_cashout->get_net_rshares(), 0 );
+    BOOST_REQUIRE_GT( bob_cashout->get_net_rshares(), 0 );
+    BOOST_REQUIRE_EQUAL( alice_cashout->get_cashout_time(), bob_cashout->get_cashout_time() );
+
     generate_blocks( db->find_comment_cashout( *db->get_comment( "alice", string( "test" ) ) )->get_cashout_time() );
 
     // If comments are paid out independent of order, then the last satoshi of HIVE cannot be divided among them
     const auto& rf = db->get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME );
     BOOST_REQUIRE_EQUAL( rf.get_reward_balance(), HIVE_asset( 1 ) );
+    BOOST_REQUIRE_GT( db->get_account( "alice" ).get_hbd_rewards(), HBD_asset( 0 ) );
+    BOOST_REQUIRE_GT( db->get_account( "bob" ).get_hbd_rewards(), HBD_asset( 0 ) );
 
     validate_database();
 

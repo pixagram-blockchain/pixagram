@@ -1,0 +1,16 @@
+#ifndef HIVE_HARDFORK_1_29
+#define HIVE_HARDFORK_1_29 29
+
+#ifdef USE_ALTERNATE_CHAIN_ID
+#define HIVE_HARDFORK_1_29_TIME (hive::protocol::testnet_blockchain_configuration::configuration_data.get_hf_time(HIVE_HARDFORK_1_29, 1789732800))
+#else
+#define HIVE_HARDFORK_1_29_TIME 1789732800
+#endif // Friday, September 18, 2026 12:00:00 UTC
+
+#define HIVE_HARDFORK_1_29_VERSION hive::protocol::hardfork_version( 1, 29 )
+
+// reset the post reward fund denominator from the inherited Hive mainnet seed to Pixagram scale
+#define HIVE_HARDFORK_1_29_RESET_RECENT_CLAIMS (HIVE_HARDFORK_1_29)
+// derive the hardfork quorum from the witnesses actually scheduled instead of assuming 21
+#define HIVE_HARDFORK_1_29_HARDFORK_QUORUM (HIVE_HARDFORK_1_29)
+#endif

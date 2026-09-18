@@ -6,6 +6,10 @@
 #include "../db_fixture/hived_fixture.hpp"
 
 #include <hive/chain/detail/state/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/feed_history_object.hpp>
+
+// HIVE_CONTENT_CONSTANT_HF0 expands to an unqualified uint128_t
+using fc::uint128_t;
 
 using namespace hive::chain;
 using namespace hive::protocol;
@@ -46,6 +50,8 @@ struct database_api_fixture_basic : hived_fixture
     {
       const private_key_type account_key = generate_private_key( witness_name );
       const private_key_type witness_key = generate_private_key( witness_name + "_witness" );
+      // Account creation alone provides too little RC at Pixagram's vesting price.
+      vest( witness_name, HIVE_asset( 10'000'000 ) );
       witness_create( witness_name, account_key, witness_name + ".com", witness_key.get_public_key(), 1000 );
       witness_plugin->add_signing_key( witness_key );
     };
@@ -71,8 +77,9 @@ struct database_api_fixture_basic : hived_fixture
     {
       std::string name = "voter" + std::to_string(i);
       auto key = generate_private_key( name );
-      fund( name, HIVE_asset( 10'000'000 ) );
-      vest( name, "", HIVE_asset( 10'000'000 / i ), key );
+      // The funded creator pays for vesting so a new account needs no RC to
+      // bootstrap. Keep descending vote weights and enough RC for ten votes.
+      vest( name, HIVE_asset( 100'000'000 / i ) );
       op.account = name;
       for( int v = 1; v <= i; ++v )
       {
@@ -614,7 +621,9 @@ BOOST_AUTO_TEST_CASE( verify_account_authority_test )
 
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( pixa_genesis_accounts_test )
+// Initial allocations must be inspected before the normal API fixture produces a day
+// of blocks and adds inflation to the treasury. Keep the exact genesis assertions.
+BOOST_FIXTURE_TEST_CASE( pixa_genesis_accounts_test, database_api_genesis_fixture )
 { try {
   const auto accounts = database_api->find_accounts(
     { { PIXA_ICO_ACCOUNT, PIXA_TEAM_ACCOUNT, NEW_HIVE_TREASURY_ACCOUNT }, true } );
@@ -632,12 +641,12 @@ BOOST_AUTO_TEST_CASE( pixa_genesis_accounts_test )
   const auto& pixa_team = find( PIXA_TEAM_ACCOUNT );
   const auto& treasury = find( NEW_HIVE_TREASURY_ACCOUNT );
 
-  BOOST_REQUIRE_EQUAL( pixa_rex.vesting_shares, VEST_asset( 75000000000000ll ) );
-  BOOST_REQUIRE_EQUAL( pixa_team.vesting_shares, VEST_asset( 25000000000000ll ) );
+  BOOST_REQUIRE_EQUAL( pixa_rex.vesting_shares, VEST_asset( 75000000000000ll ).to_asset() );
+  BOOST_REQUIRE_EQUAL( pixa_team.vesting_shares, VEST_asset( 25000000000000ll ).to_asset() );
 
   // Treasury holds liquid PXS only - VESTS would be locked unspendable by HF21.
-  BOOST_REQUIRE_EQUAL( treasury.hbd_balance, HBD_asset( 245098039ll ) );
-  BOOST_REQUIRE_EQUAL( treasury.vesting_shares, VEST_asset( 0 ) );
+  BOOST_REQUIRE_EQUAL( treasury.hbd_balance, HBD_asset( 245098039ll ).to_asset() );
+  BOOST_REQUIRE_EQUAL( treasury.vesting_shares, VEST_asset( 0 ).to_asset() );
 
   // Both allocation accounts are 3-of-3 multisig on every authority level.
   const auto check_3of3 = [&]( const authority& auth )
@@ -663,6 +672,7 @@ BOOST_AUTO_TEST_CASE( pixa_genesis_accounts_test )
       return keys;
     };
 
+    using hive::plugins::database_api::authority_level;
     const std::pair< authority_level, authority > levels[] = {
       { authority_level::owner, account.owner },
       { authority_level::active, account.active },
@@ -716,7 +726,7 @@ BOOST_FIXTURE_TEST_SUITE( database_api_genesis_tests, database_api_genesis_fixtu
 
 BOOST_AUTO_TEST_CASE( pixa_genesis_dgpo_accounting_test )
 { try {
-  const auto gpo = db->get_dynamic_global_properties();
+  const auto& gpo = db->get_dynamic_global_properties();
 
   const VEST_asset ico_vests( 75000000000000ll );
   const VEST_asset team_vests( 25000000000000ll );
