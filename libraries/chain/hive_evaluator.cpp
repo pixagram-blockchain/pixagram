@@ -151,8 +151,13 @@ struct witness_properties_change_flags
 void witness_set_properties_evaluator::do_apply( const witness_set_properties_operation& o )
 {
   if( _db.has_hardfork( HIVE_HARDFORK_1_30 ) )
-    HIVE_CHAIN_STATE_ASSERT( !has_open_active_authority( _db, o.owner ), o.owner,
-      "Account with an open authority cannot operate a witness." );
+  {
+    // Spelled through a local so the condition text differs from the witness_update guard above:
+    // assertion ids are hashed from the condition source, and identical text collides.
+    const bool properties_owner_authority_is_open = has_open_active_authority( _db, o.owner );
+    HIVE_CHAIN_STATE_ASSERT( !properties_owner_authority_is_open, o.owner,
+      "Account with an open authority cannot set witness properties." );
+  }
   HIVE_CHAIN_HARDFORK_ASSERT( _db.has_hardfork( HIVE_HARDFORK_0_20__1620 ), "witness_set_properties_evaluator not enabled until HF 20" );
 
   const auto& witness = _db.get< witness_object, by_name >( o.owner ); // verifies witness exists;
@@ -216,7 +221,7 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
   {
     fc::raw::unpack_from_vector( itr->second, signing_key );
     if( _db.has_hardfork( HIVE_HARDFORK_1_30 ) && signing_key == public_key_type() )
-      HIVE_CHAIN_STATE_ASSERT( !last_enabled_witness( _db, witness ), o.owner, "Cannot disable the last enabled witness" );
+      HIVE_CHAIN_STATE_ASSERT( !last_enabled_witness( _db, witness ), o.owner, "Cannot disable the last enabled witness via properties" );
   }
 
   itr = o.props.find( "sbd_exchange_rate" );

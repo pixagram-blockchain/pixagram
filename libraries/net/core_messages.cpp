@@ -27,6 +27,8 @@
 #include <graphene/net/core_messages.hpp>
 #include <graphene/net/message.hpp>
 #include <hive/chain/full_block.hpp>
+#include <hive/chain/full_transaction.hpp>
+#include <hive/protocol/config.hpp>
 #include <hive/chain/blockchain_worker_thread_pool.hpp>
 
 
@@ -179,6 +181,15 @@ namespace graphene { namespace net {
 
       std::shared_ptr<hive::chain::full_transaction_type> full_transaction = hive::chain::full_transaction_type::create_from_serialized_transaction(data.data(), data.size(), 
                                                                                                                                                     true /* cache this transaction */);
+      // Same reason as in chain_plugin::determine_encoding_and_accept_transaction: the worker pool
+      // recovers a public key per signature, so an over-signed transaction has to be dropped here
+      // rather than later in database::push_transaction. Node-local policy, not consensus - blocks
+      // are unaffected, so no node can fork over this.
+      const size_t p2p_signature_count = full_transaction->get_transaction().signatures.size();
+      FC_ASSERT( p2p_signature_count <= PIXA_MAX_TRANSACTION_SIGNATURES,
+        "Too many signatures - count = ${p2p_signature_count}, limit ${limit}",
+        (p2p_signature_count)("limit", uint64_t( PIXA_MAX_TRANSACTION_SIGNATURES )) );
+
       thread_pool.enqueue_work(full_transaction, hive::chain::blockchain_worker_thread_pool::data_source_type::standalone_transaction_received_from_p2p);
 
       return trx_message(full_transaction);

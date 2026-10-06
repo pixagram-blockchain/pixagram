@@ -1004,7 +1004,15 @@ std::pair< HBD_asset, HIVE_asset > database::create_hbd( const account_object& t
       HIVE_asset converted = to_hbd;
       if( has_hardfork( HIVE_HARDFORK_1_30_NO_CONVERSION_BURN ) )
       {
-        converted = hbd * median_price;
+        // Round the PIXA value of the minted PXS UP. The price operator rounds down, and using
+        // that as the burned amount would hand back more PIXA than the conversion actually left
+        // over - issuing a fraction of a satoshi out of nothing on every payout. Rounding up can
+        // only ever burn a fraction more, never less, so value is never created.
+        const fc::uint128_t pxs = uint64_t( hbd.get_amount() );
+        const fc::uint128_t base = uint64_t( median_price.get_base().get_amount() );
+        const fc::uint128_t quote = uint64_t( median_price.get_quote().get_amount() );
+        const fc::uint128_t rounded_up = base > 0 ? ( pxs * quote + base - 1 ) / base : fc::uint128_t( 0 );
+        converted = HIVE_asset( fc::uint128_to_uint64( rounded_up ) );
         if( converted > to_hbd )
           converted = to_hbd; // never burn more than was offered for conversion
         to_hive += to_hbd - converted;

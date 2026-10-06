@@ -300,6 +300,24 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
     for( uint32_t i = 0; i < wso.num_scheduled_witnesses; i++ )
     {
       auto& witness = db.get_witness( wso.current_shuffled_witnesses[ i ] );
+
+      // last_confirmed_block_num is set ONLY when a witness produces a block (database_witness.cpp
+      // update_signing_witness), so a witness that never produces keeps it at 0. It is set before
+      // this schedule update runs within the same block, so it is never greater than head and the
+      // subtraction cannot wrap. Both values are deterministic chain state, so every node computes
+      // the same result on replay and across forks.
+      //
+      // A witness that is not producing contributes NEITHER to the quorum denominator NOR a vote.
+      // Counting its vote while excluding it from the denominator would cut both ways: with eight
+      // of nine witnesses offline the quorum would fall to one and a single stale vote from an
+      // offline witness could activate a hardfork over the head of the only witness still
+      // producing. Numerator and denominator must therefore be drawn from the same set.
+      if( witness.last_confirmed_block_num == 0
+        || head - witness.last_confirmed_block_num > uint64_t( 2 * HIVE_MAX_WITNESSES ) )
+        continue;
+
+      ++producing_count;
+
       if( witness_versions.find( witness.running_version ) == witness_versions.end() )
         witness_versions[ witness.running_version ] = 1;
       else
@@ -310,15 +328,6 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
         hardfork_version_votes[ version_vote ] = 1;
       else
         hardfork_version_votes[ version_vote ] += 1;
-
-      // last_confirmed_block_num is set ONLY when a witness produces a block (database_witness.cpp
-      // update_signing_witness), so a witness that never produces keeps it at 0. It is set before
-      // this schedule update runs within the same block, so it is never greater than head and the
-      // subtraction cannot wrap. Both values are deterministic chain state, so every node computes
-      // the same producing_count on replay and across forks.
-      if( witness.last_confirmed_block_num > 0
-        && head - witness.last_confirmed_block_num <= uint64_t( 2 * HIVE_MAX_WITNESSES ) )
-        ++producing_count;
     }
 
     int witnesses_on_version = 0;
