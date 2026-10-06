@@ -31,7 +31,7 @@ struct pruned_database_fixture : public clean_database_fixture
 struct hardfork_database_fixture : public clean_database_fixture
 {
   hardfork_database_fixture( uint16_t shared_file_size_in_mb = shared_file_size_big,
-    uint32_t hardfork = HIVE_BLOCKCHAIN_VERSION.minor_v(), uint32_t num_witnesses = HIVE_MAX_WITNESSES );
+    uint32_t hardfork = HIVE_HARDFORK_1_29, uint32_t num_witnesses = HIVE_MAX_WITNESSES );
   virtual ~hardfork_database_fixture();
 };
 

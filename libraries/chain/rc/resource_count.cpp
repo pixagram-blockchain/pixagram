@@ -181,9 +181,11 @@ struct count_operation_visitor
   const state_object_size_info& _w;
   const operation_exec_info& _e;
   const fc::time_point_sec _now;
+  const bool _price_custom_data_by_length;
 
-  count_operation_visitor( const state_object_size_info& w, const operation_exec_info& e, const fc::time_point_sec now )
-    : _w(w), _e(e), _now(now) {}
+  count_operation_visitor( const state_object_size_info& w, const operation_exec_info& e, const fc::time_point_sec now,
+    bool price_custom_data_by_length = false )
+    : _w(w), _e(e), _now(now), _price_custom_data_by_length(price_custom_data_by_length) {}
 
   int64_t get_authority_dynamic_size( const authority& auth )const
   {
@@ -429,14 +431,20 @@ struct count_operation_visitor
       new_account_op_count++;
   }
 
-  void operator()( const custom_operation& )const
+  void operator()( const custom_operation& o )const
   {
     execution_time_count += _e.custom_time;
+    // HF30: see PIXA_CUSTOM_OP_BASELINE_LENGTH - the flat cost above does not scale with payload
+    // size, so a 64 KiB payload used to cost the same as a tiny one despite the extra work.
+    if( _price_custom_data_by_length )
+      execution_time_count += ( int64_t( o.data.size() ) * _e.custom_time ) / PIXA_CUSTOM_OP_BASELINE_LENGTH;
   }
 
   void operator()( const custom_json_operation& op )const
   {
     execution_time_count += _e.custom_json_time;
+    if( _price_custom_data_by_length )
+      execution_time_count += ( int64_t( op.json.size() ) * _e.custom_json_time ) / PIXA_CUSTOM_OP_BASELINE_LENGTH;
     //note: extra cost for delegate_rc_operation and (future) similar ops was already collected during
     //on_post_apply_custom_operation signal handling
   }
@@ -573,23 +581,25 @@ void count_resources(
   const signed_transaction& tx,
   const size_t size,
   count_resources_result& result,
-  const fc::time_point_sec now
+  const fc::time_point_sec now,
+  bool price_custom_data_by_length
 )
 {
-  resource_credits::count_resources( tx, size, result, now );
+  resource_credits::count_resources( tx, size, result, now, price_custom_data_by_length );
 }
 
 void resource_credits::count_resources(
   const signed_transaction& tx,
   const size_t size,
   count_resources_result& result,
-  const fc::time_point_sec now
+  const fc::time_point_sec now,
+  bool price_custom_data_by_length
   )
 {
   static const state_object_size_info size_info;
   static const operation_exec_info exec_info;
   const int64_t tx_size = int64_t( size );
-  count_operation_visitor vtor( size_info, exec_info, now );
+  count_operation_visitor vtor( size_info, exec_info, now, price_custom_data_by_length );
 
   for( const operation& op : tx.operations )
   {

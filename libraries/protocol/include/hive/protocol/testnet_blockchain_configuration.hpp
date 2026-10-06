@@ -86,6 +86,7 @@ class configuration
 #endif // IS_TEST_NET
   // How many blocks is witness allowed to miss before it is being shut down.
   uint16_t witness_shutdown_threshold = 28800; // aka HIVE_BLOCKS_PER_DAY
+  uint32_t owner_auth_history_tracking_start_block = 1; // mainnet uses a fixed block; tests may raise it
 
   public:
     configuration();
@@ -105,6 +106,7 @@ class configuration
     uint32_t get_hf_time(uint32_t hf_num, uint32_t default_time_sec)const;
     bool get_generate_missed_block_operations() const { return generate_missed_block_operations; }
     uint16_t get_witness_shutdown_threshold() const { return witness_shutdown_threshold; }
+    uint32_t get_owner_auth_history_tracking_start_block() const { return owner_auth_history_tracking_start_block; }
 
     uint32_t get_hive_reverse_auction_window_seconds() const { return hive_reverse_auction_window_seconds; }
     uint32_t get_hive_early_voting_seconds() const { return hive_early_voting_seconds; }
@@ -249,6 +251,11 @@ class configuration
     /**
      * [0 .. HIVE_BLOCKS_PER_DAY]
      */
+    void set_owner_auth_history_tracking_start_block( uint32_t block_num )
+    {
+      owner_auth_history_tracking_start_block = block_num;
+    }
+
     void set_witness_shutdown_threshold( uint16_t threshold )
     {
       witness_shutdown_threshold = threshold;

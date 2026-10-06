@@ -425,6 +425,11 @@ namespace hive { namespace protocol {
     );
     HIVE_PROTOCOL_STRING_ASSERT( id.size() <= HIVE_CUSTOM_OP_ID_MAX_LENGTH,
       "Operation ID length exceeded. Max: ${max} Current: ${n}", ("subject", id)("max", HIVE_CUSTOM_OP_ID_MAX_LENGTH)("n", id.size()) );
+    // Reject an over-long payload before parsing it. The evaluator already rejects the same input
+    // unconditionally, so this changes no outcome - it only avoids doing the UTF-8 validation and
+    // JSON parse for something that is going to be thrown away.
+    HIVE_PROTOCOL_STRING_ASSERT( json.length() <= HIVE_CUSTOM_OP_DATA_MAX_LENGTH,
+      "Operation JSON length exceeded. Max: ${max} Current: ${n}", ("subject", id)("max", HIVE_CUSTOM_OP_DATA_MAX_LENGTH)("n", json.length()) );
     validate_json_with_fallback(json);
   }
 

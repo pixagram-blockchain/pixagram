@@ -66,7 +66,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 
 #ifdef IS_TEST_NET
 
-#define HIVE_BLOCKCHAIN_VERSION             ( version(1, 29, 0) )
+#define HIVE_BLOCKCHAIN_VERSION             ( version(1, 30, 0) )
 
 #define OLD_CHAIN_ID                          (fc::sha256::hash("testnet"))
 #define HIVE_CHAIN_ID                         (fc::sha256::hash("testnet"))
@@ -89,7 +89,7 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_OWNER_AUTH_RECOVERY_PERIOD                   fc::seconds(60)
 #define HIVE_ACCOUNT_RECOVERY_REQUEST_EXPIRATION_PERIOD   fc::seconds(12)
 #define HIVE_OWNER_UPDATE_LIMIT                           fc::seconds(configuration_data.get_hive_owner_update_limit())
-#define HIVE_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM  1
+#define HIVE_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM  (configuration_data.get_owner_auth_history_tracking_start_block())
 
 #define HIVE_PROPOSAL_MAINTENANCE_PERIOD          (configuration_data.get_hive_proposal_maintenance_period())
 #define HIVE_PROPOSAL_MAINTENANCE_CLEANUP         (60*60*24*1) // 1 day
@@ -135,12 +135,12 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 
 #ifdef USE_ALTERNATE_CHAIN_ID
   /// Mirrornet
-  #define HIVE_BLOCKCHAIN_VERSION               ( version(1, 29, 0) )
+  #define HIVE_BLOCKCHAIN_VERSION               ( version(1, 30, 0) )
   #define OLD_CHAIN_ID                          fc::sha256()
   #define HIVE_CHAIN_ID                         fc::sha256("4200000000000000000000000000000000000000000000000000000000000000")
 #else
   /// Hive mainnet
-  #define HIVE_BLOCKCHAIN_VERSION               ( version(1, 29, 0) )
+  #define HIVE_BLOCKCHAIN_VERSION               ( version(1, 30, 0) )
   #define OLD_CHAIN_ID                          fc::sha256()
   #define HIVE_CHAIN_ID                         fc::sha256("706978616772616d000000000000000000000000000000000000000000000000")
 #endif
@@ -248,6 +248,38 @@ using namespace hive::protocol::testnet_blockchain_configuration;
 #define HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF20 (60*15) /// 15 minutes
 #define HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF21 (60*5) /// 5 minutes
 #define HIVE_VOTE_DUST_THRESHOLD              (50000000)
+/**
+ * Pixagram HF30: the rshares every vote loses from HF30 on.
+ *
+ * A full-strength vote spends 2% of the voter's mana, so the inherited 50,000,000 floor needs
+ * 2,500 VESTS before a vote counts at all. On Hive that is about 1.4 HP, because one HP is worth
+ * ~1,800 VESTS; on Pixagram one VESTS is one PIXA, so the same floor is 2,500 PIXA and wipes out
+ * the votes of every new account. 50,000 keeps Hive's economic floor in PIXA terms rounded up:
+ * a full vote counts from 2.5 VESTS. Resource credits, not this floor, limit vote spam.
+ */
+#define PIXA_HF30_VOTE_DUST_THRESHOLD         (50000)
+
+/**
+ * Pixagram HF30: the payload length the flat custom_json / custom resource-credit cost was
+ * calibrated for upstream (Hive's HIVE_CUSTOM_OP_DATA_MAX_LENGTH). Pixagram raised the cap to
+ * 64 KiB but kept charging the same flat cost, so a maximum-size payload cost no more than a tiny
+ * one while taking eight times the UTF-8 validation and JSON parsing. From HF30 the cost is
+ * charged in proportion to this baseline, restoring upstream's cost per byte.
+ */
+#define PIXA_CUSTOM_OP_BASELINE_LENGTH        (8192)
+
+/**
+ * Pixagram: the most signatures a transaction may carry on the pending-transaction path.
+ *
+ * Verifying a signature costs a full elliptic-curve recovery; producing one that merely survives to
+ * that stage is far cheaper, and a transaction that fails verification is charged no resource
+ * credits, so an unbounded list is free work for an attacker with no account or stake. Upstream Hive
+ * is limited only incidentally by its ~64 KiB transaction size, to roughly a thousand signatures;
+ * Pixagram's 2 MiB transactions would otherwise allow about 32,000. This restores that margin while
+ * leaving room far above any real transaction - a transfer from several 3-of-3 multisig accounts
+ * needs on the order of ten.
+ */
+#define PIXA_MAX_TRANSACTION_SIGNATURES       (1000)
 #define HIVE_DOWNVOTE_POOL_PERCENT_HF21       (25*HIVE_1_PERCENT)
 
 #define HIVE_POST_AVERAGE_WINDOW              (60*60*24u) // 1 day

@@ -707,7 +707,7 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
 
   int64_t abs_rshares = fc::uint128_to_int64(used_mana);
 
-  abs_rshares -= HIVE_VOTE_DUST_THRESHOLD;
+  abs_rshares -= _db.has_hardfork( HIVE_HARDFORK_1_30_VOTE_DUST ) ? PIXA_HF30_VOTE_DUST_THRESHOLD : HIVE_VOTE_DUST_THRESHOLD;
   abs_rshares = std::max( int64_t(0), abs_rshares );
 
   uint32_t cashout_delta = ( comment_cashout->get_cashout_time() - _now ).to_seconds();

@@ -1,0 +1,27 @@
+#ifndef HIVE_HARDFORK_1_30
+#define HIVE_HARDFORK_1_30 30
+
+// Mainnet activation is intentionally unscheduled. Replace this sentinel with the
+// agreed rollout time only after upgraded witnesses are ready. Testnets can set it.
+#ifdef USE_ALTERNATE_CHAIN_ID
+#define HIVE_HARDFORK_1_30_TIME (hive::protocol::testnet_blockchain_configuration::configuration_data.get_hf_time(HIVE_HARDFORK_1_30, 4294967295u))
+#else
+#define HIVE_HARDFORK_1_30_TIME 1791374400 // Wednesday, 7 October 2026 12:00:00 UTC
+#endif
+
+#define HIVE_HARDFORK_1_30_VERSION hive::protocol::hardfork_version( 1, 30 )
+#define HIVE_HARDFORK_1_30_WITNESS_APPROVAL HIVE_HARDFORK_1_30
+#define HIVE_HARDFORK_1_30_OWNER_HISTORY HIVE_HARDFORK_1_30
+// count votes from small accounts: scale the vote dust threshold to Pixagram's 1:1 VESTS price
+#define HIVE_HARDFORK_1_30_VOTE_DUST HIVE_HARDFORK_1_30
+// pay the nominal witness share per block while fewer than HIVE_MAX_WITNESSES are scheduled
+#define HIVE_HARDFORK_1_30_NOMINAL_WITNESS_PAY HIVE_HARDFORK_1_30
+// fund the DPF without truncating each block's PXS share to 0.001
+#define HIVE_HARDFORK_1_30_DHF_FUNDING HIVE_HARDFORK_1_30
+// pay proposals without truncating each maintenance period's PXS share to 0.001
+#define HIVE_HARDFORK_1_30_PROPOSAL_PAY HIVE_HARDFORK_1_30
+// stop burning the PIXA that does not fit into a whole 0.001 PXS when a reward is converted
+#define HIVE_HARDFORK_1_30_NO_CONVERSION_BURN HIVE_HARDFORK_1_30
+// charge custom_json / custom resource credits in proportion to payload length
+#define HIVE_HARDFORK_1_30_CUSTOM_DATA_RC HIVE_HARDFORK_1_30
+#endif

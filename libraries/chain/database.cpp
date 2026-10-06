@@ -37,6 +37,7 @@
 #include <hive/chain/util/manabar.hpp>
 #include <hive/chain/util/rd_setup.hpp>
 #include <hive/chain/util/dhf_processor.hpp>
+#include <hive/chain/util/dhf_funding.hpp>
 #include <hive/chain/util/delayed_voting.hpp>
 #include <hive/chain/util/decoded_types_data_storage.hpp>
 #include <hive/chain/util/impacted.hpp>
@@ -581,6 +582,18 @@ void database::process_non_fast_confirm_transaction( const std::shared_ptr<full_
     FC_ASSERT(trx_size <= trx_size_limit, "Transaction too large - size = ${trx_size}, limit ${trx_size_limit}",
               (trx_size)(trx_size_limit));
 
+    // Each signature costs a full elliptic-curve recovery to verify but is cheap to fabricate, and a
+    // transaction that fails verification is charged no RC at all, so an unbounded signature list is
+    // free work for anyone. Upstream Hive is bounded only incidentally, by its ~64 KiB transaction
+    // size, to roughly a thousand signatures; Pixagram's 2 MiB transactions would allow ~32,000.
+    // Cap the count to restore that margin. Deliberately NOT a consensus rule: this is the
+    // pending-transaction path only, _apply_transaction does not re-check it, so a block containing
+    // such a transaction is still valid and no node can fork over this.
+    const size_t signature_count = trx.signatures.size();
+    FC_ASSERT( signature_count <= PIXA_MAX_TRANSACTION_SIGNATURES,
+      "Too many signatures - count = ${signature_count}, limit ${limit}",
+      (signature_count)("limit", uint64_t( PIXA_MAX_TRANSACTION_SIGNATURES )) );
+
     detail::with_skip_flags(*this, skip, [&]()
     {
       BOOST_SCOPE_EXIT( this_ ) { this_->clear_tx_status(); } BOOST_SCOPE_EXIT_END
@@ -588,7 +601,9 @@ void database::process_non_fast_confirm_transaction( const std::shared_ptr<full_
       _push_transaction(full_transaction);
     });
   }
-  FC_CAPTURE_AND_RETHROW((trx))
+  // Deliberately does not capture the transaction: serializing a multi-megabyte transaction
+  // (and its signature list) into the exception on every failure is itself free work.
+  FC_CAPTURE_AND_RETHROW()
 }
 
 struct custom_op_visitor
@@ -981,6 +996,20 @@ std::pair< HBD_asset, HIVE_asset > database::create_hbd( const account_object& t
 
       auto hbd = to_hbd * median_price;
 
+      // Converting PIXA to PXS truncates to 0.001 PXS. The whole of to_hbd used to be burned
+      // regardless, so the PIXA that did not fit into a whole 0.001 PXS was destroyed rather than
+      // paid - and when the reward was small enough that hbd rounded to zero, the entire PXS half
+      // of an author's payout vanished. From HF30 only the PIXA actually represented by the minted
+      // PXS is burned; the remainder is paid out as liquid PIXA.
+      HIVE_asset converted = to_hbd;
+      if( has_hardfork( HIVE_HARDFORK_1_30_NO_CONVERSION_BURN ) )
+      {
+        converted = hbd * median_price;
+        if( converted > to_hbd )
+          converted = to_hbd; // never burn more than was offered for conversion
+        to_hive += to_hbd - converted;
+      }
+
       if( to_reward_balance )
       {
         adjust_reward_balance( to_account, hbd );
@@ -992,7 +1021,7 @@ std::pair< HBD_asset, HIVE_asset > database::create_hbd( const account_object& t
         adjust_balance( to_account, to_hive );
       }
 
-      adjust_supply( -to_hbd );
+      adjust_supply( -converted );
       adjust_supply( hbd );
       assets.first = hbd;
       assets.second = to_hive;
@@ -1693,7 +1722,8 @@ void database::adjust_rshares2( fc::uint128_t old_rshares2, fc::uint128_t new_rs
 
 void database::update_owner_authority( const account_object& account, const authority& owner_authority )
 {
-  if( head_block_num() >= HIVE_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM )
+  if( has_hardfork( HIVE_HARDFORK_1_30_OWNER_HISTORY )
+    || head_block_num() >= HIVE_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM )
   {
     create< owner_authority_history_object >( account, get< account_authority_object, by_account >( account.get_name() ).owner, head_block_time() );
   }
@@ -1762,27 +1792,42 @@ void database::process_funds()
     auto witness_reward = new_hive - content_reward - vesting_reward - dhf_new_funds;
 
     const auto& cwit = get_witness( props.current_witness );
-    witness_reward *= HIVE_MAX_WITNESSES;
 
-    if( cwit.schedule == witness_object::timeshare )
-      witness_reward *= wso.timeshare_weight;
-    else if( cwit.schedule == witness_object::miner )
-      witness_reward *= wso.miner_weight;
-    else if( cwit.schedule == witness_object::elected )
-      witness_reward *= wso.elected_weight;
-    else
+    // The weighting below splits HIVE_MAX_WITNESSES blocks' worth of witness pay across the
+    // witnesses actually scheduled. With a full schedule that averages to the nominal share. With
+    // fewer witnesses each block pays HIVE_MAX_WITNESSES / num_scheduled times the share, so the
+    // chain issues more than its inflation rate (11.7% instead of 9.75% with 9 witnesses).
+    // From HF30, a partial schedule pays every block exactly the nominal share.
+    const bool nominal_witness_pay = has_hardfork( HIVE_HARDFORK_1_30_NOMINAL_WITNESS_PAY )
+      && wso.num_scheduled_witnesses < HIVE_MAX_WITNESSES;
+
+    if( !nominal_witness_pay )
     {
-      push_virtual_operation( *this, system_warning_operation( FC_LOG_MESSAGE( warn,
-        "Encountered unknown witness type for witness: ${w}", ( "w", cwit.owner ) ).get_message() ) );
-    }
+      witness_reward *= HIVE_MAX_WITNESSES;
 
-    witness_reward /= wso.witness_pay_normalization_factor;
+      if( cwit.schedule == witness_object::timeshare )
+        witness_reward *= wso.timeshare_weight;
+      else if( cwit.schedule == witness_object::miner )
+        witness_reward *= wso.miner_weight;
+      else if( cwit.schedule == witness_object::elected )
+        witness_reward *= wso.elected_weight;
+      else
+      {
+        push_virtual_operation( *this, system_warning_operation( FC_LOG_MESSAGE( warn,
+          "Encountered unknown witness type for witness: ${w}", ( "w", cwit.owner ) ).get_message() ) );
+      }
+
+      witness_reward /= wso.witness_pay_normalization_factor;
+    }
 
     HBD_asset new_hbd( 0 );
 
     if( dhf_new_funds.get_amount() != 0 )
     {
-      new_hbd = dhf_new_funds * feed.current_median_history;
+      if( has_hardfork( HIVE_HARDFORK_1_30_DHF_FUNDING ) )
+        new_hbd = util::dhf_funding_without_truncation( dhf_new_funds, feed.current_median_history, head_block_num() );
+      else
+        new_hbd = dhf_new_funds * feed.current_median_history;
       adjust_balance( get_treasury_name(), new_hbd );
     }
 
@@ -2718,7 +2763,7 @@ void database::_apply_transaction(const std::shared_ptr<full_transaction_type>& 
   rc().finalize_transaction( *full_transaction.get() );
   notify_post_apply_transaction( note );
 
-} FC_CAPTURE_AND_RETHROW( (full_transaction->get_transaction()) ) }
+} FC_CAPTURE_AND_RETHROW( (full_transaction->get_transaction_id()) ) } // id only: see the note in process_non_fast_confirm_transaction
 
 
 struct applied_operation_info_controller

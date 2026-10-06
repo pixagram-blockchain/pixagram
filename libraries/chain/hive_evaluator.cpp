@@ -68,9 +68,33 @@ void copy_legacy_chain_properties( chain_properties& dest, const legacy_chain_pr
   dest.hbd_interest_rate = 0;
 }
 
+// An account whose active authority has a zero weight threshold is satisfied by anyone, with no
+// signature. The inherited system accounts (temp, null, ...) are like this. From HF30 such an
+// account may not run witness or feed operations, so no one can register or drive a witness through
+// one. Normal accounts always have a positive threshold (account authority validation requires it).
+bool has_open_active_authority( const database& db, const account_name_type& account )
+{
+  return db.get< account_authority_object, by_account >( account ).active.weight_threshold == 0;
+}
+
+bool last_enabled_witness( const database& db, const witness_object& witness )
+{
+  if( witness.is_disabled() )
+    return false;
+  const auto& witnesses = db.get_index< witness_index >().indices().get< by_name >();
+  return std::none_of( witnesses.begin(), witnesses.end(), [&]( const witness_object& candidate )
+  {
+    return candidate.get_id() != witness.get_id() && !candidate.is_disabled();
+  } );
+}
+
 void witness_update_evaluator::do_apply( const witness_update_operation& o )
 {
   _db.get_account( o.owner ); // verify owner exists
+
+  if( _db.has_hardfork( HIVE_HARDFORK_1_30 ) )
+    HIVE_CHAIN_STATE_ASSERT( !has_open_active_authority( _db, o.owner ), o.owner,
+      "Account with an open authority cannot operate a witness." );
 
   if ( _db.has_hardfork( HIVE_HARDFORK_0_14__410 ) )
   {
@@ -85,6 +109,11 @@ void witness_update_evaluator::do_apply( const witness_update_operation& o )
 
   const auto& by_witness_name_idx = _db.get_index< witness_index >().indices().get< by_name >();
   auto wit_itr = by_witness_name_idx.find( o.owner );
+  if( _db.has_hardfork( HIVE_HARDFORK_1_30 ) && o.block_signing_key == public_key_type() )
+  {
+    HIVE_CHAIN_STATE_ASSERT( wit_itr != by_witness_name_idx.end(), o.owner, "Cannot register a disabled witness" );
+    HIVE_CHAIN_STATE_ASSERT( !last_enabled_witness( _db, *wit_itr ), o.owner, "Cannot disable the last enabled witness" );
+  }
   if( wit_itr != by_witness_name_idx.end() )
   {
     _db.modify( *wit_itr, [&]( witness_object& w )
@@ -121,6 +150,9 @@ struct witness_properties_change_flags
 
 void witness_set_properties_evaluator::do_apply( const witness_set_properties_operation& o )
 {
+  if( _db.has_hardfork( HIVE_HARDFORK_1_30 ) )
+    HIVE_CHAIN_STATE_ASSERT( !has_open_active_authority( _db, o.owner ), o.owner,
+      "Account with an open authority cannot operate a witness." );
   HIVE_CHAIN_HARDFORK_ASSERT( _db.has_hardfork( HIVE_HARDFORK_0_20__1620 ), "witness_set_properties_evaluator not enabled until HF 20" );
 
   const auto& witness = _db.get< witness_object, by_name >( o.owner ); // verifies witness exists;
@@ -181,7 +213,11 @@ void witness_set_properties_evaluator::do_apply( const witness_set_properties_op
   itr = o.props.find( "new_signing_key" );
   flags.key_changed = itr != o.props.end();
   if( flags.key_changed )
+  {
     fc::raw::unpack_from_vector( itr->second, signing_key );
+    if( _db.has_hardfork( HIVE_HARDFORK_1_30 ) && signing_key == public_key_type() )
+      HIVE_CHAIN_STATE_ASSERT( !last_enabled_witness( _db, witness ), o.owner, "Cannot disable the last enabled witness" );
+  }
 
   itr = o.props.find( "sbd_exchange_rate" );
   if(itr == o.props.end() && _db.has_hardfork(HIVE_HARDFORK_1_24))
@@ -644,6 +680,10 @@ void feed_publish_evaluator::do_apply( const feed_publish_operation& o )
     HIVE_CHAIN_ASSET_ASSERT( is_asset_type( o.exchange_rate.base, HBD_SYMBOL ) && is_asset_type( o.exchange_rate.quote, HIVE_SYMBOL ),
       o.exchange_rate, "Price feed must be a HBD/HIVE price" );
   }
+
+  if( _db.has_hardfork( HIVE_HARDFORK_1_30 ) )
+    HIVE_CHAIN_STATE_ASSERT( !has_open_active_authority( _db, o.publisher ), o.publisher,
+      "Account with an open authority cannot publish a feed." );
 
   const auto& witness = _db.get_witness( o.publisher );
   _db.modify( witness, [&]( witness_object& w )
