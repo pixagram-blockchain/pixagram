@@ -188,7 +188,24 @@ void dhf_processor::transfer_payments( const time_point_sec& head_time, HBD_asse
       break;
 
     HBD_asset period_pay;
-    if( db.has_hardfork(HIVE_HARDFORK_1_25) )
+    if( db.has_hardfork(HIVE_HARDFORK_1_30_PROPOSAL_PAY) )
+    {
+      // Each maintenance period used to pay floor( elapsed * daily_pay / 86400 ) on its own, so the
+      // part below 0.001 PXS was discarded every hour. A proposal paying less than 0.024 PXS a day
+      // therefore received exactly nothing, for ever. Pay the difference of two running totals
+      // measured from the proposal's start instead: the remainder carries across periods and the
+      // receiver gets the exact amount due. Both totals derive only from chain state
+      // (start_date, daily_pay, last_budget_time, head_time), so every node computes the same value
+      // on replay and across forks.
+      const uint128_t rate = uint128_t( uint64_t( _item.daily_pay.amount.value ) );
+      const time_point_sec from = std::max( db.get_dynamic_global_properties().last_budget_time, _item.start_date );
+      const uint64_t elapsed_now = head_time > _item.start_date ? uint64_t( ( head_time - _item.start_date ).to_seconds() ) : 0;
+      const uint64_t elapsed_prev = from > _item.start_date ? uint64_t( ( from - _item.start_date ).to_seconds() ) : 0;
+      const uint64_t paid_now = fc::uint128_to_uint64( ( uint128_t( elapsed_now ) * rate ) / uint64_t( daily_seconds ) );
+      const uint64_t paid_prev = fc::uint128_to_uint64( ( uint128_t( elapsed_prev ) * rate ) / uint64_t( daily_seconds ) );
+      period_pay = HBD_asset( paid_now > paid_prev ? int64_t( paid_now - paid_prev ) : 0 );
+    }
+    else if( db.has_hardfork(HIVE_HARDFORK_1_25) )
     {
       period_pay = passed_time_seconds * _item.daily_pay / daily_seconds;
     }

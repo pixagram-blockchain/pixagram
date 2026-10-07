@@ -61,7 +61,7 @@ clean_database_fixture::clean_database_fixture(
 
   init_account_pub_key = init_account_priv_key.get_public_key();
 
-  inject_hardfork( hardfork.valid() ? ( *hardfork ) : HIVE_BLOCKCHAIN_VERSION.minor_v() );
+  inject_hardfork( hardfork.valid() ? ( *hardfork ) : HIVE_HARDFORK_1_29 );
   db->_log_hardforks = true;
 
   vest( HIVE_INIT_MINER_NAME, HIVE_asset( 10'000 ) );

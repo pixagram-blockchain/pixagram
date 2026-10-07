@@ -152,11 +152,34 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
   selected_voted.reserve( wso.max_voted_witnesses );
 
   const auto& widx = db.get_index<witness_index>().indices().get<by_vote_name>();
+  const bool approval_required = db.has_hardfork( HIVE_HARDFORK_1_30_WITNESS_APPROVAL );
+  const auto total_vests = db.get_dynamic_global_properties().total_vesting_shares.amount.value;
+  // One percent of outstanding VESTS. Round up so a nonzero supply always needs approval.
+  const int64_t minimum_votes = approval_required ? std::max< int64_t >( 1, total_vests / 100 + ( total_vests % 100 != 0 ) ) : 0;
+  // The approval floor only filters when at least one enabled witness meets it. If none do - a
+  // bootstrapping or degenerate chain with no real votes - fall back to pre-HF30 behavior and
+  // schedule every enabled witness, rather than collapsing the schedule. That keeps flood
+  // protection where it matters (an attacker's unvoted witnesses are excluded only while a real
+  // witness clears the floor) without ever producing a single-producer schedule.
+  const bool any_approved = approval_required && std::any_of( widx.begin(), widx.end(),
+    [&]( const witness_object& witness )
+    {
+      return !witness.is_disabled() && witness.votes.value >= minimum_votes;
+    } );
+  const auto eligible = [&]( const witness_object& witness )
+  {
+    if( witness.is_disabled() )
+      return false;
+    if( !approval_required || !any_approved )
+      return true;
+    return witness.votes.value >= minimum_votes;
+  };
   for( auto itr = widx.begin();
     itr != widx.end() && selected_voted.size() < wso.max_voted_witnesses;
     ++itr )
   {
-    if( db.has_hardfork( HIVE_HARDFORK_0_14__278 ) && (itr->is_disabled()) )
+    if( approval_required ? !eligible( *itr ) :
+      ( db.has_hardfork( HIVE_HARDFORK_0_14__278 ) && itr->is_disabled() ) )
       continue;
     selected_voted.insert( itr->get_id() );
     active_witnesses.push_back( itr->owner) ;
@@ -177,7 +200,8 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
     if( selected_voted.find( mitr->get_id() ) == selected_voted.end() )
     {
       // Only consider a miner who has a valid block signing key
-      if( !( db.has_hardfork( HIVE_HARDFORK_0_14__278 ) && db.get_witness( mitr->owner ).is_disabled() ) )
+      if( approval_required ? eligible( *mitr ) :
+        !( db.has_hardfork( HIVE_HARDFORK_0_14__278 ) && mitr->is_disabled() ) )
       {
         selected_miners.insert( mitr->get_id() );
         active_witnesses.push_back(mitr->owner);
@@ -211,8 +235,9 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
     new_virtual_time = sitr->virtual_scheduled_time; /// everyone advances to at least this time
     processed_witnesses.push_back(sitr);
 
-    if( db.has_hardfork( HIVE_HARDFORK_0_14__278 ) && sitr->is_disabled() )
-      continue; /// skip witnesses without a valid block signing key
+    if( approval_required ? !eligible( *sitr ) :
+      ( db.has_hardfork( HIVE_HARDFORK_0_14__278 ) && sitr->is_disabled() ) )
+      continue; /// skip witnesses without a valid key or sufficient approval
 
     if( selected_miners.find( sitr->get_id() ) == selected_miners.end()
       && selected_voted.find( sitr->get_id() ) == selected_voted.end() )
@@ -248,9 +273,17 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
     reset_virtual_schedule_time(db);
   }
 
-  size_t expected_active_witnesses = std::min( size_t(HIVE_MAX_WITNESSES), widx.size() );
-  FC_ASSERT( active_witnesses.size() == expected_active_witnesses, "number of active witnesses does not equal expected_active_witnesses=${expected_active_witnesses}",
-                          ("active_witnesses.size()",active_witnesses.size()) ("HIVE_MAX_WITNESSES",HIVE_MAX_WITNESSES) ("expected_active_witnesses", expected_active_witnesses) );
+  // HF30 can intentionally exclude candidates below the approval floor. Before HF30,
+  // count enabled objects rather than every registered object (including null keys).
+  const size_t eligible_count = std::count_if( widx.begin(), widx.end(), [&]( const witness_object& witness )
+  {
+    return approval_required ? eligible( witness ) : !witness.is_disabled();
+  } );
+  const size_t expected_active_witnesses = std::min( size_t(HIVE_MAX_WITNESSES), eligible_count );
+  FC_ASSERT( active_witnesses.size() == expected_active_witnesses,
+    "number of active witnesses does not equal expected_active_witnesses=${expected_active_witnesses}",
+    ("active_witnesses.size()",active_witnesses.size()) ("expected_active_witnesses",expected_active_witnesses) );
+  FC_ASSERT( !active_witnesses.empty(), "No eligible witness remains to produce blocks" );
 
   auto majority_version = wso.majority_version;
 
@@ -259,9 +292,32 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
     flat_map< version, uint32_t, std::greater< version > > witness_versions;
     flat_map< std::tuple< hardfork_version, time_point_sec >, uint32_t > hardfork_version_votes;
 
+    // Count the scheduled witnesses that are actually PRODUCING, to use as the hardfork-vote quorum
+    // denominator below (see the comment at hardfork_vote_quorum for why).
+    uint32_t producing_count = 0;
+    const uint64_t head = db.head_block_num();
+
     for( uint32_t i = 0; i < wso.num_scheduled_witnesses; i++ )
     {
       auto& witness = db.get_witness( wso.current_shuffled_witnesses[ i ] );
+
+      // last_confirmed_block_num is set ONLY when a witness produces a block (database_witness.cpp
+      // update_signing_witness), so a witness that never produces keeps it at 0. It is set before
+      // this schedule update runs within the same block, so it is never greater than head and the
+      // subtraction cannot wrap. Both values are deterministic chain state, so every node computes
+      // the same result on replay and across forks.
+      //
+      // A witness that is not producing contributes NEITHER to the quorum denominator NOR a vote.
+      // Counting its vote while excluding it from the denominator would cut both ways: with eight
+      // of nine witnesses offline the quorum would fall to one and a single stale vote from an
+      // offline witness could activate a hardfork over the head of the only witness still
+      // producing. Numerator and denominator must therefore be drawn from the same set.
+      if( witness.last_confirmed_block_num == 0
+        || head - witness.last_confirmed_block_num > uint64_t( 2 * HIVE_MAX_WITNESSES ) )
+        continue;
+
+      ++producing_count;
+
       if( witness_versions.find( witness.running_version ) == witness_versions.end() )
         witness_versions[ witness.running_version ] = 1;
       else
@@ -287,7 +343,23 @@ void update_witness_schedule4(database& db, const witness_schedule_object& wso)
     // The majority-version tally has no bearing on activation, so it keeps using the legacy
     // stored threshold until HF29 is applied. This does not make pre-HF state field-for-field
     // identical: upgraded nodes can already record different next_hardfork metadata.
-    const uint32_t hardfork_vote_quorum = pixa_hardfork_quorum( wso.num_scheduled_witnesses );
+    //
+    // Base the quorum denominator on witnesses that are actually PRODUCING, not on the raw
+    // num_scheduled count. num_scheduled counts EVERY scheduled witness, including ones that never
+    // produce and keep the default (0.0.0, genesis) hardfork vote that the stale-vote filter below
+    // ignores: such a witness raises the quorum but can never vote for it. An attacker can register
+    // a few free, non-producing witnesses (e.g. via the keyless `temp` account, exploitable until
+    // the HF30 temp guard activates) and push the quorum above what the honest producing witnesses
+    // can reach, permanently blocking HF30 - and every future hardfork - from activating by vote;
+    // HF30's own removal rules are HF30-gated and so cannot undo it. The fix must therefore be
+    // effective BEFORE HF30 activates, so it is deliberately NOT hardfork-gated - exactly as HF29
+    // changed its own tally non-gated. Like that change it only touches next_hardfork /
+    // next_hardfork_time (and, post-HF29, majority_version), none of which affect block validity,
+    // so patched and unpatched nodes keep accepting each other's blocks until the hardfork actually
+    // applies, by which time every node is upgraded. The producing_count > 0 fallback avoids a
+    // degenerate basis of 0, which pixa_hardfork_quorum would turn into an unreachable 17.
+    const uint32_t quorum_basis = producing_count > 0 ? producing_count : wso.num_scheduled_witnesses;
+    const uint32_t hardfork_vote_quorum = pixa_hardfork_quorum( quorum_basis );
     const uint32_t majority_version_quorum = db.has_hardfork( HIVE_HARDFORK_1_29_HARDFORK_QUORUM )
       ? hardfork_vote_quorum : uint32_t( wso.hardfork_required_witnesses );
 

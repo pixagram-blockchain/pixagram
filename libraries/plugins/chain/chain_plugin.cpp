@@ -3,6 +3,7 @@
 #include <appbase/application.hpp>
 
 #include <hive/chain/blockchain_worker_thread_pool.hpp>
+#include <hive/protocol/config.hpp>
 #include <hive/chain/block_storage_interface.hpp>
 #include <hive/chain/notifications.hpp>
 #include <hive/chain/rc/rc_utility.hpp>
@@ -2091,6 +2092,15 @@ void chain_plugin::queue_transaction( const std::shared_ptr<transaction_flow_con
 void chain_plugin::determine_encoding_and_accept_transaction( full_transaction_ptr& result, const hive::protocol::signed_transaction& trx,
   std::function< void( bool hf26_auth_fail )> on_full_trx, const lock_type lock /* = lock_type::boost */)
 { try {
+  // Check the signature count before anything expensive runs. The worker pool below recovers one
+  // public key per signature, which is precisely the work PIXA_MAX_TRANSACTION_SIGNATURES exists to
+  // bound, so enforcing the limit only in database::push_transaction would let an over-signed
+  // transaction pay for the whole recovery before being rejected. Node-local policy, not consensus.
+  const size_t api_signature_count = trx.signatures.size();
+  FC_ASSERT( api_signature_count <= PIXA_MAX_TRANSACTION_SIGNATURES,
+    "Too many signatures - count = ${api_signature_count}, limit ${limit}",
+    (api_signature_count)("limit", uint64_t( PIXA_MAX_TRANSACTION_SIGNATURES )) );
+
   result = full_transaction_type::create_from_signed_transaction( trx, hive::protocol::pack_type::hf26, true /* cache this transaction */);
   on_full_trx( false );
   // the only reason we'd be getting something in singed_transaction form is from the API, coming in as json

@@ -112,6 +112,9 @@ void database::init_hardforks()
   FC_ASSERT( HIVE_HARDFORK_1_29 == 29, "Invalid hardfork configuration" );
   _hardfork_versions.times[ HIVE_HARDFORK_1_29 ] = fc::time_point_sec( HIVE_HARDFORK_1_29_TIME );
   _hardfork_versions.versions[ HIVE_HARDFORK_1_29 ] = HIVE_HARDFORK_1_29_VERSION;
+  FC_ASSERT( HIVE_HARDFORK_1_30 == 30, "Invalid hardfork configuration" );
+  _hardfork_versions.times[ HIVE_HARDFORK_1_30 ] = fc::time_point_sec( HIVE_HARDFORK_1_30_TIME );
+  _hardfork_versions.versions[ HIVE_HARDFORK_1_30 ] = HIVE_HARDFORK_1_30_VERSION;
 }
 
 void database::process_hardforks()
@@ -126,6 +129,11 @@ void database::process_hardforks()
       while( _hardfork_versions.versions[ hardforks.last_hardfork ] < hardforks.next_hardfork
         && hardforks.next_hardfork_time <= head_block_time() )
       {
+        // A witness vote must not move the still-unscheduled HF30 to an earlier time.
+        if( hardforks.last_hardfork + 1 == HIVE_HARDFORK_1_30
+          && ( hardforks.next_hardfork_time != _hardfork_versions.times[ HIVE_HARDFORK_1_30 ]
+            || head_block_time() < _hardfork_versions.times[ HIVE_HARDFORK_1_30 ] ) )
+          break;
         if( hardforks.last_hardfork < HIVE_NUM_HARDFORKS ) {
           apply_hardfork( hardforks.last_hardfork + 1 );
         }
@@ -559,6 +567,9 @@ void database::apply_hardfork( uint32_t hardfork )
       }
       break;
     }
+    case HIVE_HARDFORK_1_30:
+      // Eligibility and owner-history behavior are gated where they are applied.
+      break;
     default:
       break;
   }

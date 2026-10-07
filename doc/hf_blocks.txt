@@ -30,3 +30,4 @@ HARDFORK 26 at block 1
 HARDFORK 27 at block 1
 HARDFORK 28 at block 1
 HARDFORK 29 at block 402205
+HARDFORK 30 at block 949330
