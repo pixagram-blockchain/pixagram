@@ -28,6 +28,48 @@
 #define GRAPHENE_NET_PROTOCOL_ADVERTISE_BLOCKS_BY_BLOCK_ID_VERSION 107 // share blocks by block_id instead of by block_message hash added in 107
 #define GRAPHENE_NET_PROTOCOL_FIREWALL_CHECK_VERSION               106 // support for the firewall check was added in 106
 
+// the minimum protocol version we accept a connection from.  Version 106 shipped many years ago
+// (steem era); every known client since has reported its protocol version, chain id, and last
+// known hardfork block, so requiring them costs nothing and closes the loophole where a peer
+// reporting none of them silently bypassed every compatibility check
+#define GRAPHENE_NET_MINIMUM_PROTOCOL_VERSION                      106
+
+// circuit breaker for invalid-block punitive disconnects: if we find ourselves kicking more
+// than COUNT peers within WINDOW seconds for offering "invalid" blocks, the far more likely
+// explanation is a systemic event (fork storm, local latency, a bug of ours) than that many
+// simultaneous attackers -- stop disconnecting and fall back to reconciliation until the
+// window drains.  The 2026-07-09 incident was exactly this signature: hundreds of honest
+// peers punished in minutes, every rejection a false positive.
+#define GRAPHENE_NET_INVALID_BLOCK_DISCONNECT_BREAKER_COUNT        5
+#define GRAPHENE_NET_INVALID_BLOCK_DISCONNECT_BREAKER_WINDOW_SEC   60
+
+// how far past our current head an advertised block id may claim to be and still be worth
+// fetching.  Legitimate live adverts are at most a block or two ahead; this allows for
+// generous clock skew and momentary head lag while rejecting fabricated far-future ids
+#define GRAPHENE_NET_FUTURE_BLOCK_IDS_GRACE_BLOCKS                 20
+
+// if the invalid-block disconnect breaker has been keeping peers whose blocks we rejected,
+// but our head hasn't advanced for this long, the breaker's systemic-blip assumption is
+// falsified -- those peers may be all that's occupying our slots while none of them can
+// feed us the chain.  Revoke the deferral and disconnect them so the connect loop can
+// find replacements
+#define GRAPHENE_NET_BREAKER_STALL_OVERRIDE_SEC                    60
+
+// how long the connect loop trusts a route-lookup result for a peer address before probing
+// again, so that interface/route changes (link coming up, a default route appearing) are
+// picked up without re-probing every candidate on every pass
+#define GRAPHENE_NET_ROUTE_PROBE_CACHE_SEC                         60
+
+// the far-future filter above assumes head lag is momentary.  If our head has not advanced
+// for this long while an established peer keeps advertising blocks past the grace window,
+// the likelier explanation is that we fell behind (e.g. the chain thread stalled long enough
+// for the network to get more than GRAPHENE_NET_FUTURE_BLOCK_IDS_GRACE_BLOCKS ahead) than
+// that the peer is fabricating ids.  Since adverts are dropped before they are recorded and
+// sync otherwise only restarts on a new connection, such a node would stay behind until its
+// next new peer.  Instead we restart sync with the advertising peer, at most once per this
+// interval per peer.  Also the minimum spacing between such restarts for one peer.
+#define GRAPHENE_NET_STALLED_HEAD_RESYNC_SEC                       60
+
 /**
  * Define this to enable debugging code in the p2p network interface.
  * This is code that would never be executed in normal operation, but is

@@ -1,71 +1,102 @@
 from __future__ import annotations
 
 import pytest
-from beekeepy.exceptions import ErrorInResponseError
+from test_tools.exceptions import ErrorInResponseError
 
 import test_tools as tt
+
+# RC amounts have to clear the chain's min_delegation - (account_creation_fee / 3) * vesting_share_price, see
+# libraries/chain/rc/rc_utility.cpp - which is around 3600 RC on a default testnet. They are kept well above
+# it, so that a change of the fee or of the vest price cannot quietly invalidate them, and well below what the
+# delegators power up below, since delegatable RC comes from own vesting shares only (rc_adjustment and
+# received delegations do not count, see get_maximum_rc in account_object.hpp).
+DELEGATION = 100_000
 
 
 def test_delegated_rc_account_execute_operation(wallet: tt.Wallet) -> None:
     accounts = get_accounts_name(wallet.create_accounts(2, "receiver"))
 
-    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(0.1))
-    wallet.api.delegate_rc(accounts[0], [accounts[1]], 100)
+    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(100))
+    wallet.api.transfer("initminer", accounts[1], tt.Asset.Test(1), "")
+    wallet.api.delegate_rc(accounts[0], [accounts[1]], DELEGATION)
     wallet.api.create_account(accounts[1], "alice", "{}")
 
 
 def test_undelegated_rc_account_reject_execute_operation(wallet: tt.Wallet) -> None:
-    accounts = get_accounts_name(wallet.create_accounts(2, "receiver"))
+    # Raise total_vesting_shares so the RC cost of create_account (which grows linearly with
+    # total_vesting_shares) is well above the small non-delegatable reserve (rc_adjustment) that a freshly
+    # created account holds. Without this the testnet RC pool is large enough that even an account with
+    # only its base reserve could create another account, so the rejection below would not happen.
+    wallet.api.transfer_to_vesting("initminer", "initminer", tt.Asset.Test(100_000_000))
 
-    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(0.1))
+    kept, removed = get_accounts_name(wallet.create_accounts(2, "receiver"))
+    # both accounts need liquid HIVE to pay the account_creation_fee
+    with wallet.in_single_transaction():
+        wallet.api.transfer("initminer", kept, tt.Asset.Test(1), "")
+        wallet.api.transfer("initminer", removed, tt.Asset.Test(1), "")
 
-    wallet.api.delegate_rc(accounts[0], [accounts[1]], 100)
-    wallet.api.create_account(accounts[1], "alice", "{}")
+    # delegate enough RC to both accounts to afford create_account (initminer has plenty after powering up)
+    with wallet.in_single_transaction():
+        wallet.api.delegate_rc("initminer", [kept, removed], 1_000_000_000)
+    # take the RC delegation away from `removed`
+    wallet.api.delegate_rc("initminer", [removed], 0)
 
-    wallet.api.delegate_rc(accounts[0], [accounts[1]], 0)
-
-    with pytest.raises(ErrorInResponseError):
-        wallet.api.create_account(accounts[1], "bob", "{}")
+    # `kept` still has the RC delegation and can execute the operation; `removed` is left with only its base
+    # reserve, which is not enough - so the same operation is rejected.
+    wallet.api.create_account(kept, "alice", "{}")
+    with pytest.raises(ErrorInResponseError) as exception:
+        wallet.api.create_account(removed, "bob", "{}")
+    # make sure the rejection is specifically the lack of RC (and not e.g. missing funds or some other error)
+    assert "Please wait to transact or power up HIVE" in str(exception.value)
 
 
 def test_rc_delegation_to_same_receiver(wallet: tt.Wallet) -> None:
     accounts = get_accounts_name(wallet.create_accounts(3, "receiver"))
 
     with wallet.in_single_transaction():
-        wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(10))
+        wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(100))
         wallet.api.transfer_to_vesting("initminer", accounts[1], tt.Asset.Test(10))
 
-    with wallet.in_single_transaction():
-        wallet.api.delegate_rc(accounts[0], [accounts[2]], 10)
-        wallet.api.delegate_rc(accounts[1], [accounts[2]], 2)
+    # a freshly created account has its own non-zero base max_rc (rc_adjustment); delegations add on top
+    receiver_base_max_rc = int(get_rc_account_info(accounts[2], wallet)["max_rc"])
 
-    assert get_rc_account_info(accounts[2], wallet)["max_rc"] == 12
+    with wallet.in_single_transaction():
+        wallet.api.delegate_rc(accounts[0], [accounts[2]], 5 * DELEGATION)
+        wallet.api.delegate_rc(accounts[1], [accounts[2]], DELEGATION)
+
+    assert (
+        int(get_rc_account_info(accounts[2], wallet)["max_rc"])
+        == receiver_base_max_rc + 6 * DELEGATION
+    )
 
 
 def test_same_rc_delegation_rejection(wallet: tt.Wallet) -> None:
     accounts = get_accounts_name(wallet.create_accounts(2, "receiver"))
 
-    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(10))
-    wallet.api.delegate_rc(accounts[0], [accounts[1]], 10)
+    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(100))
+    wallet.api.delegate_rc(accounts[0], [accounts[1]], DELEGATION)
 
     with pytest.raises(ErrorInResponseError):
         # Can not make same delegation RC two times
-        wallet.api.delegate_rc(accounts[0], [accounts[1]], 10)
+        wallet.api.delegate_rc(accounts[0], [accounts[1]], DELEGATION)
 
 
 def test_overwriting_of_delegated_rc_value(wallet: tt.Wallet) -> None:
     accounts = get_accounts_name(wallet.create_accounts(2, "receiver"))
 
-    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(10))
+    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(100))
 
-    wallet.api.delegate_rc(accounts[0], [accounts[1]], 5)
-    assert get_rc_account_info(accounts[1], wallet)["max_rc"] == 5
+    # a freshly created account has its own non-zero base max_rc (rc_adjustment); delegations add on top
+    base = int(get_rc_account_info(accounts[1], wallet)["max_rc"])
 
-    wallet.api.delegate_rc(accounts[0], [accounts[1]], 10)
-    assert get_rc_account_info(accounts[1], wallet)["max_rc"] == 10
+    wallet.api.delegate_rc(accounts[0], [accounts[1]], DELEGATION)
+    assert int(get_rc_account_info(accounts[1], wallet)["max_rc"]) == base + DELEGATION
 
-    wallet.api.delegate_rc(accounts[0], [accounts[1]], 7)
-    assert get_rc_account_info(accounts[1], wallet)["max_rc"] == 7
+    wallet.api.delegate_rc(accounts[0], [accounts[1]], 3 * DELEGATION)
+    assert int(get_rc_account_info(accounts[1], wallet)["max_rc"]) == base + 3 * DELEGATION
+
+    wallet.api.delegate_rc(accounts[0], [accounts[1]], 2 * DELEGATION)
+    assert int(get_rc_account_info(accounts[1], wallet)["max_rc"]) == base + 2 * DELEGATION
 
 
 def test_large_rc_delegation(node: tt.InitNode, wallet: tt.Wallet) -> None:
@@ -76,9 +107,11 @@ def test_large_rc_delegation(node: tt.InitNode, wallet: tt.Wallet) -> None:
     cost_of_transaction = 150149
     node.wait_for_block_with_number(3)
     wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(200000000))
+    # a freshly created account has its own non-zero base max_rc (rc_adjustment); delegations add on top
+    receiver_base_max_rc = int(get_rc_account_info(accounts[1], wallet)["max_rc"])
     rc_to_delegate = int(get_rc_account_info(accounts[0], wallet)["rc_manabar"]["current_mana"]) - cost_of_transaction
     wallet.api.delegate_rc(accounts[0], [accounts[1]], rc_to_delegate)
-    assert int(get_rc_account_info(accounts[1], wallet)["max_rc"]) == rc_to_delegate
+    assert int(get_rc_account_info(accounts[1], wallet)["max_rc"]) == receiver_base_max_rc + rc_to_delegate
 
 
 def test_out_of_int64_rc_delegation(wallet: tt.Wallet) -> None:
@@ -93,19 +126,20 @@ def test_out_of_int64_rc_delegation(wallet: tt.Wallet) -> None:
 def test_reject_of_delegation_of_delegated_rc(wallet: tt.Wallet) -> None:
     accounts = get_accounts_name(wallet.create_accounts(3, "receiver"))
 
-    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(0.1))
-    wallet.api.delegate_rc(accounts[0], [accounts[1]], 100)
+    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(100))
+    wallet.api.delegate_rc(accounts[0], [accounts[1]], 2 * DELEGATION)
 
+    # received RC is not delegatable, so accounts[1] cannot pass it on even though it holds enough
     with pytest.raises(ErrorInResponseError):
-        wallet.api.delegate_rc(accounts[1], [accounts[2]], 50)
+        wallet.api.delegate_rc(accounts[1], [accounts[2]], DELEGATION)
 
 
 def test_wrong_sign_in_transaction(wallet: tt.Wallet) -> None:
     accounts = get_accounts_name(wallet.create_accounts(2, "receiver"))
 
-    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(10))
+    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(100))
 
-    operation = wallet.api.delegate_rc(accounts[0], [accounts[1]], 100, broadcast=False)
+    operation = wallet.api.delegate_rc(accounts[0], [accounts[1]], DELEGATION, broadcast=False)
     operation["operations"][0][1]["required_posting_auths"][0] = accounts[1]
 
     with pytest.raises(ErrorInResponseError):
@@ -115,7 +149,7 @@ def test_wrong_sign_in_transaction(wallet: tt.Wallet) -> None:
 def test_minus_rc_delegation(wallet: tt.Wallet) -> None:
     accounts = get_accounts_name(wallet.create_accounts(2, "receiver"))
 
-    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(10))
+    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(100))
     with pytest.raises(ErrorInResponseError):
         wallet.api.delegate_rc(accounts[0], [accounts[1]], -100)
 
@@ -123,8 +157,8 @@ def test_minus_rc_delegation(wallet: tt.Wallet) -> None:
 def test_power_up_delegator(wallet: tt.Wallet) -> None:
     accounts = get_accounts_name(wallet.create_accounts(2, "receiver"))
 
-    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(10))
-    wallet.api.delegate_rc(accounts[0], [accounts[1]], 100)
+    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(100))
+    wallet.api.delegate_rc(accounts[0], [accounts[1]], DELEGATION)
     rc0 = get_rc_account_info(accounts[1], wallet)["rc_manabar"]["current_mana"]
     wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(100))
     rc1 = get_rc_account_info(accounts[1], wallet)["rc_manabar"]["current_mana"]
@@ -177,9 +211,10 @@ def test_multidelegation(node: tt.InitNode, wallet: tt.Wallet) -> None:
 
 def test_delegations_cancellation_after_rollback_vest_delegation_to_delegator(wallet: tt.Wallet) -> None:
     accounts = get_accounts_name(wallet.create_accounts(5, "account"))
-    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(10000))
+    # a fresh InitNode has a very low vest price, so power up enough to have > 1000 VESTS available to delegate
+    wallet.api.transfer_to_vesting("initminer", accounts[0], tt.Asset.Test(100000))
     wallet.api.delegate_vesting_shares(accounts[0], accounts[1], tt.Asset.Vest(1000))
-    wallet.api.delegate_rc(accounts[1], accounts[2:5], 10)
+    wallet.api.delegate_rc(accounts[1], accounts[2:5], DELEGATION)
 
     assert len(wallet.api.list_rc_direct_delegations([accounts[1], accounts[0]], 100)) == 3
 

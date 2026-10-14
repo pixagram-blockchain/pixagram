@@ -23,17 +23,17 @@
 #include <hive/chain/detail/state/recurrent_transfer_object.hpp>
 
 #include <hive/chain/util/reward.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE( restore_accounts_02 )
   {
     BOOST_TEST_MESSAGE( "Saving during HF23 and restoring balances during HF24" );
 
-    ACTORS( (alice0)(alice1)(alice2)(alice3)(alice4)(dude) )
+    ACTORS( DEFAULT_VESTING, (alice0)(alice1)(alice2)(alice3)(alice4)(dude) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -155,7 +155,7 @@ BOOST_AUTO_TEST_CASE( restore_accounts_01 )
   {
     BOOST_TEST_MESSAGE( "Saving during HF23 and restoring balances during HF24" );
 
-    ACTORS( (alice)(bob)(carol) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -181,17 +181,21 @@ BOOST_AUTO_TEST_CASE( restore_accounts_01 )
 
       {
         db->gather_balance( _alice.get_name(), _alice.get_hive_balance(), _alice.get_hbd_balance() );
-        db->adjust_balance( db->get_treasury_name(), _alice.get_hive_balance() );
-        db->adjust_balance( db->get_treasury_name(), _alice.get_hbd_balance() );
-        db->adjust_balance( "alice", -_alice.get_hive_balance() );
-        db->adjust_balance( "alice", -_alice.get_hbd_balance() );
+        temp_HIVE_balance hive_transfer;
+        db->adjust_balance( "alice", hive_transfer, -_alice.get_hive_balance() );
+        db->adjust_balance( db->get_treasury_name(), hive_transfer, hive_transfer.as_asset() );
+        temp_HBD_balance hbd_transfer;
+        db->adjust_balance( "alice", hbd_transfer, -_alice.get_hbd_balance() );
+        db->adjust_balance( db->get_treasury_name(), hbd_transfer, hbd_transfer.as_asset() );
       }
       {
         db->gather_balance( _bob.get_name(), _bob.get_hive_balance(), _bob.get_hbd_balance() );
-        db->adjust_balance( db->get_treasury_name(), _bob.get_hive_balance() );
-        db->adjust_balance( db->get_treasury_name(), _bob.get_hbd_balance() );
-        db->adjust_balance( "bob", -_bob.get_hive_balance() );
-        db->adjust_balance( "bob", -_bob.get_hbd_balance() );
+        temp_HIVE_balance hive_transfer;
+        db->adjust_balance( "bob", hive_transfer, -_bob.get_hive_balance() );
+        db->adjust_balance( db->get_treasury_name(), hive_transfer, hive_transfer.as_asset() );
+        temp_HBD_balance hbd_transfer;
+        db->adjust_balance( "bob", hbd_transfer, -_bob.get_hbd_balance() );
+        db->adjust_balance( db->get_treasury_name(), hbd_transfer, hbd_transfer.as_asset() );
       }
 
       HIVE_asset _2000( 2'000'000 );
@@ -203,10 +207,12 @@ BOOST_AUTO_TEST_CASE( restore_accounts_01 )
 
       {
         //Create another balances for `alice`
-        db->adjust_balance( "carol", -_2000 );
-        db->adjust_balance( "carol", -_10 );
-        db->adjust_balance( "alice", _2000 );
-        db->adjust_balance( "alice", _10 );
+        temp_HIVE_balance hive_transfer;
+        db->adjust_balance( "carol", hive_transfer, -_2000 );
+        db->adjust_balance( "alice", hive_transfer, _2000 );
+        temp_HBD_balance hbd_transfer;
+        db->adjust_balance( "carol", hbd_transfer, -_10 );
+        db->adjust_balance( "alice", hbd_transfer, _10 );
 
         generate_block();
 
@@ -215,10 +221,12 @@ BOOST_AUTO_TEST_CASE( restore_accounts_01 )
       }
       {
         //Create another balances for `bob`
-        db->adjust_balance( "carol", -_800 );
-        db->adjust_balance( "carol", -_70 );
-        db->adjust_balance( "bob", _800 );
-        db->adjust_balance( "bob", _70 );
+        temp_HIVE_balance hive_transfer;
+        db->adjust_balance( "carol", hive_transfer, -_800 );
+        db->adjust_balance( "bob", hive_transfer, _800 );
+        temp_HBD_balance hbd_transfer;
+        db->adjust_balance( "carol", hbd_transfer, -_70 );
+        db->adjust_balance( "bob", hbd_transfer, _70 );
 
         generate_block();
 
@@ -286,7 +294,7 @@ BOOST_AUTO_TEST_CASE( save_test_02 )
   {
     BOOST_TEST_MESSAGE( "Saving one account balances" );
 
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -321,7 +329,7 @@ BOOST_AUTO_TEST_CASE( save_test_01 )
   {
     BOOST_TEST_MESSAGE( "Saving accounts balances" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -366,10 +374,11 @@ BOOST_AUTO_TEST_CASE( basic_test_06 )
   {
     BOOST_TEST_MESSAGE( "VEST delegations - object of type `vesting_delegation_expiration_object` is generated" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
+    set_account_creation_fee( HIVE_asset( 1 ) ); // turn off minimum limit on delegation size
     generate_block();
 
     HIVE_asset _10( 10'000 );
@@ -443,10 +452,11 @@ BOOST_AUTO_TEST_CASE( basic_test_05 )
   {
     BOOST_TEST_MESSAGE( "VEST delegations - more complex scenarios" );
 
-    ACTORS( (alice)(bob)(carol) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
+    set_account_creation_fee( HIVE_asset( 1 ) ); // turn off minimum delegation limit
     generate_block();
 
     HIVE_asset _10( 10'000 );
@@ -533,10 +543,11 @@ BOOST_AUTO_TEST_CASE( basic_test_04 )
   {
     BOOST_TEST_MESSAGE( "VEST delegations" );
 
-    ACTORS( (alice)(bob)(carol) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
+    set_account_creation_fee( HIVE_asset( 1 ) ); // turn off minimum delegation limit
     generate_block();
 
     HIVE_asset _10( 10'000 );
@@ -612,7 +623,7 @@ BOOST_AUTO_TEST_CASE( basic_test_03 )
   {
     BOOST_TEST_MESSAGE( "Vesting every account to anothers accounts" );
 
-    ACTORS( (alice)(bob)(carol) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -674,7 +685,7 @@ BOOST_AUTO_TEST_CASE( basic_test_02 )
   {
     BOOST_TEST_MESSAGE( "Vesting" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -719,7 +730,7 @@ BOOST_AUTO_TEST_CASE( basic_test_01 )
   {
     BOOST_TEST_MESSAGE( "Calling clear_account" );
 
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     generate_block();
 
     const auto& _alice = db->get_account( "alice" );
@@ -753,14 +764,14 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
   {
     BOOST_TEST_MESSAGE( "Calling escrow_cleanup_test" );
 
-    ACTORS( (alice)(bob)(carol) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
     generate_block();
 
     issue_funds( "alice", HIVE_asset( 10'000 ) ); //<- note! extra 0.1 is in form of vests
     issue_funds( "alice", HBD_asset( 10'100 ) ); //<- note! treasury will get extras from interest and proposal-fund/inflation
     generate_block();
     REQUIRE_BALANCE( 10'000, 0, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 10'100, 0, 0, 27, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 10'100, 0, 0, 1422, get_hbd_balance, HBD_asset );
 
     signed_transaction tx;
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
@@ -781,7 +792,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 0, 0, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 0, 0, 27, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 0, 0, 1422, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) != nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 1 );
     generate_block();
@@ -789,7 +800,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     //escrow transfer requested but neither receiver nor agent approved yet
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 0, 0, 10'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 0, 0, 10'136, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 0, 0, 11996, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) == nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 0 );
     UNDO_CLEAR;
@@ -806,7 +817,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 0, 0, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 0, 0, 36, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 0, 0, 1896, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) != nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 1 );
     generate_block();
@@ -814,7 +825,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     //escrow transfer approved by agent but not by receiver
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 0, 0, 10'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 0, 0, 10'145, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 0, 0, 12470, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) == nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 0 );
     UNDO_CLEAR;
@@ -831,7 +842,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 0, 0, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 0, 100, 45, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 0, 100, 2370, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) != nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 1 );
     generate_block();
@@ -839,7 +850,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     //escrow transfer approved by all parties (agent got fee) but the transfer itself wasn't released yet
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 0, 0, 10'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 0, 100, 10'054, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 0, 100, 12844, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) == nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 0 );
     UNDO_CLEAR;
@@ -859,7 +870,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 0, 2'000, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 3'000, 100, 54, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 3'000, 100, 2844, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) != nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 1 );
     generate_block();
@@ -867,7 +878,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     //escrow transfer released partially by sender prior to escrow expiration
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 2'000, 0, 8'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 3'000, 100, 7'063, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 3'000, 100, 10318, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) == nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 0 );
     UNDO_CLEAR;
@@ -887,7 +898,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 2'000, 2'000, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 3'000, 3'000, 100, 63, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 3'000, 3'000, 100, 3318, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) != nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 1 );
     generate_block();
@@ -895,7 +906,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     //escrow transfer released partially by receiver prior to escrow expiration
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 2'000, 0, 8'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 3'000, 100, 7'072, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 3'000, 100, 10792, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) == nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 0 );
     UNDO_CLEAR;
@@ -914,7 +925,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 2'000, 2'000, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 3'000, 3'000, 100, 72, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 3'000, 3'000, 100, 3792, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) != nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 1 );
     generate_block();
@@ -922,7 +933,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     //escrow transfer disputed by sender
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 2'000, 0, 8'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 3'000, 100, 7'081, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 3'000, 100, 11266, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) == nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 0 );
     UNDO_CLEAR;
@@ -954,7 +965,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 4'000, 4'000, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 4'000, 6'000, 100, 81, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 4'000, 6'000, 100, 4266, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) != nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 1 );
     generate_block();
@@ -962,7 +973,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     //escrow transfer released partially by agent to sender and partially to receiver
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 4'000, 0, 6'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 6'000, 100, 4'090, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 6'000, 100, 8740, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) == nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 0 );
     UNDO_CLEAR;
@@ -982,7 +993,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 4'000, 6'000, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 4'000, 6'000, 100, 90, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 4'000, 6'000, 100, 4740, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) == nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 0 );
     generate_block();
@@ -990,7 +1001,7 @@ BOOST_AUTO_TEST_CASE( escrow_cleanup_test )
     //escrow transfer released by agent to receiver and finished (transfer fully executed)
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 6'000, 0, 4'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 6'000, 100, 4'099, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 6'000, 100, 9214, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_escrow( "alice", 30 ) == nullptr );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).pending_escrow_transfers, 0 );
     UNDO_CLEAR;
@@ -1012,14 +1023,14 @@ BOOST_AUTO_TEST_CASE( limit_order_cleanup_test )
   try
   {
     BOOST_TEST_MESSAGE( "Calling limit_order_cleanup_test" );
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     issue_funds( "alice", HIVE_asset( 10'000 ) ); //<- note! extra 0.1 is in form of vests
     issue_funds( "bob", HBD_asset( 5'000 ) ); //<- note! treasury will get extras from interest and proposal-fund/inflation
     generate_block();
     REQUIRE_BALANCE( 10'000, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 5'000, 27, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 5'000, 1422, get_hbd_balance, HBD_asset );
 
     signed_transaction tx;
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
@@ -1035,14 +1046,14 @@ BOOST_AUTO_TEST_CASE( limit_order_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 0, 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 5'000, 27, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 5'000, 1422, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_limit_order( "alice", 0 ) != nullptr );
     generate_block();
 
     //limit order set but not matched yet
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 0, 10'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 5'000, 36, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 5'000, 1896, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_limit_order( "alice", 0 ) == nullptr );
     UNDO_CLEAR;
 
@@ -1059,14 +1070,14 @@ BOOST_AUTO_TEST_CASE( limit_order_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 0, 4'000, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 2'000, 3'000, 36, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 2'000, 3'000, 1896, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_limit_order( "alice", 0 ) != nullptr );
     generate_block();
 
     //limit order partially matched
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 4'000, 6'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 3'000, 2'045, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 3'000, 4370, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_limit_order( "alice", 0 ) == nullptr );
     UNDO_CLEAR;
 
@@ -1083,14 +1094,14 @@ BOOST_AUTO_TEST_CASE( limit_order_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 0, 4'000, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 2'000, 3'000, 45, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 2'000, 3'000, 2370, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_limit_order( "alice", 0 ) != nullptr );
     generate_block();
 
     //limit order partially matched after counter-order in fill_or_kill mode that failed (no change)
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 4'000, 6'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 3'000, 2'054, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 3'000, 4844, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_limit_order( "alice", 0 ) == nullptr );
     UNDO_CLEAR;
 
@@ -1107,14 +1118,14 @@ BOOST_AUTO_TEST_CASE( limit_order_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 0, 10'000, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 5'000, 0, 54, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 5'000, 0, 2844, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_limit_order( "alice", 0 ) == nullptr );
     generate_block();
 
     //limit order fully matched
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 10'000, 100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 0, 5'063, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 0, 8318, get_hbd_balance, HBD_asset );
     BOOST_REQUIRE( db->find_limit_order( "alice", 0 ) == nullptr );
     UNDO_CLEAR;
   }
@@ -1134,14 +1145,14 @@ BOOST_AUTO_TEST_CASE( convert_request_cleanup_test )
   try
   {
     BOOST_TEST_MESSAGE( "Calling convert_request_cleanup_test" );
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     generate_block();
 
     //note! extra 0.1 TESTS is in form of vests
     issue_funds( "alice", HBD_asset( 5'000 ) ); //<- note! treasury will get extras from interest and proposal-fund/inflation
     generate_block();
     REQUIRE_BALANCE( 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 5'000, 27, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 5'000, 1422, get_hbd_balance, HBD_asset );
 
     signed_transaction tx;
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
@@ -1155,25 +1166,25 @@ BOOST_AUTO_TEST_CASE( convert_request_cleanup_test )
     tx.clear();
 
     REQUIRE_BALANCE( 0, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 27, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 1422, get_hbd_balance, HBD_asset );
     generate_block();
 
     //conversion request created but not executed yet
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 5'036, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 6896, get_hbd_balance, HBD_asset );
     UNDO_CLEAR;
 
     generate_blocks( db->head_block_time() + HIVE_CONVERSION_DELAY );
 
     REQUIRE_BALANCE( 5'000, 0, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 54, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 2844, get_hbd_balance, HBD_asset );
     generate_block();
 
     //conversion request executed
     CLEAR( "alice" );
     REQUIRE_BALANCE( 0, 5'100, get_hive_balance, HIVE_asset );
-    REQUIRE_BALANCE( 0, 63, get_hbd_balance, HBD_asset );
+    REQUIRE_BALANCE( 0, 3318, get_hbd_balance, HBD_asset );
     UNDO_CLEAR;
 
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
@@ -1205,7 +1216,7 @@ BOOST_AUTO_TEST_CASE( hbd_test_01 )
 {
   try
   {
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -1230,7 +1241,7 @@ BOOST_AUTO_TEST_CASE( hbd_test_02 )
 {
   try
   {
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -1272,7 +1283,7 @@ BOOST_AUTO_TEST_CASE( savings_test_01 )
 {
   try
   {
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -1294,7 +1305,7 @@ BOOST_AUTO_TEST_CASE( savings_test_02 )
 {
   try
   {
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );

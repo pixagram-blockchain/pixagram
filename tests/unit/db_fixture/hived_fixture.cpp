@@ -169,7 +169,9 @@ void hived_fixture::postponed_init_impl( bool remove_db_files, config_arg_overri
 
       app.startup();
 
-      db->notify_end_of_syncing();
+      // The chain plugin's write_queue thread (started by app.startup()) makes the same call when
+      // p2p is disabled; take the write lock so the two flushes cannot run concurrently.
+      db->with_write_lock( [&]() { db->notify_end_of_syncing(); } );
     } );
 
     FC_ASSERT( _data_dir != fc::path() );
@@ -197,7 +199,13 @@ json_rpc_database_fixture::json_rpc_database_fixture()
 {
   try {
 
-  configuration_data.set_initial_asset_supply( INITIAL_TEST_SUPPLY, HBD_INITIAL_TEST_SUPPLY );
+  configuration_data.set_initial_asset_supply( HIVE_INITIAL_TEST_SUPPLY, HBD_INITIAL_TEST_SUPPLY, HP_INITIAL_TEST_SUPPLY );
+  {
+    std::vector< std::string > init_witnesses;
+    for( int i = HIVE_NUM_INIT_MINERS; i < HIVE_MAX_WITNESSES; ++i )
+      init_witnesses.push_back( HIVE_INIT_MINER_NAME + fc::to_string( i ) );
+    configuration_data.set_init_witnesses( init_witnesses );
+  }
 
   hive::plugins::condenser_api::condenser_api_plugin* denser_api_plugin = nullptr;
   postponed_init(
@@ -225,18 +233,13 @@ json_rpc_database_fixture::json_rpc_database_fixture()
   generate_block();
   db->_log_hardforks = true;
 
+  set_account_creation_fee( HIVE_asset( 3000 ) ); //3.000 HIVE, same as mainnet
+
   vest( HIVE_INIT_MINER_NAME, HIVE_asset( 10'000 ) );
-
-  // Fill up the rest of the required miners
-  for( int i = HIVE_NUM_INIT_MINERS; i < HIVE_MAX_WITNESSES; i++ )
-  {
-    account_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), init_account_pub_key );
-    fund( HIVE_INIT_MINER_NAME + fc::to_string( i ), HIVE_MIN_PRODUCER_REWARD );
-    witness_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), init_account_priv_key, "foo.bar", init_account_pub_key, HIVE_MIN_PRODUCER_REWARD.amount );
-  }
-
   validate_database();
-  } catch ( const fc::exception& e )
+
+  }
+  catch ( const fc::exception& e )
   {
     edump( (e.to_detail_string()) );
     throw;

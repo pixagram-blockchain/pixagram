@@ -43,6 +43,7 @@
 #include <chrono>
 #include <memory>
 #include <iostream>
+#include <atomic>
 #include <mutex>
 #include <condition_variable>
 #include <queue>
@@ -156,6 +157,7 @@ class chain_plugin_impl
     bool                             validate_during_replay = false;
     uint32_t                         benchmark_interval = 0;
     uint32_t                         flush_interval = 0;
+    uint32_t                         live_flush_interval = 1;
     bool                             replay_in_memory = false;
     std::vector< std::string >       replay_memory_indices{};
     bool                             enable_block_log_compression = true;
@@ -174,7 +176,25 @@ class chain_plugin_impl
     };
     comment_archive_type             comment_archive_choice = comment_archive_type::ROCKSDB;
 
+    // A block whose timestamp is at most this far ahead of the local clock is pushed immediately.
+    // Witnesses intentionally produce up to 500ms before their slot time (see witness_plugin), so
+    // this must stay comfortably above that; the remainder is the clock skew (relative to the
+    // producer) a node tolerates before it starts delaying blocks.
+    fc::microseconds block_accept_lead_time = fc::seconds(1);
+    // A block further ahead than block_accept_lead_time, but no further than this, is held and
+    // pushed once it comes within block_accept_lead_time. Anything beyond this is rejected.
     uint32_t allow_future_time = 5;
+
+    // Number of blocks currently parked in a hold inside check_time_in_block(), and the most that
+    // may be parked at once. Each held block pins an fc task (and its stack) plus the block body
+    // for up to allow_future_time - block_accept_lead_time seconds, so the count must be bounded
+    // or a peer could park an arbitrary amount of memory by flooding us with cheaply fabricated
+    // future-timestamped blocks (they are only validated after the hold). The honest network
+    // essentially never has more than one block in hold at a time (one block per slot, and a hold
+    // at all means its producer is over a second fast), so a small cap loses nothing; a block
+    // arriving with the cap reached is rejected exactly as a too-far-future block is.
+    std::atomic<uint32_t> held_block_count{0};
+    static constexpr uint32_t max_held_blocks = 4;
 
     std::shared_ptr< std::thread >   write_processor_thread;
 
@@ -478,7 +498,9 @@ void chain_plugin_impl::start_write_processing()
       bool is_syncing = is_p2p_enabled;
       if( !is_syncing )
       {
-        db.notify_end_of_syncing();
+        // Under the write lock: unit-test fixtures also call notify_end_of_syncing() right after
+        // startup, and two unserialized flushes corrupt the external storages' shared WriteBatch.
+        db.with_write_lock( [&]() { db.notify_end_of_syncing(); } );
         //don't switch to live in writer (doesn't make a difference for API calls, but does for queen)
         //default_block_writer->set_is_at_live_sync();
         theApp.notify_status( "entering API mode" );
@@ -827,6 +849,7 @@ void chain_plugin_impl::initial_settings()
   ilog( "Starting chain with shared_file_size: ${n} bytes", ("n", shared_memory_size) );
 
   db.set_flush_interval( flush_interval );
+  db.set_live_flush_interval( live_flush_interval );
   if( !checkpoints.empty() )
     thread_pool.set_last_checkpoint( checkpoints.rbegin()->first );
   db.set_require_locking( check_locks );
@@ -1496,18 +1519,20 @@ void chain_plugin::set_program_options(options_description& cli, options_descrip
         "A 2 precision percentage (0-10000) that defines how quickly to scale the shared memory file. When autoscaling occurs the file's size will be increased by this percent. Setting this to 0 disables autoscaling. Recommended value is between 1000-2000 (10-20%)" )
       ("checkpoint,c", bpo::value<vector<string>>()->composing(), "Pairs of [BLOCK_NUM,BLOCK_ID] that should be enforced as checkpoints.")
       ("flush-state-interval", bpo::value<uint32_t>(),
-        "flush shared memory changes to disk every N blocks")
+        "flush shared memory changes to disk every N blocks while syncing")
+      ("flush-state-interval-live", bpo::value<uint32_t>()->default_value(1),
+        "flush shared memory changes to disk every N blocks once the node is in live mode. 1 means after every block, so a crash leaves state at most one block behind. Raise it on slow or low energy devices that should not be woken up on every block")
       ("enable-block-log-compression", boost::program_options::value<bool>()->default_value(true), "Compress blocks using zstd as they're added to the block log" )
       ("enable-block-log-auto-fixing", boost::program_options::value<bool>()->default_value(true), "If enabled, corrupted block_log will try to fix itself automatically." )
       ("block-log-compression-level", bpo::value<int>()->default_value(15), "Block log zstd compression level 0 (fast, low compression) - 22 (slow, high compression)" )
       ("blockchain-thread-pool-size", bpo::value<uint32_t>()->default_value(8)->value_name("size"), "Number of worker threads used to pre-validate transactions and blocks")
       ("block-stats-report-type", bpo::value<string>()->default_value("FULL"), "Level of detail of block stat reports: NONE, MINIMAL, REGULAR, FULL. Default FULL (recommended for API nodes)." )
-      ("block-stats-report-output", bpo::value<string>()->default_value("ILOG"), "Where to put block stat reports: DLOG, ILOG, NOTIFY, LOG_NOTIFY. Default ILOG." )
+      ("block-stats-report-output", bpo::value<string>()->default_value("ILOG"), "Where to put block stat reports: DLOG, ILOG, NOTIFY, LOG_NOTIFY, JSONL. Default ILOG. JSONL puts output to block_stats.jsonl" )
 #ifdef USE_ALTERNATE_CHAIN_ID
       ("alternate-chain-spec", boost::program_options::value<string>(), "Filepath for the alternate chain specification in JSON format")
 #endif
       ("rc-stats-report-type", bpo::value<string>()->default_value( "REGULAR" ), "Level of detail of daily RC stat reports: NONE, MINIMAL, REGULAR, FULL. Default REGULAR." )
-      ("rc-stats-report-output", bpo::value<string>()->default_value( "ILOG" ), "Where to put daily RC stat reports: DLOG, ILOG, NOTIFY, LOG_NOTIFY. Default ILOG." )
+      ("rc-stats-report-output", bpo::value<string>()->default_value( "ILOG" ), "Where to put daily RC stat reports: DLOG, ILOG, NOTIFY, LOG_NOTIFY, JSONL. Default ILOG. JSONL puts output to rc_stats.jsonl" )
       ("block-log-split", bpo::value<int>()->default_value( 9999 ), "Whether the block log should be single file (-1), not used at all & keeping only head block in memory (0), or split into files each containing 1M blocks & keeping N full million latest blocks (N). Default 9999." )
       ("max-mempool-size", bpo::value<string>()->default_value( "100M" ), "Postponed transactions that exceed limit are dropped from pending. Setting 0 means only pending transactions that fit in reapplication window of 200ms will stay in mempool.")
       ("rc-flood-level", bpo::value<uint16_t>()->default_value( 20 ), "Number of full blocks that can be present in mempool before RC surcharge is applied. 0-65535. Default 20 (one minute of full blocks).")
@@ -1637,6 +1662,8 @@ void chain_plugin::plugin_initialize(const variables_map& options)
   else
     my->flush_interval = 10000;
 
+  my->live_flush_interval = options.at( "flush-state-interval-live" ).as<uint32_t>();
+
   if( options.count( "checkpoint" ) )
   {
     auto cps = options.at( "checkpoint" ).as<vector<string>>();
@@ -1748,9 +1775,6 @@ void chain_plugin::plugin_initialize(const variables_map& options)
 
     if( alternate_chain_spec.get_object().contains("custom_op_block_limit") )
       configuration_data.custom_op_block_limit = alternate_chain_spec["custom_op_block_limit"].as< uint64_t >();
-
-    if( alternate_chain_spec.get_object().contains( "allow_not_enough_rc" ) )
-      configuration_data.allow_not_enough_rc = alternate_chain_spec[ "allow_not_enough_rc" ].as< bool >();
 
     if( alternate_chain_spec.get_object().contains( "generate_missed_block_operations" ) )
       configuration_data.set_generate_missed_block_operations( alternate_chain_spec[ "generate_missed_block_operations" ].as< bool >() );
@@ -2183,8 +2207,38 @@ int16_t chain_plugin::set_write_lock_hold_time( int16_t new_time )
 
 void chain_plugin::check_time_in_block(const hive::chain::signed_block& block)
 {
-  const fc::time_point_sec max_accept_time = fc::time_point_sec(fc::time_point::now()) + my->allow_future_time;
-  FC_ASSERT(block.timestamp <= max_accept_time, "Refusing to accept block that's too far in the future (> ${max_accept_time})", (max_accept_time));
+  const fc::time_point now = fc::time_point::now();
+  const fc::time_point block_time(block.timestamp);
+  const fc::time_point max_accept_time = now + fc::seconds(my->allow_future_time);
+  FC_ASSERT(block_time <= max_accept_time, "Refusing to accept block that's too far in the future (> ${max_accept_time})", (max_accept_time));
+
+  // A block that is only slightly ahead of our clock is not invalid, just early: either the
+  // producer's clock is fast or ours is slow. Rejecting it would make the p2p layer treat the
+  // peer that delivered it as having sent an invalid block and disconnect it, and it would let a
+  // fast-clock witness's block be applied before the slot of the witness ahead of it has even
+  // begun in real time, leapfrogging that (blameless) witness and charging it a missed block.
+  // Instead, hold the block until it comes within block_accept_lead_time of our clock. If the
+  // preceding witness's block arrives in the meantime it is applied first, and the early block
+  // then lands as a same-height fork that nobody switches to.
+  const fc::time_point release_time = block_time - my->block_accept_lead_time;
+  if (release_time > now)
+  {
+    const uint32_t held_count = 1 + my->held_block_count.fetch_add(1, std::memory_order_relaxed);
+    BOOST_SCOPE_EXIT(this_) {
+      this_->my->held_block_count.fetch_sub(1, std::memory_order_relaxed);
+    } BOOST_SCOPE_EXIT_END
+    FC_ASSERT(held_count <= detail::chain_plugin_impl::max_held_blocks,
+              "Refusing to accept block ahead of local clock: ${held_count} blocks are already being held for their timestamps",
+              (held_count));
+
+    const fc::microseconds hold_time = release_time - now;
+    wlog("Block #${n} by ${w} has timestamp ${t}, ${ahead} ms ahead of local clock; holding it for ${hold} ms before applying",
+         ("n", block.block_num())("w", block.witness)("t", block.timestamp)
+         ("ahead", (block_time - now).count() / 1000)("hold", hold_time.count() / 1000));
+    fc::usleep(hold_time);
+    if (is_finished_write_processing())
+      FC_THROW_EXCEPTION(fc::canceled_exception, "Interrupt request occurred while holding an early block");
+  }
 }
 
 void chain_plugin::register_block_generator( const std::string& plugin_name, std::shared_ptr< abstract_block_producer > block_producer )

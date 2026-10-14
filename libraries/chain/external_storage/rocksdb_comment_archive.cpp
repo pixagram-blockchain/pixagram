@@ -2,11 +2,11 @@
 #include <hive/chain/hive_object_types.hpp>
 #include <hive/chain/index.hpp>
 #include <chainbase/chainbase.inl>
-#include <hive/chain/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
 
 #include <hive/chain/util/type_registrar_definition.hpp>
 
-#include <hive/chain/external_storage/comment_rocksdb_objects.hpp>
+#include <hive/chain/external_storage/comment_rocksdb_objects_multiindex.hpp>
 #include <hive/chain/external_storage/rocksdb_comment_archive.hpp>
 #include <hive/chain/external_storage/utilities.hpp>
 #include <hive/chain/external_storage/rocksdb_comment_storage_provider.hpp>
@@ -199,9 +199,17 @@ void rocksdb_comment_archive::wipe()
   provider->wipeDb();
 }
 
-void rocksdb_comment_archive::flush()
+void rocksdb_comment_archive::flush( bool force_storage_flush )
 {
-  provider->flushDb();
+  // Submitting the pending write batch is what keeps this archive in step with flushed shared
+  // memory: on_irreversible_block moves a comment here and then removes it from state, so the
+  // batch must reach the WAL before that removal can be persisted. Forcing the memtables out
+  // into files is a separate, much more expensive step that only the explicit flush points
+  // need (issue #869).
+  if( force_storage_flush )
+    provider->flushDb();
+  else
+    provider->flushWriteBuffer();
 }
 
 void rocksdb_comment_archive::on_end_of_syncing()

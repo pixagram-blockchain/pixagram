@@ -8,10 +8,18 @@ namespace hive { namespace chain {
 
 struct clean_database_fixture : public hived_fixture
 {
-  clean_database_fixture( 
+  clean_database_fixture(
     uint16_t shared_file_size_in_mb = shared_file_size_big,
     fc::optional<uint32_t> hardfork = fc::optional<uint32_t>(),
     bool init_ah_plugin = true, int block_log_split = 9999,
+    // Initial asset supply passed to set_initial_asset_supply. Defaults emulate a chain that already
+    // ran through its whole history (mainnet-like amounts). Fixtures that operate close to genesis
+    // (see genesis_database_fixture) should override these, since that emulation distorts such tests.
+    const HIVE_asset& init_hive_supply = HIVE_INITIAL_TEST_SUPPLY,
+    const HBD_asset& init_hbd_supply = HBD_INITIAL_TEST_SUPPLY,
+    const HIVE_asset& init_vesting_supply = HP_INITIAL_TEST_SUPPLY,
+    // Witnesses created at genesis (initminer plus initminer1..). Pixagram's partial-schedule tests
+    // run with fewer than HIVE_MAX_WITNESSES.
     uint32_t num_witnesses = HIVE_MAX_WITNESSES );
   virtual ~clean_database_fixture();
 

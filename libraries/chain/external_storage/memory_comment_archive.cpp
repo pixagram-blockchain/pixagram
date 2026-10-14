@@ -1,5 +1,5 @@
 #include <hive/chain/database.hpp>
-#include <hive/chain/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
 
 #include <hive/chain/external_storage/memory_comment_archive.hpp>
 
@@ -111,7 +111,7 @@ void memory_comment_archive::wipe()
   // since storage is part of SHM, database::wipe clears it, nothing extra to do here
 }
 
-void memory_comment_archive::flush()
+void memory_comment_archive::flush( bool force_storage_flush )
 {
   // nothing extra to do here
 }

@@ -19,7 +19,7 @@ struct database_api_fixture_basic : hived_fixture
 {
   database_api_fixture_basic()
   {
-    configuration_data.set_initial_asset_supply( INITIAL_TEST_SUPPLY, HBD_INITIAL_TEST_SUPPLY );
+    configuration_data.set_initial_asset_supply( HIVE_INITIAL_TEST_SUPPLY, HBD_INITIAL_TEST_SUPPLY, HP_INITIAL_TEST_SUPPLY );
 
     hive::plugins::database_api::database_api_plugin* db_api_plugin = nullptr;
     postponed_init(
@@ -42,9 +42,12 @@ struct database_api_fixture_basic : hived_fixture
     generate_block();
     db->_log_hardforks = true;
 
-    ACTORS((top1)(top2)(top3)(top4)(top5)(top6)(top7)(top8)(top9)(top10)
-           (top11)(top12)(top13)(top14)(top15)(top16)(top17)(top18)(top19)(top20))
-    ACTORS((backup1)(backup2)(backup3)(backup4)(backup5)(backup6)(backup7)(backup8)(backup9)(backup10))
+    BOOST_REQUIRE( db->has_hardfork( HIVE_HARDFORK_0_20 ) );
+    set_account_creation_fee( HIVE_asset( 3000 ) ); //3.000 HIVE, same as mainnet
+
+    ACTORS( DEFAULT_VESTING, (top1)(top2)(top3)(top4)(top5)(top6)(top7)(top8)(top9)(top10)
+           (top11)(top12)(top13)(top14)(top15)(top16)(top17)(top18)(top19)(top20) );
+    ACTORS( DEFAULT_VESTING, (backup1)(backup2)(backup3)(backup4)(backup5)(backup6)(backup7)(backup8)(backup9)(backup10) );
 
     const auto create_witness = [&]( const std::string& witness_name )
     {
@@ -52,7 +55,7 @@ struct database_api_fixture_basic : hived_fixture
       const private_key_type witness_key = generate_private_key( witness_name + "_witness" );
       // Account creation alone provides too little RC at Pixagram's vesting price.
       vest( witness_name, HIVE_asset( 10'000'000 ) );
-      witness_create( witness_name, account_key, witness_name + ".com", witness_key.get_public_key(), 1000 );
+      witness_create( witness_name, account_key, witness_name + ".com", witness_key.get_public_key(), HIVE_asset( 1000 ) );
       witness_plugin->add_signing_key( witness_key );
     };
     for( int i = 1; i <= 20; ++i )
@@ -60,7 +63,7 @@ struct database_api_fixture_basic : hived_fixture
     for( int i = 1; i <= 10; ++i )
       create_witness( "backup" + std::to_string(i) );
 
-    ACTORS((whale)(voter1)(voter2)(voter3)(voter4)(voter5)(voter6)(voter7)(voter8)(voter9)(voter10))
+    ACTORS( DEFAULT_VESTING, (whale)(voter1)(voter2)(voter3)(voter4)(voter5)(voter6)(voter7)(voter8)(voter9)(voter10) );
 
     vest( "whale", HIVE_asset( 500'000'000 ) );
 
@@ -101,11 +104,17 @@ struct database_api_fixture_basic : hived_fixture
   hive::plugins::database_api::database_api* database_api = nullptr;
 };
 
+// Pre-history supply used by the genesis tests (the same amounts as genesis_database_fixture): the
+// clean_database_fixture defaults emulate a chain that already ran through its history.
+const HIVE_asset GENESIS_TEST_HIVE_SUPPLY( 9'900'000'000ll );
+const HBD_asset GENESIS_TEST_HBD_SUPPLY( 100'000'000ll );
+
 struct database_api_genesis_fixture : hived_fixture
 {
   database_api_genesis_fixture()
   {
-    configuration_data.set_initial_asset_supply( INITIAL_TEST_SUPPLY, HBD_INITIAL_TEST_SUPPLY );
+    configuration_data.set_initial_asset_supply( GENESIS_TEST_HIVE_SUPPLY, GENESIS_TEST_HBD_SUPPLY );
+    configuration_data.set_pixa_genesis_allocations( true ); // these tests check the Pixagram genesis funding
 
     hive::plugins::database_api::database_api_plugin* db_api_plugin = nullptr;
     postponed_init(
@@ -120,6 +129,11 @@ struct database_api_genesis_fixture : hived_fixture
 
     database_api = db_api_plugin->api.get();
     BOOST_REQUIRE( database_api );
+  }
+
+  ~database_api_genesis_fixture()
+  {
+    configuration_data.set_pixa_genesis_allocations( false );
   }
 
   hive::plugins::database_api::database_api* database_api = nullptr;
@@ -739,16 +753,16 @@ BOOST_AUTO_TEST_CASE( pixa_genesis_dgpo_accounting_test )
 
   const auto expected_total_vesting_shares = initial_vests + ico_vests + team_vests;
   const auto expected_total_vesting_fund_hive = to_vest + ico_fund + team_fund;
-  const auto expected_current_supply = INITIAL_TEST_SUPPLY + ico_fund + team_fund;
-  const auto expected_current_hbd_supply = HBD_INITIAL_TEST_SUPPLY + omnibus_hbd;
+  const auto expected_current_supply = GENESIS_TEST_HIVE_SUPPLY + ico_fund + team_fund;
+  const auto expected_current_hbd_supply = GENESIS_TEST_HBD_SUPPLY + omnibus_hbd;
   const auto expected_virtual_supply = expected_current_supply
     + expected_current_hbd_supply * db->get_feed_history().current_median_history;
 
-  BOOST_REQUIRE_EQUAL( gpo.total_vesting_shares, expected_total_vesting_shares );
-  BOOST_REQUIRE_EQUAL( gpo.total_vesting_fund_hive, expected_total_vesting_fund_hive );
-  BOOST_REQUIRE_EQUAL( gpo.current_supply, expected_current_supply );
-  BOOST_REQUIRE_EQUAL( gpo.current_hbd_supply, expected_current_hbd_supply );
-  BOOST_REQUIRE_EQUAL( gpo.virtual_supply, expected_virtual_supply );
+  BOOST_REQUIRE_EQUAL( gpo.get_total_vesting_shares(), expected_total_vesting_shares );
+  BOOST_REQUIRE_EQUAL( gpo.get_total_vesting_fund_hive(), expected_total_vesting_fund_hive );
+  BOOST_REQUIRE_EQUAL( gpo.get_current_supply(), expected_current_supply );
+  BOOST_REQUIRE_EQUAL( gpo.get_current_hbd_supply(), expected_current_hbd_supply );
+  BOOST_REQUIRE_EQUAL( gpo.get_virtual_supply(), expected_virtual_supply );
 } FC_LOG_AND_RETHROW() }
 
 BOOST_AUTO_TEST_SUITE_END()

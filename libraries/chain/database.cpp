@@ -7,23 +7,24 @@
 #include <hive/protocol/hbd_interest.hpp>
 
 #include <hive/chain/external_storage/comments_handler.hpp>
+#include <hive/chain/external_storage/fd_budget.hpp>
 #include <hive/chain/notifications.hpp>
 
-#include <hive/chain/account_object_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/global_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects.hpp>
-#include <hive/chain/hardfork_property_object.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/global_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
+#include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/block_write_interface.hpp>
 #include <hive/chain/compound.hpp>
 #include <hive/chain/database.hpp>
 #include <hive/chain/database_exceptions.hpp>
 #include <hive/chain/db_with.hpp>
 #include <hive/chain/irreversible_block_data.hpp>
-#include <hive/chain/dhf_objects.hpp>
+#include <hive/chain/detail/state/dhf_objects.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/reward_fund_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
 #include <hive/chain/shared_db_merkle.hpp>
 #include <hive/chain/witness_schedule.hpp>
 
@@ -317,7 +318,7 @@ void database::close()
     // DB state (issue #336).
     clear_pending();
 
-    flush_to_all_storages();
+    flush_to_all_storages( true );
     get_comments_handler().close();
 
     auto lib = this->get_last_irreversible_block_num();
@@ -474,14 +475,14 @@ const dynamic_global_property_object&database::get_dynamic_global_properties() c
 
 int16_t database::get_remove_threshold() const
 {
-  return get_dynamic_global_properties().current_remove_threshold;
+  return get_dynamic_global_properties().get_current_remove_threshold();
 }
 
 void database::set_remove_threshold( int16_t val )
 {
   modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
   {
-    gpo.current_remove_threshold = val;
+    gpo.set_current_remove_threshold( val );
   } );
 }
 
@@ -499,6 +500,11 @@ const feed_history_object& database::get_feed_history()const
 { try {
   return get< feed_history_object >();
 } FC_CAPTURE_AND_RETHROW() }
+
+const HBD_price& database::get_hbd_price()const
+{
+  return get_feed_history().current_median_history;
+}
 
 const time_point_sec database::calculate_discussion_payout_time( const comment_object& comment )const
 {
@@ -548,7 +554,7 @@ const comment_cashout_ex_object* database::find_comment_cashout_ex( const commen
 uint32_t database::witness_participation_rate()const
 {
   const dynamic_global_property_object& dpo = get_dynamic_global_properties();
-  return uint64_t(HIVE_100_PERCENT) * fc::uint128_popcount(dpo.recent_slots_filled) / 128;
+  return uint64_t(HIVE_100_PERCENT) * fc::uint128_popcount(dpo.get_recent_slots_filled()) / 128;
 }
 
 bool database::is_fast_confirm_transaction(const std::shared_ptr<full_transaction_type>& full_transaction)
@@ -578,7 +584,7 @@ void database::process_non_fast_confirm_transaction( const std::shared_ptr<full_
     //ABW: why is that limit related to block size and not HIVE_MAX_TRANSACTION_SIZE?
     //DLN: the block size is dynamically voted by witnesses, so this code ensures that the transaction
     //can fit into the currently voted block size.
-    auto trx_size_limit = get_dynamic_global_properties().maximum_block_size - 256;
+    auto trx_size_limit = get_dynamic_global_properties().get_maximum_block_size() - 256;
     FC_ASSERT(trx_size <= trx_size_limit, "Transaction too large - size = ${trx_size}, limit ${trx_size_limit}",
               (trx_size)(trx_size_limit));
 
@@ -885,12 +891,15 @@ void database::notify_comment_reward(const comment_reward_notification& note)
 
 void database::notify_end_of_syncing()
 {
-  flush_to_all_storages();
+  flush_to_all_storages( true );
 #ifndef IS_TEST_NET
-  // In live sync, blocks arrive every 3 seconds — flush shared_memory after each one
-  // so that on crash, hived's state is at most 1 block behind. The user-configurable
-  // flush-state-interval only matters during massive/P2P sync where throughput matters.
-  set_flush_interval( 1 );
+  // Blocks arrive every 3 seconds in live mode, so state is flushed far more often than during
+  // massive/P2P sync where flush-state-interval trades crash freshness for throughput. The live
+  // cadence is configurable (flush-state-interval-live) rather than hardcoded, so operators can
+  // see and change the value that is actually in effect (issue #869).
+  ilog( "Entering live mode: switching flush interval from ${old} to ${live} block(s).",
+        ("old", _flush_blocks)("live", _live_flush_blocks) );
+  set_flush_interval( _live_flush_blocks );
 #endif
   get_comments_handler().on_end_of_syncing();
 
@@ -917,9 +926,9 @@ void database::notify_wipe()
   HIVE_TRY_NOTIFY(_my->_wipe_signal)
 }
 
-void database::notify_flush()
+void database::notify_flush( bool force_storage_flush )
 {
-  HIVE_TRY_NOTIFY( _my->_flush_signal )
+  HIVE_TRY_NOTIFY( _my->_flush_signal, force_storage_flush )
 }
 
 void database::notify_pre_reindex( const reindex_notification& note )
@@ -936,7 +945,7 @@ account_name_type database::get_scheduled_witness( uint32_t slot_num )const
 {
   const dynamic_global_property_object& dpo = get_dynamic_global_properties();
   const witness_schedule_object& wso = get_witness_schedule_object();
-  uint64_t current_aslot = dpo.current_aslot + slot_num;
+  uint64_t current_aslot = dpo.get_current_aslot() + slot_num;
   return wso.current_shuffled_witnesses[ current_aslot % wso.num_scheduled_witnesses ];
 }
 
@@ -951,7 +960,7 @@ fc::time_point_sec database::get_slot_time(uint32_t slot_num)const
   if( head_block_num() == 0 )
   {
     // n.b. first block is at genesis_time plus one block interval
-    fc::time_point_sec genesis_time = dpo.time;
+    fc::time_point_sec genesis_time = dpo.get_head_block_time();
     return genesis_time + slot_num * interval;
   }
 
@@ -974,70 +983,74 @@ uint32_t database::get_slot_at_time(fc::time_point_sec when)const
 }
 
 /**
-  *  Converts HIVE into HBD and adds it to to_account while reducing the HIVE supply
-  *  by HIVE and increasing the HBD supply by the specified amount.
+  *  Converts given HIVE into HBD as author reward and adds it to to_account.
   */
-std::pair< HBD_asset, HIVE_asset > database::create_hbd( const account_object& to_account, const HIVE_asset& hive, bool to_reward_balance )
+std::pair< HBD_asset, HIVE_asset > database::award_hbd( const account_object& to_account, temp_HIVE_balance& hive_balance, bool is_reward )
 {
   std::pair< HBD_asset, HIVE_asset > assets;
+  HIVE_asset hive = hive_balance;
 
   try
   {
     if( hive.get_amount() == 0 )
       return assets;
 
-    const auto& median_price = get_feed_history().current_median_history;
+    const auto& exchange_rate = get_hbd_price();
     const auto& gpo = get_dynamic_global_properties();
 
-    if( !median_price.is_null() )
+    if( !exchange_rate.is_null() )
     {
-      auto to_hbd = ( gpo.hbd_print_rate * hive ) / HIVE_100_PERCENT;
-      auto to_hive = hive - to_hbd;
-
-      auto hbd = to_hbd * median_price;
+      temp_HIVE_balance to_hbd_balance;
+      auto to_hbd = ( gpo.get_hbd_print_rate() * hive_balance.as_asset() ) / HIVE_100_PERCENT;
+      to_hbd_balance.transfer_from( hive_balance, to_hbd );
 
       // Converting PIXA to PXS truncates to 0.001 PXS. The whole of to_hbd used to be burned
       // regardless, so the PIXA that did not fit into a whole 0.001 PXS was destroyed rather than
-      // paid - and when the reward was small enough that hbd rounded to zero, the entire PXS half
-      // of an author's payout vanished. From HF30 only the PIXA actually represented by the minted
-      // PXS is burned; the remainder is paid out as liquid PIXA.
-      HIVE_asset converted = to_hbd;
+      // paid - and when the reward was small enough that the PXS rounded to zero, the entire PXS
+      // half of an author's payout vanished. From HF30 only the PIXA actually represented by the
+      // minted PXS is burned; the remainder goes back to hive_balance and is paid as liquid PIXA.
       if( has_hardfork( HIVE_HARDFORK_1_30_NO_CONVERSION_BURN ) )
       {
         // Round the PIXA value of the minted PXS UP. The price operator rounds down, and using
         // that as the burned amount would hand back more PIXA than the conversion actually left
         // over - issuing a fraction of a satoshi out of nothing on every payout. Rounding up can
-        // only ever burn a fraction more, never less, so value is never created.
+        // only ever burn a fraction more, never less, so value is never created. Converting the
+        // rounded-up amount mints exactly the PXS that converting all of to_hbd would have.
+        const HBD_asset hbd = to_hbd * exchange_rate;
         const fc::uint128_t pxs = uint64_t( hbd.get_amount() );
-        const fc::uint128_t base = uint64_t( median_price.get_base().get_amount() );
-        const fc::uint128_t quote = uint64_t( median_price.get_quote().get_amount() );
+        const fc::uint128_t base = uint64_t( exchange_rate.get_base().get_amount() );
+        const fc::uint128_t quote = uint64_t( exchange_rate.get_quote().get_amount() );
         const fc::uint128_t rounded_up = base > 0 ? ( pxs * quote + base - 1 ) / base : fc::uint128_t( 0 );
-        converted = HIVE_asset( fc::uint128_to_uint64( rounded_up ) );
+        HIVE_asset converted( fc::uint128_to_uint64( rounded_up ) );
         if( converted > to_hbd )
           converted = to_hbd; // never burn more than was offered for conversion
-        to_hive += to_hbd - converted;
+        hive_balance.transfer_from( to_hbd_balance, to_hbd - converted );
       }
 
-      if( to_reward_balance )
+      temp_HBD_balance hbd_balance;
+      modify( gpo, [&]( dynamic_global_property_object& p )
       {
-        adjust_reward_balance( to_account, hbd );
-        adjust_reward_balance( to_account, to_hive );
+        hbd_balance = p.convert_HIVE_to_HBD( to_hbd_balance, exchange_rate );
+      } );
+
+      assets.first = hbd_balance;
+      assets.second = hive_balance;
+
+      if( is_reward )
+      {
+        adjust_reward_balance( to_account, hbd_balance, hbd_balance.as_asset() );
+        adjust_reward_balance( to_account, hive_balance, hive_balance.as_asset() );
       }
       else
       {
-        adjust_balance( to_account, hbd );
-        adjust_balance( to_account, to_hive );
+        adjust_balance( to_account, hbd_balance, hbd_balance.as_asset() );
+        adjust_balance( to_account, hive_balance, hive_balance.as_asset() );
       }
-
-      adjust_supply( -converted );
-      adjust_supply( hbd );
-      assets.first = hbd;
-      assets.second = to_hive;
     }
     else
     {
-      adjust_balance( to_account, hive );
-      assets.second = hive;
+      assets.second = hive_balance;
+      adjust_balance( to_account, hive_balance, hive_balance.as_asset() );
     }
   }
   FC_CAPTURE_LOG_AND_RETHROW( (to_account.get_name())(hive) )
@@ -1045,62 +1058,52 @@ std::pair< HBD_asset, HIVE_asset > database::create_hbd( const account_object& t
   return assets;
 }
 
-VEST_asset database::adjust_account_vesting_balance(const account_object& to_account, const HIVE_asset& liquid, bool to_reward_balance, Before&& before_vesting_callback )
+VEST_asset database::adjust_account_vesting_balance(const account_object& to_account, temp_HIVE_balance& liquid, bool is_reward, Before&& before_vesting_callback )
 {
+  HIVE_asset liquid_amount = liquid;
   try
   {
-    VEST_asset new_vesting = calculate_vesting( *this, liquid, to_reward_balance );
-    before_vesting_callback( new_vesting );
-    // Add new vesting to owner's balance.
-
     const auto& cprops = get_dynamic_global_properties();
-    auto _now = cprops.time;
-
-    if( to_reward_balance )
-    {
-      adjust_reward_balance( to_account, liquid, new_vesting );
-    }
-    else
-    {
-      modify( to_account, [&]( account_object& a )
-      {
-        if( has_hardfork( HIVE_HARDFORK_0_20 ) )
-        {
-          util::update_manabar( cprops, a, new_vesting.get_amount() );
-          rc().regenerate_rc_mana( to_account, _now );
-        }
-        a.vesting_shares += new_vesting;
-      } );
-      if( has_hardfork( HIVE_HARDFORK_0_20 ) )
-        rc().update_account_after_vest_change( to_account, _now );
-    }
-    // Update global vesting pool numbers.
+    auto _now = cprops.get_head_block_time();
+    temp_VEST_balance new_vest_balance;
     modify( cprops, [&]( dynamic_global_property_object& props )
     {
-      if( to_reward_balance )
+      new_vest_balance = props.convert_HIVE_to_VESTS( liquid, is_reward );
+    } );
+
+    VEST_asset new_vesting = new_vest_balance.as_asset();
+    before_vesting_callback( new_vesting );
+    if( !is_reward && has_hardfork( HIVE_HARDFORK_0_20 ) )
+      rc().regenerate_rc_mana( to_account, _now );
+    modify( to_account, [&]( account_object& a )
+    {
+      if( is_reward )
       {
-        props.pending_rewarded_vesting_shares += new_vesting;
-        props.pending_rewarded_vesting_hive += liquid;
+        a.access_vest_rewards().transfer_from( new_vest_balance );
+        a.access_vest_rewards_as_hive().transfer_from( liquid );
       }
       else
       {
-        props.total_vesting_fund_hive += liquid;
-        props.total_vesting_shares += new_vesting;
+        if( has_hardfork( HIVE_HARDFORK_0_20 ) )
+          util::update_manabar( cprops, a, new_vesting.get_amount() );
+        a.access_vesting().transfer_from( new_vest_balance );
       }
     } );
+    if( !is_reward && has_hardfork( HIVE_HARDFORK_0_20 ) )
+      rc().update_account_after_vest_change( to_account, _now );
 
     return new_vesting;
   }
-  FC_CAPTURE_AND_RETHROW( (to_account.get_name())(liquid) )
+  FC_CAPTURE_AND_RETHROW( (to_account.get_name())(liquid_amount) )
 }
 
 /**
   * @param to_account - the account to receive the new vesting shares
-  * @param liquid     - HIVE to be converted to vesting shares
+  * @param liquid     - temp_HIVE_balance fully consumed during conversion to vesting shares
   */
-VEST_asset database::create_vesting( const account_object& to_account, const HIVE_asset& liquid, bool to_reward_balance )
+VEST_asset database::create_vesting( const account_object& to_account, temp_HIVE_balance& liquid, bool is_reward )
 {
-  return create_vesting2( *this, to_account, liquid, to_reward_balance, []( VEST_asset vests_created ){} );
+  return create_vesting2( *this, to_account, liquid, is_reward, []( VEST_asset vests_created ){} );
 }
 
 fc::sha256 database::get_pow_target()const
@@ -1111,20 +1114,20 @@ fc::sha256 database::get_pow_target()const
   target._hash[1] = -1;
   target._hash[2] = -1;
   target._hash[3] = -1;
-  target = target >> ((dgp.num_pow_witnesses/4)+4);
+  target = target >> ((dgp.get_current_pow_witnesses()/4)+4);
   return target;
 }
 
 uint32_t database::get_pow_summary_target()const
 {
   const dynamic_global_property_object& dgp = get_dynamic_global_properties();
-  if( dgp.num_pow_witnesses >= 1004 )
+  if( dgp.get_current_pow_witnesses() >= 1004 )
     return 0;
 
   if( has_hardfork( HIVE_HARDFORK_0_16__551 ) )
-    return (0xFE00 - 0x0040 * dgp.num_pow_witnesses ) << 0x10;
+    return (0xFE00 - 0x0040 * dgp.get_current_pow_witnesses() ) << 0x10;
   else
-    return (0xFC00 - 0x0040 * dgp.num_pow_witnesses) << 0x10;
+    return (0xFC00 - 0x0040 * dgp.get_current_pow_witnesses()) << 0x10;
 }
 
 void database::adjust_proxied_witness_votes( const account_object& a,
@@ -1190,13 +1193,11 @@ void database::nullify_proxied_witness_votes( const account_object& a )
   adjust_proxied_witness_votes( a, delta );
 }
 
-bool database::collect_account_total_balance( const account_object& account, HIVE_asset* total_hive, HBD_asset* total_hbd,
-  VEST_asset* total_vests, HIVE_asset* vesting_shares_hive_value )
+bool database::collect_account_total_balance( const account_object& account, HIVE_asset* total_hive, HBD_asset* total_hbd, VEST_asset* total_vests )
 {
   const auto& gpo = get_dynamic_global_properties();
 
-  *vesting_shares_hive_value = account.get_vesting() * gpo.get_vesting_share_price();
-  *total_hive = *vesting_shares_hive_value;
+  *total_hive = account.get_vesting() * gpo.get_vesting_share_price();
   *total_vests = account.get_vesting();
   *total_hive += account.get_vest_rewards_as_hive();
   *total_vests += account.get_vest_rewards();
@@ -1212,16 +1213,37 @@ bool database::collect_account_total_balance( const account_object& account, HIV
   return ( total_hive->amount.value != 0 ) || ( total_hbd->amount.value != 0 ) || ( total_vests->amount.value != 0 );
 }
 
+temp_HIVE_balance database::liquify_reward_balance( const account_object& account )
+{
+  temp_VEST_balance reward_vests;
+  temp_HIVE_balance reward_hive;
+  modify( account, [&]( account_object& a )
+  {
+    a.access_vest_rewards().transfer_to( reward_vests );
+    a.access_vest_rewards_as_hive().transfer_to( reward_hive );
+  } );
+
+  modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& g )
+  {
+    g.access_pending_rewarded_vesting_hive() -= reward_hive.as_asset();
+    g.burn_VESTS( reward_vests, true );
+  } );
+
+  return reward_hive;
+}
+
 void database::clear_null_account_balance()
 {
   if( !has_hardfork( HIVE_HARDFORK_0_14__327 ) ) return;
 
+  const auto& gpo = get_dynamic_global_properties();
+
   const auto& null_account = get_account( HIVE_NULL_ACCOUNT );
-  HIVE_asset total_hive, vesting_shares_hive_value;
+  HIVE_asset total_hive;
   HBD_asset total_hbd;
   VEST_asset total_vests;
 
-  if( !( collect_account_total_balance( null_account, &total_hive, &total_hbd, &total_vests, &vesting_shares_hive_value ) ) )
+  if( !( collect_account_total_balance( null_account, &total_hive, &total_hbd, &total_vests ) ) )
     return;
 
   operation vop_op = clear_null_account_balance_operation();
@@ -1236,83 +1258,91 @@ void database::clear_null_account_balance()
 
   /////////////////////////////////////////////////////////////////////////////////////
 
+  temp_HIVE_balance hive_balance;
+  temp_HBD_balance hbd_balance;
+
   if( null_account.get_hive_balance().amount > 0 )
   {
-    adjust_balance( null_account, -null_account.get_hive_balance() );
+    auto hive = null_account.get_hive_balance();
+    adjust_balance( null_account, hive_balance, -hive );
   }
 
   if( null_account.get_hive_savings().amount > 0 )
   {
-    adjust_savings_balance( null_account, -null_account.get_hive_savings() );
+    auto hive = null_account.get_hive_savings();
+    adjust_savings_balance( null_account, hive_balance, -hive );
   }
 
   if( null_account.get_hbd_balance().amount > 0 )
   {
-    adjust_balance( null_account, -null_account.get_hbd_balance() );
+    auto hbd = null_account.get_hbd_balance();
+    adjust_balance( null_account, hbd_balance, -hbd );
   }
 
   if( null_account.get_hbd_savings().amount > 0 )
   {
-    adjust_savings_balance( null_account, -null_account.get_hbd_savings() );
+    auto hbd = null_account.get_hbd_savings();
+    adjust_savings_balance( null_account, hbd_balance, -hbd );
   }
 
   if( null_account.get_vesting().amount > 0 )
   {
-    const auto& gpo = get_dynamic_global_properties();
-    auto _now = gpo.time;
-
-    modify( gpo, [&]( dynamic_global_property_object& g )
-    {
-      g.total_vesting_shares -= null_account.get_vesting();
-      g.total_vesting_fund_hive -= vesting_shares_hive_value;
-    });
+    auto _now = gpo.get_head_block_time();
 
     if( has_hardfork( HIVE_HARDFORK_0_20 ) )
       rc().regenerate_rc_mana( null_account, _now ); //we could just always set RC value on 'null' to 0
+    temp_VEST_balance vests_to_burn;
     modify( null_account, [&]( account_object& a )
     {
-      a.vesting_shares.amount = 0;
+      vests_to_burn.transfer_from( a.access_vesting() );
       a.sum_delayed_votes = 0;
       a.delayed_votes.clear();
-    });
+    } );
     if( has_hardfork( HIVE_HARDFORK_0_20 ) )
       rc().update_account_after_vest_change( null_account, _now );
+
+    modify( gpo, [&]( dynamic_global_property_object& g )
+    {
+      auto hive_from_vests = g.convert_VESTS_to_HIVE( vests_to_burn );
+      hive_balance.transfer_from( hive_from_vests );
+    } );
   }
 
   if( null_account.get_hive_rewards().amount > 0 )
   {
-    adjust_reward_balance( null_account, -null_account.get_hive_rewards() );
+    auto hive = null_account.get_hive_rewards();
+    adjust_reward_balance( null_account, hive_balance, -hive );
   }
 
   if( null_account.get_hbd_rewards().amount > 0 )
   {
-    adjust_reward_balance( null_account, -null_account.get_hbd_rewards() );
+    auto hbd = null_account.get_hbd_rewards();
+    adjust_reward_balance( null_account, hbd_balance, -hbd );
   }
 
   if( null_account.get_vest_rewards().amount > 0 )
   {
-    const auto& gpo = get_dynamic_global_properties();
-
-    modify( gpo, [&]( dynamic_global_property_object& g )
-    {
-      g.pending_rewarded_vesting_shares -= null_account.get_vest_rewards();
-      g.pending_rewarded_vesting_hive -= null_account.get_vest_rewards_as_hive();
-    });
-
-    modify( null_account, [&]( account_object& a )
-    {
-      a.reward_vesting_hive.amount = 0;
-      a.reward_vesting_balance.amount = 0;
-    });
+    temp_HIVE_balance reward_hive = liquify_reward_balance( null_account );
+    hive_balance.transfer_from( reward_hive );
   }
 
   //////////////////////////////////////////////////////////////
 
-  if( total_hive.amount > 0 )
-    adjust_supply( -total_hive );
+  if( not hive_balance.is_empty() )
+  {
+    modify( gpo, [&]( dynamic_global_property_object& g )
+    {
+      g.burn_HIVE( hive_balance );
+    } );
+  }
 
-  if( total_hbd.amount > 0 )
-    adjust_supply( -total_hbd );
+  if( not hbd_balance.is_empty() )
+  {
+    modify( gpo, [&]( dynamic_global_property_object& g )
+    {
+      g.burn_HBD( hbd_balance, get_hbd_price(), true );
+    } );
+  }
 
   post_push_virtual_operation( *this, vop_op );
 }
@@ -1326,12 +1356,12 @@ void database::consolidate_treasury_balance()
   auto old_treasury_name = get_treasury_name( HIVE_HARDFORK_1_24_TREASURY_RENAME - 1 );
 
   const auto& old_treasury_account = get_account( old_treasury_name );
-  HIVE_asset total_hive, vesting_shares_hive_value;
+  HIVE_asset total_hive;
   HBD_asset total_hbd;
   VEST_asset total_vests;
 
   if( treasury_name == old_treasury_name || //ABW: once we actually include change of treasury in HF24 that part of condition can be removed
-    !( collect_account_total_balance( old_treasury_account, &total_hive, &total_hbd, &total_vests, &vesting_shares_hive_value ) ) )
+    !( collect_account_total_balance( old_treasury_account, &total_hive, &total_hbd, &total_vests ) ) )
     return;
 
   const auto& treasury_account = get_treasury();
@@ -1350,78 +1380,70 @@ void database::consolidate_treasury_balance()
 
   if( old_treasury_account.get_hive_balance().amount > 0 )
   {
-    adjust_balance( treasury_account, old_treasury_account.get_hive_balance() );
-    adjust_balance( old_treasury_account, -old_treasury_account.get_hive_balance() );
+    temp_HIVE_balance transfer;
+    adjust_balance( old_treasury_account, transfer, -old_treasury_account.get_hive_balance() );
+    adjust_balance( treasury_account, transfer, transfer.as_asset() );
   }
 
   if( old_treasury_account.get_hive_savings().amount > 0 )
   {
-    adjust_savings_balance( treasury_account, old_treasury_account.get_hive_savings() );
-    adjust_savings_balance( old_treasury_account, -old_treasury_account.get_hive_savings() );
+    temp_HIVE_balance transfer;
+    adjust_savings_balance( old_treasury_account, transfer, -old_treasury_account.get_hive_savings() );
+    adjust_savings_balance( treasury_account, transfer, transfer.as_asset() );
   }
 
   if( old_treasury_account.get_hbd_balance().amount > 0 )
   {
-    adjust_balance( treasury_account, old_treasury_account.get_hbd_balance() );
-    adjust_balance( old_treasury_account, -old_treasury_account.get_hbd_balance() );
+    temp_HBD_balance transfer;
+    adjust_balance( old_treasury_account, transfer, -old_treasury_account.get_hbd_balance() );
+    adjust_balance( treasury_account, transfer, transfer.as_asset() );
   }
 
   if( old_treasury_account.get_hbd_savings().amount > 0 )
   {
-    adjust_savings_balance( treasury_account, old_treasury_account.get_hbd_savings() );
-    adjust_savings_balance( old_treasury_account, -old_treasury_account.get_hbd_savings() );
+    temp_HBD_balance transfer;
+    adjust_savings_balance( old_treasury_account, transfer, -old_treasury_account.get_hbd_savings() );
+    adjust_savings_balance( treasury_account, transfer, transfer.as_asset() );
   }
 
   if( old_treasury_account.get_vesting().amount > 0 )
   {
     //note that if we wanted to move vests in vested form it would complicate delayed_votes part;
     //not that treasury could gain anything from vests anyway, so it is better to liquify them
-    adjust_balance( treasury_account, vesting_shares_hive_value );
-
-    const auto& gpo = get_dynamic_global_properties();
-    modify( gpo, [&]( dynamic_global_property_object& g )
-    {
-      g.total_vesting_shares -= old_treasury_account.get_vesting();
-      g.total_vesting_fund_hive -= vesting_shares_hive_value;
-    } );
-
+    temp_VEST_balance vests_to_liquify;
     modify( old_treasury_account, [&]( account_object& a )
     {
-      a.vesting_shares.amount = 0;
+      vests_to_liquify.transfer_from( a.access_vesting() );
       a.sum_delayed_votes = 0;
       a.delayed_votes.clear();
     } );
+
+    temp_HIVE_balance liquified;
+    modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& g )
+    {
+      liquified = g.convert_VESTS_to_HIVE( vests_to_liquify );
+    } );
+    adjust_balance( treasury_account, liquified, liquified.as_asset() );
   }
 
   if( old_treasury_account.get_hive_rewards().amount > 0 )
   {
-    adjust_reward_balance( treasury_account, old_treasury_account.get_hive_rewards() );
-    adjust_reward_balance( old_treasury_account, -old_treasury_account.get_hive_rewards() );
+    temp_HIVE_balance transfer;
+    adjust_reward_balance( old_treasury_account, transfer, -old_treasury_account.get_hive_rewards() );
+    adjust_reward_balance( treasury_account, transfer, transfer.as_asset() );
   }
 
   if( old_treasury_account.get_hbd_rewards().amount > 0 )
   {
-    adjust_reward_balance( treasury_account, old_treasury_account.get_hbd_rewards() );
-    adjust_reward_balance( old_treasury_account, -old_treasury_account.get_hbd_rewards() );
+    temp_HBD_balance transfer;
+    adjust_reward_balance( old_treasury_account, transfer, -old_treasury_account.get_hbd_rewards() );
+    adjust_reward_balance( treasury_account, transfer, transfer.as_asset() );
   }
 
   if( old_treasury_account.get_vest_rewards().amount > 0 )
   {
-    //see above handling of regular vests
-    adjust_balance( treasury_account, old_treasury_account.get_vest_rewards_as_hive() );
-
-    const auto& gpo = get_dynamic_global_properties();
-    modify( gpo, [ & ]( dynamic_global_property_object& g )
-    {
-      g.pending_rewarded_vesting_shares -= old_treasury_account.get_vest_rewards();
-      g.pending_rewarded_vesting_hive -= old_treasury_account.get_vest_rewards_as_hive();
-    } );
-
-    modify( old_treasury_account, [&]( account_object& a )
-    {
-      a.reward_vesting_hive.amount = 0;
-      a.reward_vesting_balance.amount = 0;
-    } );
+    temp_HIVE_balance reward_hive = liquify_reward_balance( old_treasury_account );
+    adjust_balance( treasury_account, reward_hive, reward_hive.as_asset() );
   }
 
   //////////////////////////////////////////////////////////////
@@ -1431,29 +1453,20 @@ void database::consolidate_treasury_balance()
 
 void database::lock_account( const account_object& account )
 {
+  authority locked_auth;
+  locked_auth.weight_threshold = 1;
   auto* account_auth = find< account_authority_object, by_account >( account.get_name() );
   if( account_auth == nullptr )
   {
-    create< account_authority_object >( [&]( account_authority_object& auth )
-    {
-      auth.account = account.get_name();
-      auth.owner.weight_threshold = 1;
-      auth.active.weight_threshold = 1;
-      auth.posting.weight_threshold = 1;
-    } );
+    create< account_authority_object >( account, locked_auth, locked_auth, locked_auth );
   }
   else
   {
-    modify( *account_auth, []( account_authority_object& auth )
+    modify( *account_auth, [&]( account_authority_object& auth )
     {
-      auth.owner.weight_threshold = 1;
-      auth.owner.clear();
-
-      auth.active.weight_threshold = 1;
-      auth.active.clear();
-
-      auth.posting.weight_threshold = 1;
-      auth.posting.clear();
+      auth.replace_owner_without_update( locked_auth );
+      auth.set_active( locked_auth );
+      auth.set_posting( locked_auth );
     } );
   }
 
@@ -1498,11 +1511,16 @@ void database::restore_accounts( const std::set< std::string >& restored_account
       continue;
     }
 
-    adjust_balance( treasury_account, -found->second.hbd_balance );
-    adjust_balance( treasury_account, -found->second.hive_balance );
-
-    adjust_balance( *account_ptr, found->second.hbd_balance );
-    adjust_balance( *account_ptr, found->second.hive_balance );
+    {
+      temp_HBD_balance transfer;
+      adjust_balance( treasury_account, transfer, -found->second.hbd_balance );
+      adjust_balance( *account_ptr, transfer, transfer.as_asset() );
+    }
+    {
+      temp_HIVE_balance transfer;
+      adjust_balance( treasury_account, transfer, -found->second.hive_balance );
+      adjust_balance( *account_ptr, transfer, transfer.as_asset() );
+    }
 
     operation vop = hardfork_hive_restore_operation( name, treasury_name, found->second.hbd_balance, found->second.hive_balance );
     push_virtual_operation( *this, vop );
@@ -1533,7 +1551,7 @@ void database::clear_account( const account_object& account )
 
   const auto& treasury_account = get_treasury();
   const auto& cprops = get_dynamic_global_properties();
-  auto now = cprops.time;
+  auto now = cprops.get_head_block_time();
 
   hardfork_hive_operation vop( account_name, treasury_account.get_name() );
 
@@ -1563,13 +1581,13 @@ void database::clear_account( const account_object& account )
       modify( delegatee, [&]( account_object& a )
       {
         util::update_manabar( cprops, a );
-        a.received_vesting_shares -= delegation.get_vesting();
+        a.access_received_vesting() -= delegation.get_vesting();
         freed_delegations += delegation.get_vesting();
 
         a.voting_manabar.use_mana( delegation.get_vesting().amount.value );
 
         a.downvote_manabar.use_mana(
-          fc::uint128_to_int64( ( uint128_t( delegation.get_vesting().amount.value ) * cprops.downvote_pool_percent ) /
+          fc::uint128_to_int64( ( uint128_t( delegation.get_vesting().amount.value ) * cprops.get_downvote_pool_percent() ) /
           HIVE_100_PERCENT ) );
       } );
 
@@ -1590,21 +1608,18 @@ void database::clear_account( const account_object& account )
       remove( delegation );
     }
 
-    VEST_asset vests_to_convert = account.get_vesting();
-    HIVE_asset converted_hive = vests_to_convert * cprops.get_vesting_share_price();
     total_converted_vests += account.get_vesting();
-    total_hive_from_vests += converted_hive;
-
     adjust_proxied_witness_votes( account, -account.get_vesting().amount );
 
+    temp_VEST_balance vests_to_convert;
     modify( account, [&]( account_object& a )
     {
       util::update_manabar( cprops, a );
       a.voting_manabar.current_mana = 0;
       a.downvote_manabar.current_mana = 0;
-      a.vesting_shares = VEST_asset( 0 );
+      vests_to_convert.transfer_from( a.access_vesting() );
       //FC_ASSERT( a.delegated_vesting_shares == freed_delegations, "Inconsistent amount of delegations" );
-      a.delegated_vesting_shares = VEST_asset( 0 );
+      a.access_delegated_vesting() = VEST_asset( 0 );
       a.vesting_withdraw_rate.amount = 0;
       a.next_vesting_withdrawal = fc::time_point_sec::maximum();
       a.to_withdraw.amount = 0;
@@ -1615,16 +1630,16 @@ void database::clear_account( const account_object& account )
         a.delayed_votes.clear();
         a.sum_delayed_votes = 0;
       }
-
-      rc().update_account_after_vest_change( account, now, true, true );
     } );
+    rc().update_account_after_vest_change( account, now, true, true );
 
-    adjust_balance( treasury_account, converted_hive );
+    temp_HIVE_balance hive_from_vests;
     modify( cprops, [&]( dynamic_global_property_object& o )
     {
-      o.total_vesting_fund_hive -= converted_hive;
-      o.total_vesting_shares -= vests_to_convert;
+      hive_from_vests = o.convert_VESTS_to_HIVE( vests_to_convert );
+      total_hive_from_vests += hive_from_vests;
     } );
+    adjust_balance( treasury_account, hive_from_vests, hive_from_vests.as_asset() );
   }
 
   remove_pending_escrows( account, account_name );
@@ -1639,51 +1654,61 @@ void database::clear_account( const account_object& account )
   // Touch HBD balances (to be sure all interests are added to balances)
   if( has_hardfork( HIVE_HARDFORK_1_24 ) )
   {
-    adjust_balance( account, HBD_asset( 0 ) );
-    adjust_savings_balance( account, HBD_asset( 0 ) );
-    adjust_reward_balance( account, HBD_asset( 0 ) );
+    temp_HBD_balance zero_hbd;
+    adjust_balance( account, zero_hbd, HBD_asset( 0 ) );
+    adjust_savings_balance( account, zero_hbd, HBD_asset( 0 ) );
+    adjust_reward_balance( account, zero_hbd, HBD_asset( 0 ) );
   }
 
   // Remove remaining savings balances
   total_transferred_hive += account.get_hive_savings();
   total_transferred_hbd += account.get_hbd_savings();
-  adjust_balance( treasury_account, account.get_hive_savings() );
-  adjust_savings_balance( account, -account.get_hive_savings() );
-  adjust_balance( treasury_account, account.get_hbd_savings() );
-  adjust_savings_balance( account, -account.get_hbd_savings() );
+  {
+    temp_HIVE_balance transfer;
+    adjust_savings_balance( account, transfer, -account.get_hive_savings() );
+    adjust_balance( treasury_account, transfer, transfer.as_asset() );
+  }
+  {
+    temp_HBD_balance transfer;
+    adjust_savings_balance( account, transfer, -account.get_hbd_savings() );
+    adjust_balance( treasury_account, transfer, transfer.as_asset() );
+  }
 
   // Remove HBD and HIVE balances
   total_transferred_hive += account.get_hive_balance();
   total_transferred_hbd += account.get_hbd_balance();
-  adjust_balance( treasury_account, account.get_hive_balance() );
-  adjust_balance( account, -account.get_hive_balance() );
-  adjust_balance( treasury_account, account.get_hbd_balance() );
-  adjust_balance( account, -account.get_hbd_balance() );
+  {
+    temp_HIVE_balance transfer;
+    adjust_balance( account, transfer, -account.get_hive_balance() );
+    adjust_balance( treasury_account, transfer, transfer.as_asset() );
+  }
+  {
+    temp_HBD_balance transfer;
+    adjust_balance( account, transfer, -account.get_hbd_balance() );
+    adjust_balance( treasury_account, transfer, transfer.as_asset() );
+  }
 
   // Transfer reward balances
   total_transferred_hive += account.get_hive_rewards();
   total_transferred_hbd += account.get_hbd_rewards();
-  adjust_balance( treasury_account, account.get_hive_rewards() );
-  adjust_reward_balance( account, -account.get_hive_rewards() );
-  adjust_balance( treasury_account, account.get_hbd_rewards() );
-  adjust_reward_balance( account, -account.get_hbd_rewards() );
+  {
+    temp_HIVE_balance transfer;
+    adjust_reward_balance( account, transfer, -account.get_hive_rewards() );
+    adjust_balance( treasury_account, transfer, transfer.as_asset() );
+  }
+  {
+    temp_HBD_balance transfer;
+    adjust_reward_balance( account, transfer, -account.get_hbd_rewards() );
+    adjust_balance( treasury_account, transfer, transfer.as_asset() );
+  }
 
   // Convert and transfer vesting rewards
-  adjust_balance( treasury_account, account.get_vest_rewards_as_hive() );
   total_converted_vests += account.get_vest_rewards();
   total_hive_from_vests += account.get_vest_rewards_as_hive();
-
-  modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
   {
-    gpo.pending_rewarded_vesting_shares -= account.get_vest_rewards();
-    gpo.pending_rewarded_vesting_hive -= account.get_vest_rewards_as_hive();
-  } );
-
-  modify( account, []( account_object &a )
-  {
-    a.reward_vesting_balance = VEST_asset( 0 );
-    a.reward_vesting_hive = HIVE_asset( 0 );
-  } );
+    temp_HIVE_balance reward_hive = liquify_reward_balance( account );
+    adjust_balance( treasury_account, reward_hive, reward_hive.as_asset() );
+  }
 
   vop.hbd_transferred = total_transferred_hbd;
   vop.hive_transferred = total_transferred_hive;
@@ -1714,17 +1739,16 @@ void database::process_delayed_voting( const block_notification& note )
 }
 
 /**
-  * This method updates total_reward_shares2 on DGPO, and children_rshares2 on comments, when a comment's rshares2 changes
-  * from old_rshares2 to new_rshares2.  Maintaining invariants that children_rshares2 is the sum of all descendants' rshares2,
-  * and dgpo.total_reward_shares2 is the total number of rshares2 outstanding.
+  * This method updates recent_claims in the reward_fund_object when a comment's rshares2 changes
+  * from old_rshares2 to new_rshares2. Only called pre-HF17 where recent_claims stores the sum of
+  * all outstanding rshares2 (without decay).
   */
 void database::adjust_rshares2( fc::uint128_t old_rshares2, fc::uint128_t new_rshares2 )
 {
-  const auto& dgpo = get_dynamic_global_properties();
-  modify( dgpo, [&]( dynamic_global_property_object& p )
+  modify( get_reward_fund(), [&]( reward_fund_object& rfo )
   {
-    p.total_reward_shares2 -= old_rshares2;
-    p.total_reward_shares2 += new_rshares2;
+    rfo.access_recent_claims() -= old_rshares2;
+    rfo.access_recent_claims() += new_rshares2;
   } );
 }
 
@@ -1733,15 +1757,13 @@ void database::update_owner_authority( const account_object& account, const auth
   if( has_hardfork( HIVE_HARDFORK_1_30_OWNER_HISTORY )
     || head_block_num() >= HIVE_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM )
   {
-    create< owner_authority_history_object >( account, get< account_authority_object, by_account >( account.get_name() ).owner, head_block_time() );
+    create< owner_authority_history_object >( account, get< account_authority_object, by_account >( account.get_name() ).get_owner(), head_block_time() );
   }
 
   modify( get< account_authority_object, by_account >( account.get_name() ), [&]( account_authority_object& auth )
   {
-    auth.owner = owner_authority;
-    auth.previous_owner_update = auth.last_owner_update;
-    auth.last_owner_update = head_block_time();
-  });
+    auth.set_owner( owner_authority, head_block_time() );
+  } );
 }
 
 
@@ -1759,7 +1781,7 @@ void database::process_funds()
 {
   const auto& props = get_dynamic_global_properties();
   const auto& wso = get_witness_schedule_object();
-  const auto& feed = get_feed_history();
+  const auto& exchange_rate = get_hbd_price();
 
   if( has_hardfork( HIVE_HARDFORK_0_16__551) )
   {
@@ -1777,29 +1799,26 @@ void database::process_funds()
     HIVE_asset new_hive( 0 );
     if( has_hardfork( HIVE_HARDFORK_1_28_NO_DHF_HBD_IN_INFLATION ) )
     {
-      auto median_price = get_feed_history().current_median_history;
-      FC_ASSERT( median_price.is_null() == false );
+      FC_ASSERT( exchange_rate.is_null() == false );
 
       const auto& treasury_account = get_treasury();
       const HBD_asset hbd_supply_without_treasury = props.get_current_hbd_supply() - treasury_account.get_hbd_balance();
       FC_ASSERT( hbd_supply_without_treasury.amount.value >= 0 ); // ABW: not needed
-      const auto virtual_supply_without_treasury = hbd_supply_without_treasury * median_price + props.get_current_supply();
+      const auto virtual_supply_without_treasury = hbd_supply_without_treasury * exchange_rate + props.get_current_supply();
 
       new_hive = ( virtual_supply_without_treasury * current_inflation_rate ) / (int64_t(HIVE_100_PERCENT) * int64_t(HIVE_BLOCKS_PER_YEAR));
     }
     else
     {
-      new_hive = ( props.virtual_supply * current_inflation_rate ) / (int64_t(HIVE_100_PERCENT) * int64_t(HIVE_BLOCKS_PER_YEAR));
+      new_hive = ( props.get_virtual_supply() * current_inflation_rate ) / (int64_t(HIVE_100_PERCENT) * int64_t(HIVE_BLOCKS_PER_YEAR));
     }
 
-    auto content_reward = ( new_hive * props.content_reward_percent ) / HIVE_100_PERCENT;
-    if( has_hardfork( HIVE_HARDFORK_0_17__774 ) )
-      content_reward = pay_reward_funds( content_reward );
-    auto vesting_reward = ( new_hive * props.vesting_reward_percent ) / HIVE_100_PERCENT;
-    auto dhf_new_funds = ( new_hive * props.proposal_fund_percent ) / HIVE_100_PERCENT;
+    auto content_reward = ( new_hive * props.get_content_reward_percent() ) / HIVE_100_PERCENT;
+    auto vesting_reward = ( new_hive * props.get_vesting_reward_percent() ) / HIVE_100_PERCENT;
+    auto dhf_new_funds = ( new_hive * props.get_proposal_fund_percent() ) / HIVE_100_PERCENT;
     auto witness_reward = new_hive - content_reward - vesting_reward - dhf_new_funds;
 
-    const auto& cwit = get_witness( props.current_witness );
+    const auto& cwit = get_witness( props.get_current_witness() );
 
     // The weighting below splits HIVE_MAX_WITNESSES blocks' worth of witness pay across the
     // witnesses actually scheduled. With a full schedule that averages to the nominal share. With
@@ -1828,32 +1847,36 @@ void database::process_funds()
       witness_reward /= wso.witness_pay_normalization_factor;
     }
 
-    HBD_asset new_hbd( 0 );
-
-    if( dhf_new_funds.get_amount() != 0 )
-    {
-      if( has_hardfork( HIVE_HARDFORK_1_30_DHF_FUNDING ) )
-        new_hbd = util::dhf_funding_without_truncation( dhf_new_funds, feed.current_median_history, head_block_num() );
-      else
-        new_hbd = dhf_new_funds * feed.current_median_history;
-      adjust_balance( get_treasury_name(), new_hbd );
-    }
-
     new_hive = content_reward + vesting_reward + witness_reward;
 
+    // Issue HIVE and HBD first, then distribute
+    temp_HIVE_balance hive_issued;
+    temp_HBD_balance hbd_issued;
     modify( props, [&]( dynamic_global_property_object& p )
     {
-      p.total_vesting_fund_hive += vesting_reward;
-      if( !has_hardfork( HIVE_HARDFORK_0_17__774 ) )
-        p.total_reward_fund_hive += content_reward;
-      p.current_supply      += new_hive;
-      p.current_hbd_supply  += new_hbd;
-      p.virtual_supply      += new_hive + dhf_new_funds;
-      p.dhf_interval_ledger += new_hbd;
+      temp_HIVE_balance to_hbd;
+      hive_issued = p.issue_HIVE( new_hive + dhf_new_funds );
+      to_hbd.transfer_from( hive_issued, dhf_new_funds );
+      p.access_total_vesting_fund_hive().transfer_from( hive_issued, vesting_reward );
+      if( has_hardfork( HIVE_HARDFORK_1_30_DHF_FUNDING ) )
+        hbd_issued = p.convert_HIVE_to_exact_HBD( to_hbd,
+          util::dhf_funding_without_truncation( dhf_new_funds, exchange_rate, head_block_num() ) );
+      else
+        hbd_issued = p.convert_HIVE_to_HBD( to_hbd, exchange_rate, false );
+      p.add_to_dhf_interval_ledger( hbd_issued );
     } );
 
+    // Distribute content reward to reward funds
+    pay_reward_funds( hive_issued, content_reward );
+    // Distribute DHF HBD to treasury
+    if( hbd_issued.as_asset().get_amount() != 0 )
+      adjust_balance( get_treasury_name(), hbd_issued, hbd_issued.as_asset() );
+
+    // Create vesting for witness and account for it in temp
+    temp_HIVE_balance witness_reward_balance;
+    witness_reward_balance.transfer_from( hive_issued, witness_reward );
     auto vop = producer_reward_operation( cwit.owner, asset( 0, VESTS_SYMBOL ) );
-    create_vesting2( *this, get_account( cwit.owner ), witness_reward, false,
+    create_vesting2( *this, get_account( cwit.owner ), witness_reward_balance, false,
       [&]( const VEST_asset& vesting_shares )
       {
         vop.vesting_shares = vesting_shares.to_asset();
@@ -1870,17 +1893,46 @@ void database::process_funds()
 
     content_reward = content_reward + curate_reward;
 
-    if( props.head_block_number < HIVE_START_VESTING_BLOCK )
+    if( props.get_head_block_number() < HIVE_START_VESTING_BLOCK )
       vesting_reward = HIVE_asset( 0 );
     else
       vesting_reward *= 9;
 
+    temp_HIVE_balance hive_issued;
     modify( props, [&]( dynamic_global_property_object& p )
     {
-        p.total_vesting_fund_hive += vesting_reward;
-        p.total_reward_fund_hive  += content_reward;
-        p.current_supply += content_reward + witness_pay + vesting_reward;
-        p.virtual_supply += content_reward + witness_pay + vesting_reward;
+      hive_issued = p.issue_HIVE( content_reward + witness_pay + vesting_reward );
+    } );
+
+    pay_reward_funds( hive_issued, content_reward );
+
+    /// pay witness in vesting shares
+    const auto& witness_account = get_account( props.get_current_witness() );
+    if( props.get_head_block_number() >= HIVE_START_MINER_VOTING_BLOCK || ( witness_account.get_vesting().amount.value == 0 ) )
+    {
+      temp_HIVE_balance witness_pay_balance;
+      witness_pay_balance.transfer_from( hive_issued, witness_pay );
+      auto vop = producer_reward_operation( witness_account.get_name(), asset( 0, VESTS_SYMBOL ) );
+      create_vesting2( *this, witness_account, witness_pay_balance, false,
+        [&]( const VEST_asset& vesting_shares )
+        {
+          vop.vesting_shares = vesting_shares.to_asset();
+          pre_push_virtual_operation( *this, vop );
+        } );
+      post_push_virtual_operation( *this, vop );
+    }
+    else
+    {
+      modify( get_account( witness_account.get_name() ), [&]( account_object& a )
+      {
+        a.access_hive_balance().transfer_from( hive_issued, witness_pay );
+      } );
+      push_virtual_operation( *this, producer_reward_operation( witness_account.get_name(), witness_pay.to_asset() ) );
+    }
+
+    modify( props, [&]( dynamic_global_property_object& p )
+    {
+      p.access_total_vesting_fund_hive().transfer_from( hive_issued, vesting_reward );
     } );
   }
 }
@@ -1893,11 +1945,11 @@ void database::process_subsidized_accounts()
   // Update global pool.
   modify( gpo, [&]( dynamic_global_property_object& g )
   {
-    g.available_account_subsidies = rd_apply( wso.account_subsidy_rd, g.available_account_subsidies );
+    g.set_available_account_subsidies( rd_apply( wso.account_subsidy_rd, g.get_available_account_subsidies() ) );
   } );
 
   // Update per-witness pool for current witness.
-  const witness_object& current_witness = get_witness( gpo.current_witness );
+  const witness_object& current_witness = get_witness( gpo.get_current_witness() );
   update_witness_schedule_for_elected( current_witness, wso.account_subsidy_witness_rd );
 }
 
@@ -1909,7 +1961,7 @@ HIVE_asset database::get_liquidity_reward()const
 
   const auto& props = get_dynamic_global_properties();
   static_assert( HIVE_LIQUIDITY_REWARD_PERIOD_SEC == 60*60, "this code assumes a 1 hour time interval" ); // NOLINT(misc-redundant-expression)
-  HIVE_asset percent( protocol::calc_percent_reward_per_hour< HIVE_LIQUIDITY_APR_PERCENT >( props.virtual_supply.amount ) );
+  HIVE_asset percent( protocol::calc_percent_reward_per_hour< HIVE_LIQUIDITY_APR_PERCENT >( props.get_virtual_supply().amount ) );
   return std::max( percent, HIVE_MIN_LIQUIDITY_REWARD );
 }
 
@@ -1918,7 +1970,7 @@ HIVE_asset database::get_content_reward()const
   // There is no need to update virtual_supply to take into account treasury as it's done in process_funds
   const auto& props = get_dynamic_global_properties();
   static_assert( HIVE_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
-  HIVE_asset percent( protocol::calc_percent_reward_per_block< HIVE_CONTENT_APR_PERCENT >( props.virtual_supply.amount ) );
+  HIVE_asset percent( protocol::calc_percent_reward_per_block< HIVE_CONTENT_APR_PERCENT >( props.get_virtual_supply().amount ) );
   return std::max( percent, HIVE_MIN_CONTENT_REWARD );
 }
 
@@ -1927,42 +1979,17 @@ HIVE_asset database::get_curation_reward()const
   // There is no need to update virtual_supply to take into account treasury as it's done in process_funds
   const auto& props = get_dynamic_global_properties();
   static_assert( HIVE_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
-  HIVE_asset percent( protocol::calc_percent_reward_per_block< HIVE_CURATE_APR_PERCENT >( props.virtual_supply.amount ) );
+  HIVE_asset percent( protocol::calc_percent_reward_per_block< HIVE_CURATE_APR_PERCENT >( props.get_virtual_supply().amount ) );
   return std::max( percent, HIVE_MIN_CURATE_REWARD );
 }
 
-HIVE_asset database::get_producer_reward()
+HIVE_asset database::get_producer_reward()const
 {
   // There is no need to update virtual_supply to take into account treasury as it's done in process_funds
   const auto& props = get_dynamic_global_properties();
   static_assert( HIVE_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
-  HIVE_asset percent( protocol::calc_percent_reward_per_block< HIVE_PRODUCER_APR_PERCENT >( props.virtual_supply.amount ) );
-  auto pay = std::max( percent, HIVE_MIN_PRODUCER_REWARD );
-  const auto& witness_account = get_account( props.current_witness );
-
-  /// pay witness in vesting shares
-  if( props.head_block_number >= HIVE_START_MINER_VOTING_BLOCK || (witness_account.get_vesting().amount.value == 0) )
-  {
-    // const auto& witness_obj = get_witness( props.current_witness );
-    auto vop = producer_reward_operation( witness_account.get_name(), asset( 0, VESTS_SYMBOL ) );
-    create_vesting2( *this, witness_account, pay, false,
-      [&]( const VEST_asset& vesting_shares )
-      {
-        vop.vesting_shares = vesting_shares.to_asset();
-        pre_push_virtual_operation( *this, vop );
-      } );
-    post_push_virtual_operation( *this, vop );
-  }
-  else
-  {
-    modify( get_account( witness_account.get_name() ), [&]( account_object& a )
-    {
-      a.balance += pay;
-    } );
-    push_virtual_operation( *this, producer_reward_operation( witness_account.get_name(), pay.to_asset() ) );
-  }
-
-  return pay;
+  HIVE_asset percent( protocol::calc_percent_reward_per_block< HIVE_PRODUCER_APR_PERCENT >( props.get_virtual_supply().amount ) );
+  return std::max( percent, HIVE_MIN_PRODUCER_REWARD );
 }
 
 HIVE_asset database::get_pow_reward()const
@@ -1972,13 +1999,13 @@ HIVE_asset database::get_pow_reward()const
 
 #ifndef IS_TEST_NET
   /// 0 block rewards until at least HIVE_MAX_WITNESSES have produced a POW
-  if( props.num_pow_witnesses < HIVE_MAX_WITNESSES && props.head_block_number < HIVE_START_VESTING_BLOCK )
+  if( props.get_current_pow_witnesses() < HIVE_MAX_WITNESSES && props.get_head_block_number() < HIVE_START_VESTING_BLOCK )
     return HIVE_asset( 0 );
 #endif
 
   static_assert( HIVE_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
   static_assert( HIVE_MAX_WITNESSES == 21, "this code assumes 21 per round" );
-  HIVE_asset percent( calc_percent_reward_per_round< HIVE_POW_APR_PERCENT >( props.virtual_supply.amount ) );
+  HIVE_asset percent( calc_percent_reward_per_round< HIVE_POW_APR_PERCENT >( props.get_virtual_supply().amount ) );
   return std::max( percent, HIVE_MIN_POW_REWARD );
 }
 
@@ -1987,14 +2014,14 @@ HIVE_asset database::get_pow_reward()const
 uint16_t database::get_curation_rewards_percent() const
 {
   if( has_hardfork( HIVE_HARDFORK_0_17__774 ) )
-    return get_reward_fund().percent_curation_rewards;
+    return get_reward_fund().get_percent_curation_rewards();
   else if( has_hardfork( HIVE_HARDFORK_0_8__116 ) )
     return HIVE_1_PERCENT * 25;
   else
     return HIVE_1_PERCENT * 50;
 }
 
-HIVE_asset database::pay_reward_funds( const HIVE_asset& reward )
+void database::pay_reward_funds( temp_HIVE_balance& reward_balance, const HIVE_asset& content_reward )
 {
   const auto& reward_idx = get_index< reward_fund_index, by_id >();
   HIVE_asset used_rewards( 0 );
@@ -2002,30 +2029,30 @@ HIVE_asset database::pay_reward_funds( const HIVE_asset& reward )
   for( auto itr = reward_idx.begin(); itr != reward_idx.end(); ++itr )
   {
     // reward is a per block reward and the percents are 16-bit. This should never overflow
-    auto r = ( reward * itr->percent_content_rewards ) / HIVE_100_PERCENT;
+    auto r = ( content_reward * itr->get_percent_content_rewards() ) / HIVE_100_PERCENT;
 
     modify( *itr, [&]( reward_fund_object& rfo )
     {
-      rfo.reward_balance += r;
-    });
+      rfo.access_reward_balance().transfer_from( reward_balance, r );
+    } );
 
     used_rewards += r;
 
     // Sanity check to ensure we aren't printing more HIVE than has been allocated through inflation
-    FC_ASSERT( used_rewards <= reward );
+    // ABW: in case we ever have more than one fund, which might lead to their sum being less than
+    // designated reward, we need to add burning of excess reward here
+    FC_ASSERT( used_rewards == content_reward );
   }
-
-  return used_rewards;
 }
 
 HBD_asset database::to_hbd( const HIVE_asset& hive )const
 {
-  return util::to_hbd( get_feed_history().current_median_history, hive );
+  return util::to_hbd( get_hbd_price(), hive );
 }
 
 HIVE_asset database::to_hive( const HBD_asset& hbd )const
 {
-  return util::to_hive( get_feed_history().current_median_history, hbd );
+  return util::to_hive( get_hbd_price(), hbd );
 }
 
 void database::account_recovery_processing()
@@ -2044,7 +2071,7 @@ void database::account_recovery_processing()
   const auto& hist_idx = get_index< owner_authority_history_index >().indices(); //by id
   auto hist = hist_idx.begin();
 
-  while( hist != hist_idx.end() && time_point_sec( hist->last_valid_time + HIVE_OWNER_AUTH_RECOVERY_PERIOD ) < head_block_time() )
+  while( hist != hist_idx.end() && time_point_sec( hist->get_last_valid_time() + HIVE_OWNER_AUTH_RECOVERY_PERIOD ) < head_block_time() )
   {
     remove( *hist );
     hist = hist_idx.begin();
@@ -2075,17 +2102,17 @@ void database::account_recovery_processing()
 
 time_point_sec database::head_block_time()const
 {
-  return get_dynamic_global_properties().time;
+  return get_dynamic_global_properties().get_head_block_time();
 }
 
 uint32_t database::head_block_num()const
 {
-  return get_dynamic_global_properties().head_block_number;
+  return get_dynamic_global_properties().get_head_block_number();
 }
 
 block_id_type database::head_block_id()const
 {
-  return get_dynamic_global_properties().head_block_id;
+  return get_dynamic_global_properties().get_head_block_id();
 }
 
 uint32_t database::get_last_irreversible_block_num() const
@@ -2162,28 +2189,17 @@ void database::apply_block( const std::shared_ptr<full_block_type>& full_block, 
   //fc::microseconds dt = end_time - begin_time;
   if( _flush_blocks != 0 )
   {
-    if( _next_flush_block == 0 )
+    // _next_flush_block == 0 means nothing is scheduled yet - the node has just started, or the
+    // interval has just changed - so flush right away and schedule from here.
+    if( _next_flush_block == 0 || _next_flush_block == block_num )
     {
-      uint32_t lep = block_num + 1 + _flush_blocks * 9 / 10;
-      uint32_t rep = block_num + 1 + _flush_blocks;
-
-      // use time_point::now() as RNG source to pick block randomly between lep and rep
-      uint32_t span = rep - lep;
-      uint32_t x = lep;
-      if( span > 0 )
-      {
-        uint64_t now = uint64_t( fc::time_point::now().time_since_epoch().count() );
-        x += now % span;
-      }
-      _next_flush_block = x;
-      //ilog( "Next flush scheduled at block ${b}", ("b", x) );
-    }
-
-    if( _next_flush_block == block_num )
-    {
-      _next_flush_block = 0;
+      // Schedule the following flush straight away. Resetting to 0 here would leave the next
+      // block to do the scheduling, spending one block idle between every pair of flushes, so
+      // an interval of N would flush every N+1 blocks -- most visibly with N == 1, which
+      // flushed every second block despite the "after each block" intent (issue #869).
+      _next_flush_block = schedule_next_flush_block( block_num );
       //ilog( "Flushing database shared memory at block ${b}", ("b", block_num) );
-      flush_to_all_storages();
+      flush_to_all_storages( false );
     }
   }
 
@@ -2338,7 +2354,7 @@ void database::_apply_block( const std::shared_ptr<full_block_type>& full_block,
   const auto& gprops = get_dynamic_global_properties();
   uint32_t block_size = full_block->get_uncompressed_block().raw_size;
   if( has_hardfork( HIVE_HARDFORK_0_12 ) ) // block 1798604 was twice the allowed max due to megasized comment
-    FC_ASSERT(block_size <= gprops.maximum_block_size, "Block size is larger than voted on block size", (block_num)(block_size)("max",gprops.maximum_block_size));
+    FC_ASSERT(block_size <= gprops.get_maximum_block_size(), "Block size is larger than voted on block size", (block_num)(block_size)("max",gprops.get_maximum_block_size()));
 
   if( block_size < HIVE_MIN_BLOCK_SIZE )
     elog("Block size is too small", (block_num)(block_size)("min", HIVE_MIN_BLOCK_SIZE));
@@ -2346,7 +2362,7 @@ void database::_apply_block( const std::shared_ptr<full_block_type>& full_block,
   /// modify current witness so transaction evaluators can know who included the transaction,
   /// this is mostly for POW operations which must pay the current_witness
   modify( gprops, [&]( dynamic_global_property_object& dgp ){
-    dgp.current_witness = block.witness;
+    dgp.set_current_witness( block.witness );
   });
 
   /// parse witness version reporting
@@ -2436,8 +2452,8 @@ void database::_apply_block( const std::shared_ptr<full_block_type>& full_block,
   // reversible.
   migrate_irreversible_state(old_last_irreversible);
 
-  _my->_last_pushed_block_number.store(gprops.head_block_number, std::memory_order_release);
-  _my->_last_pushed_block_time.store(gprops.time.sec_since_epoch(), std::memory_order_release);
+  _my->_last_pushed_block_number.store(gprops.get_head_block_number(), std::memory_order_release);
+  _my->_last_pushed_block_time.store(gprops.get_head_block_time().sec_since_epoch(), std::memory_order_release);
 } FC_CAPTURE_CALL_LOG_AND_RETHROW( std::bind( &database::notify_fail_apply_block, this, note ), (block_num) ) }
 
 void database::process_genesis_accounts()
@@ -2665,9 +2681,9 @@ void database::validate_transaction(const std::shared_ptr<full_transaction_type>
 
   if (!(skip & (skip_transaction_signatures | skip_authority_check)))
   {
-    auto get_active  =    [&]( const string& name ) { return authority( get< account_authority_object, by_account >( name ).active ); };
-    auto get_owner   =    [&]( const string& name ) { return authority( get< account_authority_object, by_account >( name ).owner );  };
-    auto get_posting =    [&]( const string& name ) { return authority( get< account_authority_object, by_account >( name ).posting );  };
+    auto get_active  =    [&]( const string& name ) { return get< account_authority_object, by_account >( name ).get_active().to_authority(); };
+    auto get_owner   =    [&]( const string& name ) { return get< account_authority_object, by_account >( name ).get_owner().to_authority();  };
+    auto get_posting =    [&]( const string& name ) { return get< account_authority_object, by_account >( name ).get_posting().to_authority();  };
     auto get_witness_key = [&]( const string& name ) { try { return get_witness( name ).signing_key; } FC_CAPTURE_AND_RETHROW((name)) };
 
     try
@@ -2873,13 +2889,35 @@ void database_impl::apply_operation(const operation& op)
   _self.notify_post_apply_operation( note );
 }
 
-void database::flush_to_all_storages()
+uint32_t database::schedule_next_flush_block( uint32_t block_num ) const
 {
-  get_comments_handler().flush();
+  // Pick the next flush block randomly inside the last tenth of the interval so that nodes
+  // started together do not all flush on the same block.
+  uint32_t lep = block_num + 1 + _flush_blocks * 9 / 10;
+  uint32_t rep = block_num + 1 + _flush_blocks;
+
+  uint32_t span = rep - lep;
+  uint32_t x = lep;
+  if( span > 0 )
+  {
+    // use time_point::now() as RNG source to pick block randomly between lep and rep
+    uint64_t now = uint64_t( fc::time_point::now().time_since_epoch().count() );
+    x += now % span;
+  }
+  return x;
+}
+
+void database::flush_to_all_storages( bool force_storage_flush )
+{
+  get_comments_handler().flush( force_storage_flush );
 
   chainbase::database::flush();
 
-  notify_flush();
+  notify_flush( force_storage_flush );
+
+  // Cheap, heavily rate-limited sampling: descriptor usage grows silently between restarts
+  // and the startup-only limit check cannot see it (issue #869).
+  report_fd_usage_if_needed();
 }
 
 const witness_object& database::validate_block_header( uint32_t skip, const std::shared_ptr<full_block_type>& full_block )const
@@ -2919,7 +2957,7 @@ void database::update_global_dynamic_data( const signed_block& b )
   const dynamic_global_property_object& _dgp = get_dynamic_global_properties();
 
   uint32_t missed_blocks = get_slot_at_time( b.timestamp );
-;
+
   assert( missed_blocks != 0 );
   missed_blocks--;
 
@@ -2945,48 +2983,46 @@ void database::update_global_dynamic_data( const signed_block& b )
     // This is constant time assuming 100% participation. It is O(B) otherwise (B = Num blocks between update)
     for( uint32_t i = 0; i < missed_blocks + 1; i++ )
     {
-      dgp.participation_count -= fc::uint128_high_bits(dgp.recent_slots_filled) & 0x8000000000000000ULL ? 1 : 0;
-      dgp.recent_slots_filled = ( dgp.recent_slots_filled << 1 ) + ( i == 0 ? 1 : 0 );
-      dgp.participation_count += ( i == 0 ? 1 : 0 );
+      dgp.set_participation_count( dgp.get_participation_count() - (fc::uint128_high_bits(dgp.get_recent_slots_filled()) & 0x8000000000000000ULL ? 1 : 0) );
+      dgp.set_recent_slots_filled( ( dgp.get_recent_slots_filled() << 1 ) + ( i == 0 ? 1 : 0 ) );
+      dgp.set_participation_count( dgp.get_participation_count() + ( i == 0 ? 1 : 0 ) );
     }
 
-    dgp.head_block_number = b.block_num();
     // Following FC_ASSERT should never fail, as _currently_processing_block_id is always set by caller
     FC_ASSERT( _currently_processing_block_id.valid() );
-    dgp.head_block_id = *_currently_processing_block_id;
-    dgp.time = b.timestamp;
-    dgp.current_aslot += missed_blocks+1;
+    dgp.set_new_head_block( b.block_num(), *_currently_processing_block_id, b.timestamp );
+    dgp.set_current_aslot( dgp.get_current_aslot() + missed_blocks+1 );
   } );
 
   if( !(get_node_skip_flags() & skip_undo_history_check) )
   {
-    HIVE_ASSERT( _dgp.head_block_number - get_last_irreversible_block_num() < HIVE_MAX_UNDO_HISTORY, undo_database_exception,
+    HIVE_ASSERT( _dgp.get_head_block_number() - get_last_irreversible_block_num() < HIVE_MAX_UNDO_HISTORY, undo_database_exception,
                  "The database does not have enough undo history to support a blockchain with so many missed blocks. "
                  "Please add a checkpoint if you would like to continue applying blocks beyond this point.",
-                 ("irreversible_block_num", get_last_irreversible_block_num())("head", _dgp.head_block_number)
+                 ("irreversible_block_num", get_last_irreversible_block_num())("head", _dgp.get_head_block_number())
                  ("max_undo", HIVE_MAX_UNDO_HISTORY) );
   }
 } FC_CAPTURE_AND_RETHROW() }
 
 uint16_t database::calculate_HBD_percent()
 {
-  auto median_price = get_feed_history().current_median_history;
-  if( median_price.is_null() )
+  const auto& exchange_rate = get_hbd_price();
+  if( exchange_rate.is_null() )
     return 0;
 
   const auto& dgpo = get_dynamic_global_properties();
   auto hbd_supply = dgpo.get_current_hbd_supply();
-  auto virtual_supply = dgpo.virtual_supply;
+  auto virtual_supply = dgpo.get_virtual_supply();
   if( has_hardfork( HIVE_HARDFORK_1_24 ) )
   {
     // Removing the hbd in the treasury from the debt ratio calculations
     hbd_supply -= get_treasury().get_hbd_balance();
     if( hbd_supply.amount < 0 )
       hbd_supply = HBD_asset( 0 );
-    virtual_supply = hbd_supply * median_price + dgpo.get_current_supply();
+    virtual_supply = hbd_supply * exchange_rate + dgpo.get_current_supply();
   }
 
-  auto hbd_as_hive = fc::uint128_t( ( hbd_supply * median_price ).amount.value );
+  auto hbd_as_hive = fc::uint128_t( ( hbd_supply * exchange_rate ).amount.value );
   hbd_as_hive *= HIVE_100_PERCENT;
   if( has_hardfork( HIVE_HARDFORK_0_21 ) )
     hbd_as_hive += virtual_supply.amount.value / 2; // added rounding
@@ -2997,21 +3033,21 @@ void database::update_virtual_supply()
 { try {
   modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& dgp )
   {
-    auto median_price = get_feed_history().current_median_history;
+    const auto& exchange_rate = get_hbd_price();
     //current_median_history was null until block 933600
-    dgp.virtual_supply = dgp.current_supply
-      + ( median_price.is_null() ? HIVE_asset( 0 ) : dgp.get_current_hbd_supply() * median_price );
+    dgp.access_virtual_supply() = dgp.get_current_supply()
+      + ( exchange_rate.is_null() ? HIVE_asset( 0 ) : dgp.get_current_hbd_supply() * exchange_rate );
 
-    if( !median_price.is_null() && has_hardfork( HIVE_HARDFORK_0_14__230 ) )
+    if( !exchange_rate.is_null() && has_hardfork( HIVE_HARDFORK_0_14__230 ) )
     {
       uint16_t percent_hbd = calculate_HBD_percent();
 
-      if( percent_hbd >= dgp.hbd_stop_percent )
-        dgp.hbd_print_rate = 0;
-      else if( percent_hbd <= dgp.hbd_start_percent )
-        dgp.hbd_print_rate = HIVE_100_PERCENT;
+      if( percent_hbd >= dgp.get_hbd_stop_percent() )
+        dgp.set_hbd_print_rate( 0 );
+      else if( percent_hbd <= dgp.get_hbd_start_percent() )
+        dgp.set_hbd_print_rate( HIVE_100_PERCENT );
       else
-        dgp.hbd_print_rate = ( ( dgp.hbd_stop_percent - percent_hbd ) * HIVE_100_PERCENT ) / ( dgp.hbd_stop_percent - dgp.hbd_start_percent );
+        dgp.set_hbd_print_rate( ( ( dgp.get_hbd_stop_percent() - percent_hbd ) * HIVE_100_PERCENT ) / ( dgp.get_hbd_stop_percent() - dgp.get_hbd_start_percent() ) );
     }
   });
 } FC_CAPTURE_AND_RETHROW() }
@@ -3249,16 +3285,14 @@ void database::clear_expired_delegations()
     try{
     pre_push_virtual_operation( *this, vop );
 
+    if( has_hardfork( HIVE_HARDFORK_0_20 ) )
+      rc().regenerate_rc_mana( delegator, now );
     modify( delegator, [&]( account_object& a )
     {
       if( has_hardfork( HIVE_HARDFORK_0_20 ) )
-      {
         util::update_manabar( gpo, a, itr->get_vesting().amount.value );
-        rc().regenerate_rc_mana( a, now );
-      }
-
-      a.delegated_vesting_shares -= itr->get_vesting();
-    });
+      a.access_delegated_vesting() -= itr->get_vesting();
+    } );
     if( has_hardfork( HIVE_HARDFORK_0_20 ) )
       rc().update_account_after_vest_change( delegator, now );
 
@@ -3269,18 +3303,28 @@ void database::clear_expired_delegations()
   } FC_CAPTURE_AND_RETHROW( (vop) ) }
 }
 
-void database::adjust_balance( const account_object& a, const asset& delta )
+void database::adjust_balance( const account_object& a, temp_balance& any_balance, const asset& delta )
 {
   if( delta.symbol.asset_num == HIVE_ASSET_NUM_HIVE )
-    adjust_balance( a, HIVE_asset( delta ) );
+  {
+    HIVE_asset hive_delta( delta );
+    temp_HIVE_balance hive;
+    hive.transfer_from( any_balance );
+    adjust_balance( a, hive, hive_delta );
+    hive.transfer_to( any_balance );
+  }
   else
   {
     FC_ASSERT( ( delta.symbol.asset_num == HIVE_ASSET_NUM_HBD ) && "liquid", "invalid symbol" );
-    adjust_balance( a, HBD_asset( delta ) );
+    HBD_asset hbd_delta( delta );
+    temp_HBD_balance hbd;
+    hbd.transfer_from( any_balance );
+    adjust_balance( a, hbd, hbd_delta );
+    hbd.transfer_to( any_balance );
   }
 }
 
-void database::adjust_balance( const account_object& a, const HIVE_asset& delta )
+void database::adjust_balance( const account_object& a, temp_HIVE_balance& hive_balance, const HIVE_asset& delta )
 {
   if( delta.amount < 0 )
   {
@@ -3290,28 +3334,24 @@ void database::adjust_balance( const account_object& a, const HIVE_asset& delta 
   }
 
   const bool trace_balance_change = false; //a.get_name() == "X";
-  std::string op_context;
-
-  if( trace_balance_change )
-  {
-    if( _current_applied_operation_info != nullptr )
-      op_context = fc::json::to_string( _current_applied_operation_info->op );
-    else
-      op_context = "No operation context";
-  }
 
   modify( a, [&]( account_object& acnt )
   {
-    auto b = acnt.balance;
-    acnt.balance += delta;
-    if(trace_balance_change)
-      ilog("${a} HIVE balance changed to ${nb} (previous: ${b} ) at block: ${block}. Operation context: ${c}", ("a", a.get_name())("b", b.amount)("nb", acnt.balance.amount)("block", _current_block_num)("c", op_context));
-
-    FC_ASSERT( acnt.get_hive_balance().amount.value >= 0, "Insufficient HIVE funds" );
+    auto b = acnt.get_hive_balance();
+    acnt.access_hive_balance().transfer_from( hive_balance, delta );
+    if( trace_balance_change )
+    {
+      std::string op_context;
+      if( _current_applied_operation_info != nullptr )
+        op_context = fc::json::to_string( _current_applied_operation_info->op );
+      else
+        op_context = "No operation context";
+      ilog("${a} HIVE balance changed to ${nb} (previous: ${b} ) at block: ${block}. Operation context: ${c}", ("a", a.get_name())("b", b.amount)("nb", acnt.get_hive_balance().amount)("block", _current_block_num)("c", op_context));
+    }
   } );
 }
 
-void database::adjust_balance( const account_object& a, const HBD_asset& delta )
+void database::adjust_balance( const account_object& a, temp_HBD_balance& hbd_balance, const HBD_asset& delta )
 {
   if( delta.amount < 0 )
   {
@@ -3321,194 +3361,147 @@ void database::adjust_balance( const account_object& a, const HBD_asset& delta )
   }
 
   const bool trace_balance_change = false; //a.get_name() == "X";
-  std::string op_context;
-
-  if( trace_balance_change )
-  {
-    if( _current_applied_operation_info != nullptr )
-      op_context = fc::json::to_string( _current_applied_operation_info->op );
-    else
-      op_context = "No operation context";
-  }
 
   modify( a, [&]( account_object& acnt )
   {
+    auto _delta = delta; // copy original value in case account's hbd balance and delta are the same object
     /// Starting from HF 25 HBD interest will be paid only from saving balance.
     if( has_hardfork(HIVE_HARDFORK_1_25) == false && a.hbd_seconds_last_update != head_block_time() )
     {
+      const auto& dgpo = get_dynamic_global_properties();
       const auto _head_block_time = head_block_time();
       const bool update_hdb_balance = (_head_block_time - a.hbd_last_interest_payment).to_seconds() > HIVE_HBD_INTEREST_COMPOUND_INTERVAL_SEC;
-      const auto interest = hive::protocol::hbd_interest::evaluate_hbd_interest(&acnt.hbd_seconds, _head_block_time, a.get_hbd_balance(), a.hbd_seconds_last_update,
-        get_dynamic_global_properties().get_hbd_interest_rate(), update_hdb_balance);
+      const auto interest = hive::protocol::hbd_interest::evaluate_hbd_interest( &acnt.hbd_seconds, _head_block_time, a.get_hbd_balance(), a.hbd_seconds_last_update,
+        dgpo.get_hbd_interest_rate(), update_hdb_balance );
       acnt.hbd_seconds_last_update = _head_block_time;
 
       if( acnt.hbd_seconds > 0 && update_hdb_balance )
       {
-        HBD_asset interest_paid( fc::uint128_to_uint64( interest ) );
-        acnt.hbd_balance += interest_paid;
+        HBD_asset interest_to_pay( fc::uint128_to_uint64( interest ) );
+        temp_HBD_balance interest_balance;
+        // nested modify is safe here, because two separate multiindexes are modified
+        modify( dgpo, [&]( dynamic_global_property_object& props )
+        {
+          interest_balance = props.issue_HBD( interest_to_pay, get_hbd_price() );
+        } );
+        acnt.access_hbd_balance().transfer_from( interest_balance );
         acnt.hbd_seconds = 0;
         acnt.hbd_last_interest_payment = _head_block_time;
 
-        if(interest > 0)
-          push_virtual_operation( *this, interest_operation( a.get_name(), interest_paid, true ) );
-
-        modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& props )
-        {
-          props.current_hbd_supply += interest_paid;
-          props.virtual_supply += interest_paid * get_feed_history().current_median_history;
-        } );
+        if( interest > 0 )
+          push_virtual_operation( *this, interest_operation( a.get_name(), interest_to_pay, true ) );
       }
     }
 
-    auto b = acnt.hbd_balance;
-    acnt.hbd_balance += delta;
-
-    if(trace_balance_change)
-      ilog("${a} HBD balance changed to ${nb} (previous: ${b} ) at block: ${block}. Operation context: ${c}", ("a", a.get_name())("b", b.amount)("nb", acnt.hbd_balance.amount)("block", _current_block_num)("c", op_context));
-
-    FC_ASSERT( acnt.get_hbd_balance().amount.value >= 0, "Insufficient HBD funds" );
+    auto b = acnt.get_hbd_balance();
+    acnt.access_hbd_balance().transfer_from( hbd_balance, _delta );
+    if( trace_balance_change )
+    {
+      std::string op_context;
+      if( _current_applied_operation_info != nullptr )
+        op_context = fc::json::to_string( _current_applied_operation_info->op );
+      else
+        op_context = "No operation context";
+      ilog("${a} HBD balance changed to ${nb} (previous: ${b} ) at block: ${block}. Operation context: ${c}", ("a", a.get_name())("b", b.amount)("nb", acnt.get_hbd_balance().amount)("block", _current_block_num)("c", op_context));
+    }
   } );
 }
 
-void database::adjust_savings_balance( const account_object& a, const asset& delta )
+void database::adjust_savings_balance( const account_object& a, temp_balance& any_balance, const asset& delta )
 {
   if( delta.symbol.asset_num == HIVE_ASSET_NUM_HIVE )
-    adjust_savings_balance( a, HIVE_asset( delta ) );
+  {
+    HIVE_asset hive_delta( delta );
+    temp_HIVE_balance hive;
+    hive.transfer_from( any_balance );
+    adjust_savings_balance( a, hive, hive_delta );
+    hive.transfer_to( any_balance );
+  }
   else
   {
     FC_ASSERT( ( delta.symbol.asset_num == HIVE_ASSET_NUM_HBD ) && "savings", "invalid symbol" );
-    adjust_savings_balance( a, HBD_asset( delta ) );
+    HBD_asset hbd_delta( delta );
+    temp_HBD_balance hbd;
+    hbd.transfer_from( any_balance );
+    adjust_savings_balance( a, hbd, hbd_delta );
+    hbd.transfer_to( any_balance );
   }
 }
 
-void database::adjust_savings_balance( const account_object& a, const HIVE_asset& delta )
+void database::adjust_savings_balance( const account_object& a, temp_HIVE_balance& hive_balance, const HIVE_asset& delta )
 {
   modify( a, [&]( account_object& acnt )
   {
-    acnt.savings_balance += delta;
-    FC_ASSERT( acnt.get_hive_savings().amount.value >= 0, "Insufficient savings HIVE funds" );
+    acnt.access_hive_savings().transfer_from( hive_balance, delta );
   } );
 }
 
-void database::adjust_savings_balance( const account_object& a, const HBD_asset& delta )
+void database::adjust_savings_balance( const account_object& a, temp_HBD_balance& hbd_balance, const HBD_asset& delta )
 {
   modify( a, [&]( account_object& acnt )
   {
+    auto _delta = delta; // copy original value in case savings hbd balance and delta are the same object
     if( a.savings_hbd_seconds_last_update != head_block_time() )
     {
+      const auto& dgpo = get_dynamic_global_properties();
       const auto _head_block_time = head_block_time();
       const bool update_savings_hdb_balance = (_head_block_time - a.savings_hbd_last_interest_payment).to_seconds() > HIVE_HBD_INTEREST_COMPOUND_INTERVAL_SEC;
-      const auto interest = hive::protocol::hbd_interest::evaluate_hbd_interest(&acnt.savings_hbd_seconds, _head_block_time, a.get_hbd_savings(), a.savings_hbd_seconds_last_update,
-        get_dynamic_global_properties().get_hbd_interest_rate(), update_savings_hdb_balance);
+      const auto interest = hive::protocol::hbd_interest::evaluate_hbd_interest( &acnt.savings_hbd_seconds, _head_block_time, a.get_hbd_savings(), a.savings_hbd_seconds_last_update,
+        dgpo.get_hbd_interest_rate(), update_savings_hdb_balance );
       acnt.savings_hbd_seconds_last_update = _head_block_time;
 
       if( acnt.savings_hbd_seconds > 0 && update_savings_hdb_balance )
       {
-        HBD_asset interest_paid( fc::uint128_to_uint64( interest ) );
-        acnt.savings_hbd_balance += interest_paid;
+        HBD_asset interest_to_pay( fc::uint128_to_uint64( interest ) );
+        temp_HBD_balance interest_balance;
+        // nested modify is safe here, because two separate multiindexes are modified
+        modify( dgpo, [&]( dynamic_global_property_object& props )
+        {
+          interest_balance = props.issue_HBD( interest_to_pay, get_hbd_price() );
+        } );
+        acnt.access_hbd_savings().transfer_from( interest_balance );
         acnt.savings_hbd_seconds = 0;
         acnt.savings_hbd_last_interest_payment = _head_block_time;
 
         if( interest > 0 )
-          push_virtual_operation( *this, interest_operation( a.get_name(), interest_paid, false ) );
-
-        modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& props )
-        {
-          props.current_hbd_supply += interest_paid;
-          props.virtual_supply += interest_paid * get_feed_history().current_median_history;
-        } );
+          push_virtual_operation( *this, interest_operation( a.get_name(), interest_to_pay, false ) );
       }
     }
-    acnt.savings_hbd_balance += delta;
-    FC_ASSERT( acnt.get_hbd_savings().amount.value >= 0, "Insufficient savings HBD funds" );
+    acnt.access_hbd_savings().transfer_from( hbd_balance, _delta );
   } );
 }
 
-void database::adjust_reward_balance( const account_object& a, const asset& value_delta,
-                          const asset& share_delta /*= asset(0,VESTS_SYMBOL)*/ )
-{
-  FC_ASSERT( value_delta.symbol.is_vesting() == false && share_delta.symbol.is_vesting() );
-
-  if( value_delta.symbol.asset_num == HIVE_ASSET_NUM_HIVE )
-  {
-    if( share_delta.amount.value == 0 )
-      adjust_reward_balance( a, HIVE_asset( value_delta ) );
-    else
-      adjust_reward_balance( a, HIVE_asset( value_delta ), VEST_asset( share_delta ) );
-  }
-  else
-  {
-    FC_ASSERT( value_delta.symbol.asset_num == HIVE_ASSET_NUM_HBD, "invalid symbol" );
-    adjust_reward_balance( a, HBD_asset( value_delta ) );
-  }
-}
-
-void database::adjust_reward_balance( const account_object& a, const HIVE_asset& value_delta )
+void database::adjust_reward_balance( const account_object& a, temp_HIVE_balance& hive_balance, const HIVE_asset& value_delta )
 {
   modify( a, [&]( account_object& acnt )
   {
-    acnt.reward_hive_balance += value_delta;
-    FC_ASSERT( acnt.get_hive_rewards().amount.value >= 0, "Insufficient reward HIVE funds" );
+    acnt.access_hive_rewards().transfer_from( hive_balance, value_delta );
   } );
 }
 
-void database::adjust_reward_balance( const account_object& a, const HIVE_asset& value_delta, const VEST_asset& share_delta )
+void database::adjust_reward_balance( const account_object& a, temp_HBD_balance& hbd_balance, const HBD_asset& value_delta )
 {
   modify( a, [&]( account_object& acnt )
   {
-    acnt.reward_vesting_hive += value_delta;
-    acnt.reward_vesting_balance += share_delta;
-    FC_ASSERT( acnt.get_vest_rewards().amount.value >= 0, "Insufficient reward VESTS funds" );
+    acnt.access_hbd_rewards().transfer_from( hbd_balance, value_delta );
   } );
 }
 
-void database::adjust_reward_balance( const account_object& a, const HBD_asset& value_delta )
+temp_HIVE_balance database::issue_mining_reward( const HIVE_asset& reward )
 {
-  modify( a, [&]( account_object& acnt )
-  {
-    acnt.reward_hbd_balance += value_delta;
-    FC_ASSERT( acnt.get_hbd_rewards().amount.value >= 0, "Insufficient reward HBD funds" );
-  } );
-}
-
-void database::adjust_supply( const asset& delta, bool adjust_vesting )
-{
-  if( delta.symbol.asset_num == HIVE_ASSET_NUM_HIVE )
-    adjust_supply( HIVE_asset( delta ), adjust_vesting );
-  else
-  {
-    FC_ASSERT( ( delta.symbol.asset_num == HIVE_ASSET_NUM_HBD ) && "supply", "invalid symbol" );
-    adjust_supply( HBD_asset( delta ) );
-  }
-}
-
-void database::adjust_supply( const HIVE_asset& delta, bool adjust_vesting )
-{
+  temp_HIVE_balance new_hive;
   const auto& props = get_dynamic_global_properties();
-  if( props.head_block_number < HIVE_BLOCKS_PER_DAY*7 )
-    adjust_vesting = false;
+  bool adjust_vesting = reward.amount > 0 && props.get_head_block_number() >= HIVE_BLOCKS_PER_DAY * 7;
 
   modify( props, [&]( dynamic_global_property_object& props )
   {
-    HIVE_asset new_vesting( (adjust_vesting && delta.amount > 0) ? delta.amount * 9 : 0 );
-    props.current_supply += delta + new_vesting;
-    props.virtual_supply += delta + new_vesting;
-    props.total_vesting_fund_hive += new_vesting;
-    FC_ASSERT( props.current_supply.amount.value >= 0 );
+    HIVE_asset new_vesting( adjust_vesting ? reward.amount * 9 : 0 );
+    new_hive = props.issue_HIVE( reward + new_vesting );
+    props.access_total_vesting_fund_hive().transfer_from( new_hive, new_vesting );
   } );
-}
 
-void database::adjust_supply( const HBD_asset& delta )
-{
-  const auto& props = get_dynamic_global_properties();
-  modify( props, [&]( dynamic_global_property_object& props )
-  {
-    props.current_hbd_supply += delta;
-    props.virtual_supply = props.get_current_hbd_supply() * get_feed_history().current_median_history + props.current_supply;
-    FC_ASSERT( props.get_current_hbd_supply().amount.value >= 0 );
-  } );
+  return new_hive;
 }
-
 
 asset database::get_balance( const account_object& a, asset_symbol_type symbol )const
 {
@@ -3548,6 +3541,7 @@ void database::validate_invariants()const
     HIVE_asset total_supply;
     HBD_asset total_hbd;
     VEST_asset total_vesting;
+    VEST_asset total_reward_vesting;
     HIVE_asset pending_vesting_hive;
     share_type total_vsf_votes = share_type( 0 );
     ushare_type total_delayed_votes = ushare_type( 0 );
@@ -3575,7 +3569,7 @@ void database::validate_invariants()const
       total_hbd += itr->get_hbd_savings();
       total_hbd += itr->get_hbd_rewards();
       total_vesting += itr->get_vesting();
-      total_vesting += itr->get_vest_rewards();
+      total_reward_vesting += itr->get_vest_rewards();
       pending_vesting_hive += itr->get_vest_rewards_as_hive();
       total_vsf_votes += ( !itr->has_proxy() ?
                       itr->get_governance_vote_power() :
@@ -3600,32 +3594,34 @@ void database::validate_invariants()const
 
     for( auto itr = reward_idx.begin(); itr != reward_idx.end(); ++itr )
     {
-      total_supply += itr->reward_balance;
+      total_supply += itr->get_reward_balance();
       ++reward_fund_no;
     }
 
-    total_supply += gpo.get_total_vesting_fund_hive() + gpo.get_total_reward_fund_hive() + gpo.get_pending_rewarded_vesting_hive();
+    total_supply += gpo.get_total_vesting_fund_hive() + gpo.get_pending_rewarded_vesting_hive();
 
-    FC_ASSERT( gpo.current_supply == total_supply, "", ("gpo.current_supply",gpo.current_supply)("total_supply",total_supply) );
+    FC_ASSERT( gpo.get_current_supply() == total_supply, "", ("gpo.current_supply",gpo.get_current_supply())("total_supply",total_supply) );
     FC_ASSERT( gpo.get_current_hbd_supply() == total_hbd, "", ("gpo.current_hbd_supply",gpo.get_current_hbd_supply())("total_hbd",total_hbd) );
-    FC_ASSERT( gpo.total_vesting_shares + gpo.pending_rewarded_vesting_shares == total_vesting, "", ("gpo.total_vesting_shares",gpo.total_vesting_shares)("total_vesting",total_vesting) );
-    FC_ASSERT( gpo.total_vesting_shares.amount == total_vsf_votes + total_delayed_votes.value, "", ("total_vesting_shares",gpo.total_vesting_shares)("total_vsf_votes + total_delayed_votes",total_vsf_votes + total_delayed_votes.value) );
+    FC_ASSERT( gpo.get_total_vesting_shares() == total_vesting, "", ("gpo.total_vesting_shares",gpo.get_total_vesting_shares())("total_vesting",total_vesting) );
+    FC_ASSERT( gpo.get_pending_rewarded_vesting_shares() == total_reward_vesting, "", ("gpo.pending_rewarded_vesting_shares",gpo.get_pending_rewarded_vesting_shares())("total_reward_vesting",total_reward_vesting) );
+    FC_ASSERT( gpo.get_total_vesting_shares().amount == total_vsf_votes + total_delayed_votes.value, "", ("total_vesting_shares",gpo.get_total_vesting_shares())("total_vsf_votes + total_delayed_votes",total_vsf_votes + total_delayed_votes.value) );
     FC_ASSERT( gpo.get_pending_rewarded_vesting_hive() == pending_vesting_hive, "", ("pending_rewarded_vesting_hive",gpo.get_pending_rewarded_vesting_hive())("pending_vesting_hive", pending_vesting_hive));
 
-    FC_ASSERT( gpo.virtual_supply >= gpo.current_supply );
-    if ( !get_feed_history().current_median_history.is_null() )
+    FC_ASSERT( gpo.get_virtual_supply() >= gpo.get_current_supply() );
+    const auto& exchange_rate = get_hbd_price();
+    if ( !exchange_rate.is_null() )
     {
-      FC_ASSERT( gpo.get_current_hbd_supply()* get_feed_history().current_median_history + gpo.current_supply
-        == gpo.virtual_supply, "", ("gpo.current_hbd_supply",gpo.get_current_hbd_supply())("get_feed_history().current_median_history",get_feed_history().current_median_history)("gpo.current_supply",gpo.current_supply)("gpo.virtual_supply",gpo.virtual_supply) );
+      FC_ASSERT( gpo.get_current_hbd_supply()* exchange_rate + gpo.get_current_supply()
+        == gpo.get_virtual_supply(), "", ("gpo.current_hbd_supply",gpo.get_current_hbd_supply())("get_hbd_price()",exchange_rate)("gpo.current_supply",gpo.get_current_supply())("gpo.virtual_supply",gpo.get_virtual_supply()) );
     }
 
     ilog( "validate_invariants @${b}:", ( "b", head_block_num() ) );
     ilog( "successful scan of ${p} witnesses, ${a} accounts, ${c} convert requests, ${cc} collateralized convert requests, ${o} limit orders, ${e} escrow transfers, ${w} saving withdrawals and ${r} reward funds.",
       ( "p", witness_no )( "a", account_no )( "c", convert_no )( "cc", collateralized_convert_no )( "o", order_no )( "e", escrow_no )( "w", withdrawal_no )( "r", reward_fund_no ) );
-    ilog( "HIVE supply: ${h}", ( "h", gpo.current_supply.amount.value ) );
-    ilog( "HBD supply: ${s} ( including ${i} initial )", ( "s", gpo.get_current_hbd_supply().amount.value )( "i", gpo.init_hbd_supply.amount.value ) );
-    ilog( "virtual supply (HIVE): ${w}", ( "w", gpo.virtual_supply.amount.value ) );
-    ilog( "VESTS: ${v} ( + ${p} pending ) worth (HIVE): ${x} ( + ${y} )", ( "v", gpo.total_vesting_shares.amount.value )( "p", gpo.pending_rewarded_vesting_shares.amount.value )( "x", gpo.get_total_vesting_fund_hive().amount.value )( "y", gpo.get_pending_rewarded_vesting_hive().amount.value ) );
+    ilog( "HIVE supply: ${h}", ( "h", gpo.get_current_supply().amount.value ) );
+    ilog( "HBD supply: ${s} ( including ${i} initial )", ( "s", gpo.get_current_hbd_supply().amount.value )( "i", gpo.get_initial_hbd_supply().amount.value ) );
+    ilog( "virtual supply (HIVE): ${w}", ( "w", gpo.get_virtual_supply().amount.value ) );
+    ilog( "VESTS: ${v} ( + ${p} pending ) worth (HIVE): ${x} ( + ${y} )", ( "v", gpo.get_total_vesting_shares().amount.value )( "p", gpo.get_pending_rewarded_vesting_shares().amount.value )( "x", gpo.get_total_vesting_fund_hive().amount.value )( "y", gpo.get_pending_rewarded_vesting_hive().amount.value ) );
   }
   FC_CAPTURE_LOG_AND_RETHROW( (head_block_num()) );
 }

@@ -86,6 +86,10 @@ class configuration
 #endif // IS_TEST_NET
   // How many blocks is witness allowed to miss before it is being shut down.
   uint16_t witness_shutdown_threshold = 28800; // aka HIVE_BLOCKS_PER_DAY
+  // Whether genesis funds pixa.rex, pixa.team and the treasury (IS_TEST_NET builds only - mainnet and
+  // mirrornet always do). Off by default so the upstream unit tests run with a realistic stake
+  // distribution; tests of the Pixagram genesis turn it on.
+  bool pixa_genesis_allocations = false;
   uint32_t owner_auth_history_tracking_start_block = 1; // mainnet uses a fixed block; tests may raise it
 
   public:
@@ -106,6 +110,7 @@ class configuration
     uint32_t get_hf_time(uint32_t hf_num, uint32_t default_time_sec)const;
     bool get_generate_missed_block_operations() const { return generate_missed_block_operations; }
     uint16_t get_witness_shutdown_threshold() const { return witness_shutdown_threshold; }
+    bool get_pixa_genesis_allocations() const { return pixa_genesis_allocations; }
     uint32_t get_owner_auth_history_tracking_start_block() const { return owner_auth_history_tracking_start_block; }
 
     uint32_t get_hive_reverse_auction_window_seconds() const { return hive_reverse_auction_window_seconds; }
@@ -256,6 +261,11 @@ class configuration
       owner_auth_history_tracking_start_block = block_num;
     }
 
+    void set_pixa_genesis_allocations( bool fund )
+    {
+      pixa_genesis_allocations = fund;
+    }
+
     void set_witness_shutdown_threshold( uint16_t threshold )
     {
       witness_shutdown_threshold = threshold;
@@ -281,7 +291,6 @@ class configuration
     fc::microseconds min_comment_edit_interval = fc::seconds(3);
     uint64_t         custom_op_block_limit = 5;
 
-    bool allow_not_enough_rc = false;
     uint32_t rc_stats_report_frequency = // in blocks
 #ifdef IS_TEST_NET
       400; // HIVE_BLOCKS_PER_HOUR/3 - three reports per hour for testnet

@@ -6,9 +6,9 @@
 #include <hive/chain/database.hpp>
 #include <hive/chain/database_virtual_operations.hpp>
 #include <hive/chain/detail/state/decline_voting_rights_request_object_multiindex.hpp>
-#include <hive/chain/global_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/global_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
 #include <hive/chain/evaluator_registry.hpp>
 
 #include <hive/chain/util/owner_update_limit_mgr.hpp>
@@ -165,17 +165,17 @@ void account_create_evaluator::do_apply( const account_create_operation& o )
 
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__1771 ) )
   {
-    HIVE_CHAIN_BALANCE_ASSERT( o_fee == wso.median_props.account_creation_fee, o_fee, "Must pay the exact account creation fee. paid: ${p} fee: ${f}",
+    HIVE_CHAIN_FEE_ASSERT( o_fee == wso.median_props.account_creation_fee, wso.median_props.account_creation_fee, "Must pay the exact account creation fee. paid: ${p} fee: ${f}",
       ( "p", o_fee )( "f", wso.median_props.account_creation_fee ) );
   }
   else if( !_db.has_hardfork( HIVE_HARDFORK_0_20__1761 ) && _db.has_hardfork( HIVE_HARDFORK_0_19__987 ) )
   {
-    HIVE_CHAIN_BALANCE_ASSERT( o_fee >= HIVE_asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER ), o_fee, "Insufficient Fee: ${f} required, ${p} provided.",
+    HIVE_CHAIN_FEE_ASSERT( o_fee >= HIVE_asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER ), HIVE_asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER ), "Insufficient Fee: ${f} required, ${p} provided.",
       ( "f", HIVE_asset( wso.median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER ) )( "p", o_fee ) );
   }
   else if( _db.has_hardfork( HIVE_HARDFORK_0_1 ) )
   {
-    HIVE_CHAIN_BALANCE_ASSERT( o_fee >= wso.median_props.account_creation_fee && "Can't create", o_fee, "Insufficient Fee: ${f} required, ${p} provided.",
+    HIVE_CHAIN_FEE_ASSERT( o_fee >= wso.median_props.account_creation_fee && "Can't create", wso.median_props.account_creation_fee, "Insufficient Fee: ${f} required, ${p} provided.",
       ( "f", wso.median_props.account_creation_fee )( "p", o_fee ) );
   }
 
@@ -183,26 +183,21 @@ void account_create_evaluator::do_apply( const account_create_operation& o )
   verify_authority_accounts_exist( _db, o.active, o.new_account_name, authority::active );
   verify_authority_accounts_exist( _db, o.posting, o.new_account_name, authority::posting );
 
-  _db.adjust_balance( creator, -o_fee );
+  temp_HIVE_balance fee;
+  _db.adjust_balance( creator, fee, -o_fee );
 
-  const auto& new_account = create_account( _db, o.new_account_name, o.memo_key, props.time, _db.get_current_timestamp(),
-    false /*mined*/, o_fee, &creator );
+  const auto& new_account = create_account( _db, o.new_account_name, o.memo_key, props.get_head_block_time(), _db.get_current_timestamp(),
+    false /*mined*/, fee.as_asset(), &creator );
 
   VEST_asset initial_vesting_shares( 0 );
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__1762 ) )
-    _db.adjust_balance( _db.get< account_object, by_name >( HIVE_NULL_ACCOUNT ), o_fee );
+    _db.adjust_balance( _db.get< account_object, by_name >( HIVE_NULL_ACCOUNT ), fee, fee.as_asset() );
   else if( o_fee.amount > 0 )
-    initial_vesting_shares = _db.create_vesting( new_account, o_fee );
-
-  _db.create< account_authority_object >( [&]( account_authority_object& auth )
   {
-    auth.account = o.new_account_name;
-    auth.owner = o.owner;
-    auth.active = o.active;
-    auth.posting = o.posting;
-    auth.previous_owner_update = fc::time_point_sec::min();
-    auth.last_owner_update = fc::time_point_sec::min();
-  } );
+    initial_vesting_shares = _db.create_vesting( new_account, fee );
+  }
+
+  _db.create< account_authority_object >( new_account, o.owner, o.active, o.posting );
 
   push_virtual_operation( _db, account_created_operation( o.new_account_name, o.creator, initial_vesting_shares, VEST_asset( 0 ) ) );
 }
@@ -233,37 +228,32 @@ void account_create_with_delegation_evaluator::do_apply( const account_create_wi
   HIVE_CHAIN_BALANCE_ASSERT( current_delegation >= target_delegation, current_delegation, "Insufficient Delegation ${f} required, ${p} provided.",
     ( "f", target_delegation )( "p", current_delegation )( "account_creation_fee", wso.median_props.account_creation_fee )( "o.fee", o_fee )( "o.delegation", o_delegation ) );
 
-  HIVE_CHAIN_BALANCE_ASSERT( o_fee >= wso.median_props.account_creation_fee, o_fee, "Insufficient Fee: ${f} required, ${p} provided.",
+  HIVE_CHAIN_FEE_ASSERT( o_fee >= wso.median_props.account_creation_fee, wso.median_props.account_creation_fee, "Insufficient Fee: ${f} required, ${p} provided.",
     ( "f", wso.median_props.account_creation_fee )( "p", o_fee ) );
 
   verify_authority_accounts_exist( _db, o.owner, o.new_account_name, authority::owner );
   verify_authority_accounts_exist( _db, o.active, o.new_account_name, authority::active );
   verify_authority_accounts_exist( _db, o.posting, o.new_account_name, authority::posting );
 
+  temp_HIVE_balance fee;
   _db.modify( creator, [&]( account_object& c )
   {
-    c.balance -= o_fee;
-    c.delegated_vesting_shares += o_delegation;
+    c.access_hive_balance().transfer_to( fee, o_fee );
+    c.access_delegated_vesting() += o_delegation;
   } );
 
-  const auto& new_account = create_account( _db, o.new_account_name, o.memo_key, props.time, _db.get_current_timestamp(),
-    false /*mined*/, o_fee, &creator, o_delegation );
+  const auto& new_account = create_account( _db, o.new_account_name, o.memo_key, props.get_head_block_time(), _db.get_current_timestamp(),
+    false /*mined*/, fee.as_asset(), &creator, o_delegation );
 
   VEST_asset initial_vesting_shares( 0 );
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__1762 ) )
-    _db.adjust_balance( _db.get< account_object, by_name >( HIVE_NULL_ACCOUNT ), o_fee );
+    _db.adjust_balance( _db.get< account_object, by_name >( HIVE_NULL_ACCOUNT ), fee, fee.as_asset() );
   else if( o_fee.amount > 0 )
-    initial_vesting_shares = _db.create_vesting( new_account, o_fee );
-
-  _db.create< account_authority_object >( [&]( account_authority_object& auth )
   {
-    auth.account = o.new_account_name;
-    auth.owner = o.owner;
-    auth.active = o.active;
-    auth.posting = o.posting;
-    auth.previous_owner_update = fc::time_point_sec::min();
-    auth.last_owner_update = fc::time_point_sec::min();
-  } );
+    initial_vesting_shares = _db.create_vesting( new_account, fee );
+  }
+
+  _db.create< account_authority_object >( new_account, o.owner, o.active, o.posting );
 
   if( o_delegation.amount > 0 || !_db.has_hardfork( HIVE_HARDFORK_0_19__997 ) )
   {
@@ -310,9 +300,11 @@ void account_update_evaluator::do_apply( const account_update_operation& o )
 //       in HF21, so only this operation is applicable to our needs
 # ifndef HIVE_CONVERTER_BUILD
     if( _db.has_hardfork( HIVE_HARDFORK_0_11 ) )
+    {
       HIVE_CHAIN_TIME_ASSERT( util::owner_update_limit_mgr::check( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ), _db.head_block_time(),
-                                                                        account_auth.previous_owner_update, account_auth.last_owner_update ) && "update",
-                                                      o.account, "${m}", ("m", util::owner_update_limit_mgr::msg( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ) )) );
+        account_auth.get_previous_owner_update(), account_auth.get_last_owner_update() ) && "update",
+        o.account, "${m}", ( "m", util::owner_update_limit_mgr::msg( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ) ) ) );
+    }
 # endif
 
     verify_authority_accounts_exist( _db, *o.owner, o.account, authority::owner );
@@ -350,8 +342,8 @@ void account_update_evaluator::do_apply( const account_update_operation& o )
   {
     _db.modify( account_auth, [&]( account_authority_object& auth)
     {
-      if( o.active )       auth.active  = *o.active;
-      if( *_auth_posting ) auth.posting = **_auth_posting;
+      if( o.active )       auth.set_active( *o.active );
+      if( *_auth_posting ) auth.set_posting( **_auth_posting );
     } );
   }
 
@@ -368,8 +360,8 @@ void account_update2_evaluator::do_apply( const account_update2_operation& o )
   if( o.owner )
   {
     HIVE_CHAIN_TIME_ASSERT( util::owner_update_limit_mgr::check( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ), _db.head_block_time(),
-                                                                      account_auth.previous_owner_update, account_auth.last_owner_update ) && "update2",
-                                                    o.account, "${m}", ("m", util::owner_update_limit_mgr::msg( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ) ) ) );
+      account_auth.get_previous_owner_update(), account_auth.get_last_owner_update() ) && "update2",
+      o.account, "${m}", ( "m", util::owner_update_limit_mgr::msg( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ) ) ) );
 
     verify_authority_accounts_exist( _db, *o.owner, o.account, authority::owner );
 
@@ -392,8 +384,8 @@ void account_update2_evaluator::do_apply( const account_update2_operation& o )
   {
     _db.modify( account_auth, [&]( account_authority_object& auth)
     {
-      if( o.active )  auth.active  = *o.active;
-      if( o.posting ) auth.posting = *o.posting;
+      if( o.active )  auth.set_active( *o.active );
+      if( o.posting ) auth.set_posting( *o.posting );
     } );
   }
 
@@ -401,8 +393,7 @@ void account_update2_evaluator::do_apply( const account_update2_operation& o )
 
 void claim_account_evaluator::do_apply( const claim_account_operation& o )
 {
-  HIVE_CHAIN_HARDFORK_ASSERT( _db.has_hardfork( HIVE_HARDFORK_0_20__1771 ) && "claim_account_operation is not enabled until hardfork 20.",
-    "" );
+  HIVE_CHAIN_HARDFORK_ASSERT( _db.has_hardfork( HIVE_HARDFORK_0_20__1771 ) && "claim_account_operation is not enabled until hardfork 20.", "" );
 
   const auto& creator = _db.get_account( o.creator );
   const auto& wso = _db.get_witness_schedule_object();
@@ -425,7 +416,7 @@ void claim_account_evaluator::do_apply( const claim_account_operation& o )
     // when transaction is part of some block (existing or in production)
     if( _db.is_processing_block() )
     {
-      const auto& current_witness = _db.get_witness( gpo.current_witness );
+      const auto& current_witness = _db.get_witness( gpo.get_current_witness() );
       HIVE_CHAIN_STATE_ASSERT( current_witness.schedule == witness_object::elected, current_witness.owner, "Subsidized accounts can only be claimed by elected witnesses. current_witness:${w} witness_type:${t}",
         ("w",current_witness.owner)("t",current_witness.schedule) );
 
@@ -438,33 +429,32 @@ void claim_account_evaluator::do_apply( const claim_account_operation& o )
       } );
     }
 
-    HIVE_CHAIN_LIMIT_ASSERT( gpo.available_account_subsidies >= HIVE_ACCOUNT_SUBSIDY_PRECISION, gpo.available_account_subsidies, "There are not enough subsidized accounts to claim" );
+    HIVE_CHAIN_LIMIT_ASSERT( gpo.get_available_account_subsidies() >= HIVE_ACCOUNT_SUBSIDY_PRECISION, gpo.get_available_account_subsidies(), "There are not enough subsidized accounts to claim" );
 
     _db.modify( gpo, [&]( dynamic_global_property_object& gpo )
     {
-      gpo.available_account_subsidies -= HIVE_ACCOUNT_SUBSIDY_PRECISION;
+      gpo.set_available_account_subsidies( gpo.get_available_account_subsidies() - HIVE_ACCOUNT_SUBSIDY_PRECISION );
     } );
   }
   else
   {
-    HIVE_CHAIN_BALANCE_ASSERT( o_fee == wso.median_props.account_creation_fee && "Wrong fee",
-      o_fee, "Must pay the exact account creation fee (or zero if subsidy is to be used). paid: ${p} fee: ${f}",
+    HIVE_CHAIN_FEE_ASSERT( o_fee == wso.median_props.account_creation_fee && "Wrong fee",
+      wso.median_props.account_creation_fee, "Must pay the exact account creation fee (or zero if subsidy is to be used). paid: ${p} fee: ${f}",
       ( "p", o_fee )( "f", wso.median_props.account_creation_fee ) );
   }
 
-  _db.adjust_balance( _db.get_account( HIVE_NULL_ACCOUNT ), o_fee );
-
+  temp_HIVE_balance fee;
   _db.modify( creator, [&]( account_object& a )
   {
-    a.balance -= o_fee;
+    a.access_hive_balance().transfer_to( fee, o_fee );
     a.pending_claimed_accounts++;
   } );
+  _db.adjust_balance( _db.get_account( HIVE_NULL_ACCOUNT ), fee, fee.as_asset() );
 }
 
 void create_claimed_account_evaluator::do_apply( const create_claimed_account_operation& o )
 {
-  HIVE_CHAIN_HARDFORK_ASSERT( _db.has_hardfork( HIVE_HARDFORK_0_20__1771 ) && "create_claimed_account_operation is not enabled until hardfork 20.",
-    "" );
+  HIVE_CHAIN_HARDFORK_ASSERT( _db.has_hardfork( HIVE_HARDFORK_0_20__1771 ) && "create_claimed_account_operation is not enabled until hardfork 20.", "" );
 
   const auto& creator = _db.get_account( o.creator );
   const auto& props = _db.get_dynamic_global_properties();
@@ -480,18 +470,10 @@ void create_claimed_account_evaluator::do_apply( const create_claimed_account_op
     a.pending_claimed_accounts--;
   } );
 
-  const auto& new_account = create_account( _db, o.new_account_name, o.memo_key, props.time, _db.get_current_timestamp(),
+  const auto& new_account = create_account( _db, o.new_account_name, o.memo_key, props.get_head_block_time(), _db.get_current_timestamp(),
     false /*mined*/, _db.get_witness_schedule_object().median_props.account_creation_fee, &creator );
 
-  _db.create< account_authority_object >( [&]( account_authority_object& auth )
-  {
-    auth.account = o.new_account_name;
-    auth.owner = o.owner;
-    auth.active = o.active;
-    auth.posting = o.posting;
-    auth.previous_owner_update = fc::time_point_sec::min();
-    auth.last_owner_update = fc::time_point_sec::min();
-  } );
+  _db.create< account_authority_object >( new_account, o.owner, o.active, o.posting );
 
   push_virtual_operation( _db, account_created_operation( new_account.get_name(), o.creator, VEST_asset( 0 ), VEST_asset( 0 ) ) );
 }
@@ -509,23 +491,27 @@ void request_account_recovery_evaluator::do_apply( const request_account_recover
   }
   else // Empty recovery account defaults to top witness
   {
-    HIVE_CHAIN_PERMISSION_ASSERT( (_db.get_index< witness_index, by_vote_name >().begin()->owner == o.recovery_account), o.recovery_account, "Top witness must recover an account with no recovery partner." );
+    HIVE_CHAIN_PERMISSION_ASSERT( ( _db.get_index< witness_index, by_vote_name >().begin()->owner == o.recovery_account ), o.recovery_account, "Top witness must recover an account with no recovery partner." );
   }
 
   const auto& recovery_request_idx = _db.get_index< account_recovery_request_index, by_account >();
   auto request = recovery_request_idx.find( o.account_to_recover );
 
-  FC_TODO( "validate_auth_size should always be called" );
-    //ABW: now there is a bug - editing existing request can introduce authority wider than max,
-    //such authority can also be used when cancelling (although it is kind of "workaroundable")
-    //HF29 is needed to fix this, after that the check should be moved to validate
+  bool checked_size = false;
+  // TODO: after activation of HF29 check if the check can be moved to operation validate
+  if( _db.is_in_control() || _db.has_hardfork( HIVE_HARDFORK_1_31_FIX_ENFORCEMENT_OF_AUTHORITY_SIZE_ON_RECOVERY_REQUEST ) )
+  {
+    validate_auth_size( o.new_owner_authority );
+    checked_size = true;
+  }
 
   if( request == recovery_request_idx.end() ) // New Request
   {
     HIVE_CHAIN_STATE_ASSERT( !o.new_owner_authority.is_impossible() && "Cannot recover using an impossible authority.", o.account_to_recover, "Recovery authority for '${subject}' is impossible." );
     HIVE_CHAIN_STATE_ASSERT( o.new_owner_authority.weight_threshold, o.account_to_recover, "Cannot recover using an open authority." );
 
-    validate_auth_size( o.new_owner_authority );
+    if( !checked_size )
+      validate_auth_size( o.new_owner_authority );
 
     // Check accounts in the new authority exist
     verify_authority_accounts_exist( _db, o.new_owner_authority, o.account_to_recover, authority::owner );
@@ -568,9 +554,9 @@ void recover_account_evaluator::do_apply( const recover_account_operation& o )
   auto hist = recent_auth_idx.lower_bound( o.account_to_recover );
   bool found = false;
 
-  while( hist != recent_auth_idx.end() && hist->account == o.account_to_recover && !found )
+  while( hist != recent_auth_idx.end() && hist->get_account() == o.account_to_recover && !found )
   {
-    found = hist->previous_owner_authority == o.recent_owner_authority;
+    found = hist->get_previous_owner_authority() == o.recent_owner_authority;
     if( found ) break;
     ++hist;
   }

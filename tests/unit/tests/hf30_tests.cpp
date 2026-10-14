@@ -3,14 +3,15 @@
 #include <boost/test/unit_test.hpp>
 
 #include <hive/chain/database.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/comment_object.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
 #include <hive/chain/detail/state/feed_history_object.hpp>
+#include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
-#include <hive/chain/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
 #include <hive/chain/util/dhf_funding.hpp>
 #include <hive/chain/witness_schedule.hpp>
 #include <hive/protocol/legacy_asset.hpp>
@@ -35,7 +36,7 @@ struct hf30_database_fixture : hardfork_database_fixture
   // Give every witness approval above the HF30 floor so activation keeps the schedule at its size.
   void approve_all_witnesses()
   {
-    const int64_t total = db->get_dynamic_global_properties().total_vesting_shares.amount.value;
+    const int64_t total = db->get_dynamic_global_properties().get_total_vesting_shares().amount.value;
     const int64_t minimum = total / 100 + ( total % 100 != 0 );
     db_plugin->debug_update( [=]( database& chain )
     {
@@ -80,7 +81,8 @@ BOOST_AUTO_TEST_CASE( disabled_witness_does_not_halt_pre_hf30_schedule )
 { try {
   account_create( "disabled", init_account_pub_key );
   fund( "disabled", HIVE_MIN_PRODUCER_REWARD );
-  witness_create( "disabled", init_account_priv_key, "foo.bar", public_key_type(), 0 );
+  vest( "disabled", HIVE_asset( 50'000 ) ); // RC for the witness_update
+  witness_create( "disabled", init_account_priv_key, "foo.bar", public_key_type(), HIVE_asset( 0 ) );
   generate_blocks( 2 * HIVE_MAX_WITNESSES );
   BOOST_REQUIRE_EQUAL( uint32_t( db->get_witness_schedule_object().num_scheduled_witnesses ), 9u );
   BOOST_REQUIRE_EQUAL( uint32_t( db->get_future_witness_schedule_object().num_scheduled_witnesses ), 9u );
@@ -90,7 +92,7 @@ BOOST_AUTO_TEST_CASE( disabled_witness_does_not_halt_pre_hf30_schedule )
 BOOST_AUTO_TEST_CASE( unapproved_witnesses_cannot_expand_schedule )
 { try {
   // Give the nine existing witnesses approval above the one-percent floor.
-  const int64_t total = db->get_dynamic_global_properties().total_vesting_shares.amount.value;
+  const int64_t total = db->get_dynamic_global_properties().get_total_vesting_shares().amount.value;
   const int64_t minimum = total / 100 + ( total % 100 != 0 );
   db_plugin->debug_update( [=]( database& chain )
   {
@@ -102,7 +104,8 @@ BOOST_AUTO_TEST_CASE( unapproved_witnesses_cannot_expand_schedule )
     const auto name = std::string( "sybil" ) + std::to_string( i );
     account_create( name, init_account_pub_key );
     fund( name, HIVE_MIN_PRODUCER_REWARD );
-    witness_create( name, init_account_priv_key, "foo.bar", init_account_pub_key, 0 );
+    vest( name, HIVE_asset( 50'000 ) ); // RC for the witness_update
+    witness_create( name, init_account_priv_key, "foo.bar", init_account_pub_key, HIVE_asset( 0 ) );
   }
   activate();
   generate_blocks( 3 * HIVE_MAX_WITNESSES );
@@ -124,7 +127,8 @@ BOOST_AUTO_TEST_CASE( unapproved_witnesses_leave_schedule_after_activation )
     const auto name = std::string( "late" ) + std::to_string( i );
     account_create( name, init_account_pub_key );
     fund( name, HIVE_MIN_PRODUCER_REWARD );
-    witness_create( name, init_account_priv_key, "foo.bar", init_account_pub_key, 0 );
+    vest( name, HIVE_asset( 50'000 ) ); // RC for the witness_update
+    witness_create( name, init_account_priv_key, "foo.bar", init_account_pub_key, HIVE_asset( 0 ) );
   }
   generate_blocks( 2 * HIVE_MAX_WITNESSES );
   BOOST_REQUIRE_EQUAL( uint32_t( db->get_witness_schedule_object().num_scheduled_witnesses ), 13u );
@@ -147,7 +151,7 @@ BOOST_AUTO_TEST_CASE( open_authority_account_cannot_operate_witness_after_hf30 )
   // unsigned transaction satisfies it. Before HF30 that lets anyone register it as a witness; from
   // HF30 the witness operation is rejected.
   const uint32_t temp_active_threshold =
-    db->get< account_authority_object, by_account >( HIVE_TEMP_ACCOUNT ).active.weight_threshold;
+    db->get< account_authority_object, by_account >( HIVE_TEMP_ACCOUNT ).get_active().weight_threshold;
   BOOST_REQUIRE_EQUAL( temp_active_threshold, 0u );
 
   auto unsigned_update = [&]()
@@ -183,11 +187,11 @@ BOOST_AUTO_TEST_CASE( last_enabled_witness_cannot_disable_itself )
   for( uint32_t i = 1; i < 9; ++i )
   {
     const auto name = HIVE_INIT_MINER_NAME + fc::to_string( i );
-    witness_create( name, init_account_priv_key, "foo.bar", public_key_type(), 0 );
+    witness_create( name, init_account_priv_key, "foo.bar", public_key_type(), HIVE_asset( 0 ) );
   }
   activate();
   HIVE_REQUIRE_THROW( witness_create( HIVE_INIT_MINER_NAME, init_account_priv_key,
-    "foo.bar", public_key_type(), 0 ), fc::assert_exception );
+    "foo.bar", public_key_type(), HIVE_asset( 0 ) ), fc::assert_exception );
 
   witness_set_properties_operation op;
   op.owner = HIVE_INIT_MINER_NAME;
@@ -214,12 +218,12 @@ BOOST_AUTO_TEST_CASE( witness_vote_cannot_advance_hf30_activation_time )
 
 BOOST_AUTO_TEST_CASE( small_account_votes_count_from_hf30 )
 { try {
-  ACTORS( (author)(smallvoter) )
+  ACTORS( DEFAULT_VESTING, (author)(smallvoter) );
   // About 100 VESTS: a full vote spends 2% of it, 2,000,000 rshares, which the inherited
   // 50,000,000 floor wipes out and the HF30 floor of 50,000 does not.
   const auto& dgp = db->get_dynamic_global_properties();
-  const int64_t pixa = fc::uint128_to_int64( fc::uint128_t( 100'000'000 ) * dgp.total_vesting_fund_hive.amount.value
-    / dgp.total_vesting_shares.amount.value );
+  const int64_t pixa = fc::uint128_to_int64( fc::uint128_t( 100'000'000 ) * dgp.get_total_vesting_fund_hive().amount.value
+    / dgp.get_total_vesting_shares().amount.value );
   vest( "author", HIVE_asset( 3'000'000 ) );   // resource credits for the post
   vest( "smallvoter", HIVE_asset( pixa ) );
   generate_block();
@@ -253,7 +257,7 @@ BOOST_AUTO_TEST_CASE( partial_schedule_pays_the_nominal_witness_share )
     for( const auto& witness : db->get_index< witness_index, by_id >() )
       before[ std::string( witness.owner ) ] = db->get_account( witness.owner ).get_vesting().amount.value;
     generate_block();
-    const std::string producer( db->get_dynamic_global_properties().current_witness );
+    const std::string producer( db->get_dynamic_global_properties().get_current_witness() );
     return db->get_account( producer ).get_vesting().amount.value - before[ producer ];
   };
 
@@ -387,7 +391,7 @@ BOOST_AUTO_TEST_CASE( reward_conversion_does_not_burn_pixa_after_hf30 )
   // Converting the PXS half of a reward truncates to 0.001 PXS. Before HF30 the whole PIXA amount
   // was burned regardless, destroying the remainder - and destroying the entire PXS half when the
   // reward was small enough to round to zero. Verify the remainder is now returned as PIXA.
-  ACTORS( (convauthor) )
+  ACTORS( DEFAULT_VESTING, (convauthor) );
   vest( "convauthor", HIVE_asset( 10'000'000 ) );
   approve_all_witnesses();
   activate();
@@ -415,11 +419,15 @@ BOOST_AUTO_TEST_CASE( reward_conversion_does_not_burn_pixa_after_hf30 )
   const auto pxs_before = db->get_balance( db->get_account( "convauthor" ), HBD_SYMBOL );
   db_plugin->debug_update( [=]( database& chain )
   {
-    // create_hbd assumes its caller already minted the PIXA being converted (reward payouts do),
-    // so mint it here too - otherwise the chain's supply invariant is violated by the test setup
-    // rather than by the code under test.
-    chain.adjust_supply( tiny );
-    chain.create_hbd( chain.get_account( "convauthor" ), tiny, false );
+    // award_hbd pays out PIXA its caller already minted (reward payouts do), so mint it here too -
+    // otherwise the chain's supply invariant is violated by the test setup rather than by the code
+    // under test.
+    temp_HIVE_balance minted;
+    chain.modify( chain.get_dynamic_global_properties(), [&]( dynamic_global_property_object& g )
+    {
+      minted = g.issue_HIVE( tiny );
+    } );
+    chain.award_hbd( chain.get_account( "convauthor" ), minted, false );
   } );
   generate_block();
   const auto balance_after = db->get_balance( db->get_account( "convauthor" ), HIVE_SYMBOL );
@@ -470,7 +478,8 @@ BOOST_AUTO_TEST_CASE( non_producing_witnesses_do_not_raise_hardfork_quorum )
     const auto name = std::string( "attacker" ) + std::to_string( i );
     account_create( name, init_account_pub_key );
     fund( name, HIVE_MIN_PRODUCER_REWARD );
-    witness_create( name, init_account_priv_key, "foo.bar", init_account_pub_key, 0 );
+    vest( name, HIVE_asset( 50'000 ) ); // RC for the witness_update
+    witness_create( name, init_account_priv_key, "foo.bar", init_account_pub_key, HIVE_asset( 0 ) );
   }
   // Let the schedule settle so all thirteen witnesses are scheduled and each has produced recently.
   generate_blocks( 2 * HIVE_MAX_WITNESSES );
@@ -596,7 +605,7 @@ BOOST_AUTO_TEST_CASE( exact_witness_vote_activates_and_owner_history_is_recorded
   {
     const auto& h = db->get_index< owner_authority_history_index, by_account >();
     BOOST_REQUIRE( h.lower_bound( account_name_type( "early" ) ) == h.end()
-      || h.lower_bound( account_name_type( "early" ) )->account != account_name_type( "early" ) );
+      || h.lower_bound( account_name_type( "early" ) )->get_account() != account_name_type( "early" ) );
   }
 
   generate_blocks( activation_time + fc::seconds( HIVE_BLOCK_INTERVAL ) );
@@ -615,8 +624,8 @@ BOOST_AUTO_TEST_CASE( exact_witness_vote_activates_and_owner_history_is_recorded
   const auto& history = db->get_index< owner_authority_history_index, by_account >();
   const auto found = history.lower_bound( account_name_type( "recoverable" ) );
   BOOST_REQUIRE( found != history.end() );
-  BOOST_REQUIRE( found->account == account_name_type( "recoverable" ) );
-  BOOST_REQUIRE( found->previous_owner_authority == previous_owner );
+  BOOST_REQUIRE( found->get_account() == account_name_type( "recoverable" ) );
+  BOOST_REQUIRE( found->get_previous_owner_authority() == previous_owner );
 } FC_LOG_AND_RETHROW() }
 
 BOOST_AUTO_TEST_SUITE_END()

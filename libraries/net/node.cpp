@@ -29,6 +29,7 @@
 #include <iomanip>
 #include <deque>
 #include <unordered_set>
+#include <unordered_map>
 #include <list>
 #include <forward_list>
 #include <iostream>
@@ -74,6 +75,7 @@
 #include <fc/crypto/rand.hpp>
 #include <fc/network/rate_limiting.hpp>
 #include <fc/network/ip.hpp>
+#include <fc/network/udp_socket.hpp>
 #include <fc/smart_ref_impl.hpp>
 #include <fc/bitutil.hpp>
 
@@ -139,6 +141,13 @@ namespace graphene { namespace net {
     struct block_clock_index{};
 
 
+    // Cache of recently-seen messages, kept so we can serve peers' fetch requests without
+    // hitting deeper storage.  NOTE: with the introduction of authoritative chain-state checks
+    // (classify_advertised_block_id / has_item at delivery), this cache is no longer the
+    // arbiter of "have we seen this block?" for block-id-capable peers -- it retains that duty
+    // only for legacy message-hash advertisements, whose hashes cannot be checked against the
+    // chain.  Its block-clock expiry semantics are a serving-window bound, not a correctness
+    // boundary.
     template <typename smart_ptr_type>
     class blockchain_tied_message_cache
     {
@@ -303,7 +312,6 @@ namespace graphene { namespace net {
     {
     private:
       node_delegate *_node_delegate;
-      fc::thread *_thread;
 
       typedef boost::accumulators::accumulator_set<int64_t, boost::accumulators::stats<boost::accumulators::tag::min,
                                                                                        boost::accumulators::tag::rolling_mean,
@@ -402,11 +410,10 @@ namespace graphene { namespace net {
         }
       };
     public:
-      statistics_gathering_node_delegate_wrapper(node_delegate* delegate, fc::thread* thread_for_delegate_calls);
+      statistics_gathering_node_delegate_wrapper(node_delegate* delegate);
 
       fc::variant_object get_call_statistics();
 
-      hive::protocol::chain_id_type get_old_chain_id() const override;
       hive::protocol::chain_id_type get_new_chain_id() const override;
       hive::protocol::chain_id_type get_chain_id() const override;
       bool has_item( const net::item_id& id ) override;
@@ -425,6 +432,7 @@ namespace graphene { namespace net {
       fc::time_point_sec get_block_time(const item_hash_t& block_id) override;
       fc::time_point_sec get_blockchain_now() override;
       item_hash_t get_head_block_id() const override;
+      uint32_t get_last_irreversible_block_num() const override;
       uint32_t estimate_last_known_fork_from_git_revision_timestamp(uint32_t unix_timestamp) const override;
       void error_encountered(const std::string& message, const fc::oexception& error) override;
       std::deque<block_id_type>::const_iterator find_first_item_not_in_blockchain(const std::deque<block_id_type>& item_hashes_received) override;
@@ -463,6 +471,18 @@ namespace graphene { namespace net {
       fc::promise<void>::ptr    _retrigger_connect_loop_promise;
       bool                      _potential_peer_database_updated;
       fc::future<void>          _p2p_network_connect_loop_done;
+      /// cached results of the per-address route probe (see can_route_to); entries expire so
+      /// interface/route changes are picked up
+      struct route_probe_result
+      {
+        bool           routable;
+        fc::time_point expiration;
+      };
+      std::unordered_map<fc::ip::address, route_probe_result> _route_probe_cache;
+      /// how many candidates the last connect-loop pass skipped for lack of a route, per family;
+      /// used to log the situation once when it changes rather than on every pass
+      uint32_t                  _unroutable_ipv4_candidates_last_pass = 0;
+      uint32_t                  _unroutable_ipv6_candidates_last_pass = 0;
       // @}
 
       /// used by the task that fetches sync items during synchronization
@@ -553,6 +573,13 @@ namespace graphene { namespace net {
       std::unordered_set<peer_connection_ptr>                     _terminating_connections;
 
       boost::circular_buffer<item_hash_t> _most_recent_blocks_accepted; // the /n/ most recent blocks we've accepted (currently tuned to the max number of connections)
+      std::deque<fc::time_point> _recent_invalid_block_disconnect_times; // when we recently disconnected peers over "invalid" blocks (circuit breaker state)
+      // monotone mirrors of the chain state used to judge advertised/queued block ids without a
+      // delegate round trip per decision; refreshed on every accepted block (staleness is
+      // conservative: at worst we briefly treat a just-dead fork block as still fetchable)
+      uint32_t _cached_head_block_num = 0;
+      uint32_t _cached_last_irreversible_block_num = 0;
+      fc::time_point _last_head_advance_time; // when _cached_head_block_num last increased
 
       uint32_t _sync_item_type;
       uint32_t _total_number_of_unfetched_items; /// the number of items we still need to fetch while syncing
@@ -618,6 +645,7 @@ namespace graphene { namespace net {
 
       void save_node_configuration();
 
+      bool can_route_to(const fc::ip::address& addr);
       void p2p_network_connect_loop();
       void trigger_p2p_network_connect_loop();
 
@@ -716,6 +744,17 @@ namespace graphene { namespace net {
 
       void on_connection_closed(peer_connection* originating_peer) override;
 
+      void refresh_cached_chain_state();
+      enum class block_id_classification
+      {
+        known,               // we already have this exact block (main chain or fork database)
+        dead_fork,           // at or below our last irreversible block and not ours: can never apply
+        fetchable,           // plausible block we don't have
+        implausible_future   // claims a height so far past our head it can't be a real new block
+      };
+      block_id_classification classify_advertised_block_id(const item_hash_t& block_id_hash);
+      bool stalled_head_resync_due(peer_connection* peer);
+      bool invalid_block_disconnect_breaker_tripped();
       void send_sync_block_to_node_delegate(const std::shared_ptr<full_block_type>& full_block);
       uint32_t get_number_of_handle_message_calls_in_progress();
       void discard_abandoned_sync_blocks();
@@ -762,7 +801,7 @@ namespace graphene { namespace net {
                                 const fc::oexception& additional_data = fc::oexception());
 
       // methods implementing node's public interface
-      void set_node_delegate(node_delegate* del, fc::thread* thread_for_delegate_calls);
+      void set_node_delegate(node_delegate* del);
       void load_configuration( const fc::path& configuration_directory );
       void listen_to_p2p_network( std::function<bool()> break_callback );
       void connect_to_p2p_network();
@@ -779,6 +818,7 @@ namespace graphene { namespace net {
 
       void broadcast(const std::shared_ptr<full_block_type>& full_block, const message_propagation_data& propagation_data);
       void broadcast(const std::shared_ptr<full_transaction_type>& full_transaction, const message_propagation_data& propagation_data);
+      void advertise_block(const std::shared_ptr<full_block_type>& full_block);
       void broadcast(const std::shared_ptr<full_block_type>& full_block);
       void broadcast(const std::shared_ptr<hive::chain::full_transaction_type>& full_transaction);
 
@@ -986,6 +1026,65 @@ namespace graphene { namespace net {
       }
     }
 
+    // Tests whether this host has a route to the given address.  A UDP connect() sends no
+    // packets; it only performs a kernel route lookup and source-address selection, so it
+    // fails exactly when the host cannot reach that destination: no interface of its family,
+    // or neither a default route, a connected subnet nor any other route covering it, or an
+    // explicit unreachable/blackhole route.  The lookup is done for the real destination
+    // rather than a fixed placeholder such as TEST-NET-1: a host whose only routes are
+    // connected subnets (a LAN-only testnet, a docker --internal network) can dial its
+    // on-link peers but not a placeholder, and bogon filters commonly blackhole exactly the
+    // placeholder prefixes while leaving real destinations reachable.  Nothing is sent.
+    static bool probe_route_to_address(const fc::ip::address& addr)
+    {
+      try
+      {
+        fc::ip::endpoint probe_target(addr, 53); // the port plays no part in the route lookup
+        fc::udp_socket probe_socket;
+        probe_socket.open_for_endpoint(probe_target);
+        probe_socket.connect(probe_target);
+        return true;
+      }
+      catch (...)
+      {
+        return false;
+      }
+    }
+
+    bool node_impl::can_route_to(const fc::ip::address& addr)
+    {
+      VERIFY_CORRECT_THREAD();
+      // loopback is reachable through the loopback interface even when the host has no
+      // other route for the family (e.g. ::1 on a host without global IPv6)
+      if (addr.is_loopback_address())
+        return true;
+
+      const fc::time_point now = fc::time_point::now();
+      auto cached = _route_probe_cache.find(addr);
+      if (cached != _route_probe_cache.end() && now < cached->second.expiration)
+        return cached->second.routable;
+
+      // the cache is keyed by candidate addresses, so it can grow no larger than the peer
+      // database plus the endpoints we are asked to firewall-check, but drop expired entries
+      // once it gets large so churn in the peer database doesn't accumulate forever
+      if (_route_probe_cache.size() >= 2 * GRAPHENE_NET_MAX_PEERDB_SIZE)
+      {
+        for (auto iter = _route_probe_cache.begin(); iter != _route_probe_cache.end(); )
+          if (now >= iter->second.expiration)
+            iter = _route_probe_cache.erase(iter);
+          else
+            ++iter;
+        cached = _route_probe_cache.end();
+      }
+
+      const bool routable = probe_route_to_address(addr);
+      const bool previously_routable = cached == _route_probe_cache.end() ? true : cached->second.routable;
+      if (routable != previously_routable)
+        dlog("route to ${addr} from this host: ${routable}", ("addr", addr)("routable", routable));
+      _route_probe_cache[addr] = route_probe_result{routable, now + fc::seconds(GRAPHENE_NET_ROUTE_PROBE_CACHE_SEC)};
+      return routable;
+    }
+
     void node_impl::p2p_network_connect_loop()
     {
       while (!_p2p_network_connect_loop_done.canceled() && !node_is_shutting_down())
@@ -1021,26 +1120,63 @@ namespace graphene { namespace net {
             bool initiated_connection_this_pass = false;
             _potential_peer_database_updated = false;
 
-            for (peer_database::iterator iter = _potential_peer_db.begin();
-                 iter != _potential_peer_db.end() && is_wanting_new_connections();
-                 ++iter)
+            // Dial IPv6 candidates before IPv4 ones.  A node reachable over both
+            // families appears as two unrelated entries here; whichever connection
+            // finishes its handshake first is kept and the other is dropped as a
+            // duplicate, so dialing order biases dual-stack peers toward IPv6
+            // without affecting single-family peers.
+            uint32_t unroutable_ipv4_candidates = 0;
+            uint32_t unroutable_ipv6_candidates = 0;
+            for (int family_pass = 0; family_pass < 2 && is_wanting_new_connections(); ++family_pass)
             {
-              dlog("potential peer to connect to: ${iter}",("iter",*iter));
-              fc::microseconds delay_until_retry = fc::seconds((iter->number_of_failed_connection_attempts + 1) * _node_configuration.peer_connection_retry_timeout);
-              if (_active_connections.size() == 0) //if no active connections, we should try more often to find a peer, so limit the amount of delay time
+              const bool ipv6_pass = (family_pass == 0);
+              for (peer_database::iterator iter = _potential_peer_db.begin();
+                   iter != _potential_peer_db.end() && is_wanting_new_connections();
+                   ++iter)
               {
-                delay_until_retry = std::min(delay_until_retry,fc::seconds(180));
-              }
+                if (iter->endpoint.get_address().is_ipv6() != ipv6_pass)
+                  continue;
+                dlog("potential peer to connect to: ${iter}",("iter",*iter));
+                // skip peers we have no route to, but keep their entries: we still store and
+                // advertise them to peers that may be able to use them, and the route may appear
+                // later (the probe result is re-checked every GRAPHENE_NET_ROUTE_PROBE_CACHE_SEC)
+                if (!can_route_to(iter->endpoint.get_address()))
+                {
+                  dlog("skipping ${peer}: this host has no route to its address", ("peer", iter->endpoint));
+                  (ipv6_pass ? unroutable_ipv6_candidates : unroutable_ipv4_candidates)++;
+                  continue;
+                }
+                fc::microseconds delay_until_retry = fc::seconds((iter->number_of_failed_connection_attempts + 1) * _node_configuration.peer_connection_retry_timeout);
+                if (_active_connections.size() == 0) //if no active connections, we should try more often to find a peer, so limit the amount of delay time
+                {
+                  delay_until_retry = std::min(delay_until_retry,fc::seconds(180));
+                }
 
-              if (!is_connection_to_endpoint_in_progress(iter->endpoint) &&
-                  ((iter->last_connection_disposition != last_connection_failed &&
-                    iter->last_connection_disposition != last_connection_rejected &&
-                    iter->last_connection_disposition != last_connection_handshaking_failed) ||
-                   (fc::time_point::now() - iter->last_connection_attempt_time) > delay_until_retry))
-              {
-                connect_to_endpoint(iter->endpoint);
-                initiated_connection_this_pass = true;
+                if (!is_connection_to_endpoint_in_progress(iter->endpoint) &&
+                    ((iter->last_connection_disposition != last_connection_failed &&
+                      iter->last_connection_disposition != last_connection_rejected &&
+                      iter->last_connection_disposition != last_connection_handshaking_failed) ||
+                     (fc::time_point::now() - iter->last_connection_attempt_time) > delay_until_retry))
+                {
+                  connect_to_endpoint(iter->endpoint);
+                  initiated_connection_this_pass = true;
+                }
               }
+            }
+
+            // say so (once per change, not per pass) when candidates are being left alone for
+            // lack of a route: with only unroutable candidates a node quietly makes no progress,
+            // and the per-candidate skip above is only logged at debug level
+            if (unroutable_ipv4_candidates != _unroutable_ipv4_candidates_last_pass ||
+                unroutable_ipv6_candidates != _unroutable_ipv6_candidates_last_pass)
+            {
+              if (unroutable_ipv4_candidates || unroutable_ipv6_candidates)
+                ilog("not dialing ${ipv4} IPv4 and ${ipv6} IPv6 peer candidates: this host has no route to them (re-checked every ${secs}s)",
+                     ("ipv4", unroutable_ipv4_candidates)("ipv6", unroutable_ipv6_candidates)("secs", GRAPHENE_NET_ROUTE_PROBE_CACHE_SEC));
+              else
+                ilog("all peer candidates are routable from this host again");
+              _unroutable_ipv4_candidates_last_pass = unroutable_ipv4_candidates;
+              _unroutable_ipv6_candidates_last_pass = unroutable_ipv6_candidates;
             }
 
             if (!initiated_connection_this_pass && !_potential_peer_database_updated)
@@ -1478,6 +1614,7 @@ namespace graphene { namespace net {
     {
       dlog("checking if we can terminate inactive connections");
       std::list<peer_connection_ptr> peers_to_disconnect_gently;
+      std::list<peer_connection_ptr> peers_to_disconnect_for_rejected_blocks;
       std::list<peer_connection_ptr> peers_to_disconnect_forcibly;
       std::list<peer_connection_ptr> peers_to_send_keep_alive;
       std::list<peer_connection_ptr> peers_to_terminate;
@@ -1496,6 +1633,27 @@ namespace graphene { namespace net {
         // peers need action (disconneting, sending keepalives, etc), then we walk through
         // those lists yielding at our leisure later.
         ASSERT_TASK_NOT_PREEMPTED();
+
+        // The invalid-block circuit breaker keeps peers that would otherwise have been
+        // disconnected, on the theory that mass rejections indicate a systemic event rather
+        // than genuinely bad peers.  That theory holds only while the chain keeps advancing.
+        // If our head has stalled and we are still holding peers whose blocks we rejected,
+        // the breaker may be preserving a peer set that cannot feed us the chain (all slots
+        // occupied, connect loop satisfied, no progress) -- revoke the deferral for the
+        // flagged peers so their slots open up for replacements.
+        if (_cached_head_block_num > 0 &&
+            _last_head_advance_time != fc::time_point() &&
+            fc::time_point::now() - _last_head_advance_time > fc::seconds(GRAPHENE_NET_BREAKER_STALL_OVERRIDE_SEC))
+        {
+          for (const peer_connection_ptr& active_peer : _active_connections)
+            if (active_peer->block_rejected_while_breaker_tripped)
+            {
+              wlog("disconnecting peer ${peer}: it delivered a block we rejected while the disconnect circuit breaker "
+                   "was active, and our chain has made no progress in the ${timeout} seconds since",
+                   ("peer", active_peer->get_remote_endpoint())("timeout", GRAPHENE_NET_BREAKER_STALL_OVERRIDE_SEC));
+              peers_to_disconnect_for_rejected_blocks.push_back(active_peer);
+            }
+        }
 
         uint32_t handshaking_timeout = _node_configuration.peer_inactivity_timeout;
         fc::time_point handshaking_disconnect_threshold = fc::time_point::now() - fc::seconds(handshaking_timeout);
@@ -1676,6 +1834,13 @@ namespace graphene { namespace net {
       }
       peers_to_disconnect_gently.clear();
 
+      for( const peer_connection_ptr& peer : peers_to_disconnect_for_rejected_blocks )
+      {
+        fc::exception detailed_error(FC_LOG_MESSAGE(warn, "You delivered a block we rejected, and our chain has made no progress since"));
+        disconnect_from_peer(peer.get(), "You delivered a block we rejected, and our chain has made no progress since", true, detailed_error);
+      }
+      peers_to_disconnect_for_rejected_blocks.clear();
+
       for( const peer_connection_ptr& peer : peers_to_send_keep_alive )
         peer->send_message(current_time_request_message(),
                            offsetof(current_time_request_message, request_sent_time));
@@ -1764,7 +1929,7 @@ namespace graphene { namespace net {
       _bandwidth_monitor_last_update_time = current_time;
 
       if (!node_is_shutting_down() && !_bandwidth_monitor_loop_done.canceled())
-        _bandwidth_monitor_loop_done = schedule_task( [=](){ bandwidth_monitor_loop(); },
+        _bandwidth_monitor_loop_done = schedule_task( [=, this](){ bandwidth_monitor_loop(); },
                                                      fc::time_point::now() + fc::seconds(GRAPHENE_NET_BANDWIDTH_MONITOR_INTERVAL_SECONDS),
                                                      "bandwidth_monitor_loop" );
       dlog("end bandwidth_monitor_loop (not a loop)");
@@ -1774,7 +1939,7 @@ namespace graphene { namespace net {
     {
       dump_node_status();
       if (!node_is_shutting_down() && !_dump_node_status_task_done.canceled())
-        _dump_node_status_task_done = schedule_task([=](){ dump_node_status_task(); },
+        _dump_node_status_task_done = schedule_task([=, this](){ dump_node_status_task(); },
                                                    fc::time_point::now() + fc::minutes(GRAPHENE_NET_DUMP_NODE_STATUS_INTERVAL_MINUTES),
                                                    "dump_node_status_task");
     }
@@ -2073,7 +2238,7 @@ namespace graphene { namespace net {
         }
       case core_message_type_enum::block_message_type:
       case core_message_type_enum::compressed_block_message_type:
-        fc::async( [=]() { process_block_message(originating_peer, received_message, message_hash); }, "process_block_msg");
+        fc::async( [=, this]() { process_block_message(originating_peer, received_message, message_hash); }, "process_block_msg");
         break;
       case core_message_type_enum::trx_message_type:
         process_trx_message(originating_peer, received_message.as_trx_message( _thread_pool ));
@@ -2096,7 +2261,7 @@ namespace graphene { namespace net {
         // to allow us to add messages in the future
         if (received_message.msg_type < core_message_type_enum::core_message_type_first ||
             received_message.msg_type > core_message_type_enum::core_message_type_last)
-          fc::async([=](){ process_ordinary_message(originating_peer, received_message, message_hash); }, "process_ord_msg");
+          fc::async([=, this](){ process_ordinary_message(originating_peer, received_message, message_hash); }, "process_ord_msg");
         break;
       }
     }
@@ -2209,6 +2374,20 @@ namespace graphene { namespace net {
         originating_peer->last_known_fork_block_number = _delegate->estimate_last_known_fork_from_git_revision_timestamp(unix_timestamp);
       }
 
+      // log what kind of node this is while we still have all the identifying details in one
+      // place; when diagnosing network incidents it is otherwise impossible to tell after the
+      // fact which software/version a given peer endpoint was running
+      ilog("Received hello from ${endpoint}: user_agent '${agent}', protocol version ${version}, platform ${platform}, "
+           "graphene revision ${rev} (${rev_time}), last known fork block ${fork}, node_id ${node_id}",
+           ("endpoint", originating_peer->get_remote_endpoint())
+           ("agent", hello_message_received.user_agent)
+           ("version", hello_message_received.core_protocol_version)
+           ("platform", originating_peer->platform)
+           ("rev", originating_peer->graphene_git_revision_sha)
+           ("rev_time", originating_peer->graphene_git_revision_unix_timestamp)
+           ("fork", originating_peer->last_known_fork_block_number)
+           ("node_id", originating_peer->node_id));
+
       // now decide what to do with it
       if (originating_peer->their_state == peer_connection::their_connection_state::just_connected)
       {
@@ -2225,6 +2404,29 @@ namespace graphene { namespace net {
           disconnect_from_peer(originating_peer, "Invalid signature in hello message", true, detailed_error);
           return;
         }
+        if (hello_message_received.core_protocol_version < GRAPHENE_NET_MINIMUM_PROTOCOL_VERSION)
+        {
+          wlog("Received hello message from peer ${peer} reporting protocol version ${version}, below the minimum ${minimum} this node accepts",
+               ("peer", originating_peer->get_remote_endpoint())
+               ("version", hello_message_received.core_protocol_version)
+               ("minimum", GRAPHENE_NET_MINIMUM_PROTOCOL_VERSION));
+          originating_peer->their_state = peer_connection::their_connection_state::connection_rejected;
+          send_connection_rejected_message(originating_peer,
+                                           originating_peer->get_socket().remote_endpoint(),
+                                           rejection_reason_code::client_too_old,
+                                           "Your p2p protocol version is older than the minimum this node accepts, please upgrade");
+          fc::exception detailed_error(FC_LOG_MESSAGE(warn, "Your p2p protocol version is older than the minimum this node accepts, please upgrade"));
+          disconnect_from_peer(originating_peer, "Your p2p protocol version is older than the minimum this node accepts, please upgrade", true, detailed_error);
+          return;
+        }
+        // note: we do NOT require last_known_fork_block_number to be reported.  Although the
+        // receive side has parsed it (and the obsolete-client check below has consumed it) since
+        // the BitShares era, hive's own hello has never actually sent it: generate_hello_user_data
+        // only includes it when _hard_fork_block_numbers is non-empty, and hive's p2p_plugin has
+        // always initialized that list empty (it likewise never sets graphene_git_revision_*, so
+        // the estimate fallback above can never fire either).  Requiring the field would reject
+        // every hived on the network.  Making the obsolete-client mechanism real -- or deleting
+        // it as vestigial -- is tracked separately.
         if (originating_peer->last_known_fork_block_number != 0)
         {
           uint32_t next_fork_block_number = get_next_known_hard_fork_block_number(originating_peer->last_known_fork_block_number);
@@ -2256,11 +2458,15 @@ namespace graphene { namespace net {
             }
           }
         }
-        if ( !originating_peer->chain_id ||
-              ( ( *originating_peer->chain_id != _delegate->get_old_chain_id() ) && ( *originating_peer->chain_id != _delegate->get_new_chain_id() ) ) )
+        // Only the current chain id is accepted.  We used to also accept the pre-split (legacy)
+        // chain id so that a node syncing from scratch could obtain early blocks from either
+        // network while there were few nodes on the new one; that bootstrap rationale has long
+        // expired, and accepting the legacy id let nodes of the other network occupy connection
+        // slots and a sync exchange before eventually being dropped as unreachable-fork peers.
+        if ( !originating_peer->chain_id || *originating_peer->chain_id != _delegate->get_new_chain_id() )
         {
-            wlog("Received hello message from peer running a node for different blockchain. Old chain-id: '${old_chain_id}'. New chain-id: '${new_chain_id}'. Their chain-id: '${their_chain_id}'.",
-               ("old_chain_id", _delegate->get_old_chain_id())("new_chain_id", _delegate->get_new_chain_id())("their_chain_id", originating_peer->chain_id) );
+            wlog("Received hello message from peer running a node for different blockchain. My chain-id: '${my_chain_id}'. Their chain-id: '${their_chain_id}'.",
+               ("my_chain_id", _delegate->get_new_chain_id())("their_chain_id", originating_peer->chain_id) );
 
             originating_peer->their_state = peer_connection::their_connection_state::connection_rejected;
             send_connection_rejected_message(originating_peer,
@@ -2431,6 +2637,12 @@ namespace graphene { namespace net {
               updated_peer_record->last_connection_disposition = last_connection_rejected;
               updated_peer_record->last_connection_attempt_time = fc::time_point::now();
               updated_peer_record->last_failed_time = updated_peer_record->last_connection_attempt_time;
+              // count the rejection like a failed attempt so the retry backoff grows.  Without
+              // this, a node that rejects us (full, incompatible, ...) is redialed every
+              // peer_connection_retry_timeout forever -- against a node with a reduced
+              // connection limit this was measured at ~75 attempts/minute network-wide,
+              // sustained for as long as the condition lasted
+              updated_peer_record->number_of_failed_connection_attempts++;
               _potential_peer_db.update_entry(*updated_peer_record);
             }
           }
@@ -2524,6 +2736,9 @@ namespace graphene { namespace net {
             if (updated_peer_record)
             {
               updated_peer_record->last_connection_disposition = last_connection_succeeded;
+              // a completed handshake clears the retry backoff accumulated from earlier
+              // failures or rejections
+              updated_peer_record->number_of_failed_connection_attempts = 0;
               _potential_peer_db.update_entry(*updated_peer_record);
             }
           }
@@ -2647,6 +2862,9 @@ namespace graphene { namespace net {
           // mark the connection as successful in the database
           potential_peer_record updated_peer_record = _potential_peer_db.lookup_or_create_entry_for_endpoint(*endpoint_for_db);
           updated_peer_record.last_connection_disposition = last_connection_succeeded;
+          // a completed handshake clears the retry backoff accumulated from earlier
+          // failures or rejections
+          updated_peer_record.number_of_failed_connection_attempts = 0;
           _potential_peer_db.update_entry(updated_peer_record);
         }
 
@@ -3103,8 +3321,12 @@ namespace graphene { namespace net {
           else
             originating_peer->send_message(item_not_available_message(item_id(block_message_type, fetch_items_message_received.items_to_fetch[i])));
 
-        // if we sent them a block, update our record of the last block they've seen accordingly
-        if (last_full_block_sent)
+        // if we sent them a block newer than the newest we already knew they had, update our
+        // record of the last block they've seen.  Serving an *older* block (e.g. one they are
+        // backfilling) must not regress the estimate: it feeds synopsis construction and sync
+        // decisions, and regressing it makes us treat an up-to-date peer as far behind
+        if (last_full_block_sent &&
+            last_full_block_sent->get_block_num() > _delegate->get_block_number(originating_peer->last_block_delegate_has_seen))
         {
           originating_peer->last_block_delegate_has_seen = last_full_block_sent->get_block_id();
           originating_peer->last_block_time_delegate_has_seen = last_full_block_sent->get_block_header().timestamp;
@@ -3150,7 +3372,13 @@ namespace graphene { namespace net {
       {
         originating_peer->items_requested_from_peer.erase( regular_item_iter );
         originating_peer->inventory_peer_advertised_to_us.erase( requested_item );
-        if (is_item_in_any_peers_inventory(requested_item))
+        // before handing the request to another peer, re-check that we still need the item:
+        // the chain may have advanced past it while it was in flight.  (Only possible for
+        // block ids -- legacy message hashes carry no block number to reason about.)
+        bool still_needed = true;
+        if (requested_item.item_type == block_message_type && originating_peer->advertise_blocks_by_block_id())
+          still_needed = classify_advertised_block_id(requested_item.item_hash) == block_id_classification::fetchable;
+        if (still_needed && is_item_in_any_peers_inventory(requested_item))
           _items_to_fetch.insert(prioritized_item_id(requested_item, _items_to_fetch_sequence_counter++));
         wlog("Peer doesn't have the requested item.");
         trigger_fetch_items_loop();
@@ -3220,13 +3448,44 @@ namespace graphene { namespace net {
           // how we interpret the item_hash depends on the peer's protocol version
           if (originating_peer->advertise_blocks_by_block_id())
           {
-            // then it's a block_id
-            if (_block_message_cache.contains_item_by_contents_hash(item_hash))
+            // it's a block_id: judge it against the real chain state rather than the bounded
+            // recent-message cache, which forgets anything older than ~20 blocks and therefore
+            // mistook stale re-advertisements for new blocks
+            bool skip_this_item = false;
+            switch (classify_advertised_block_id(item_hash))
+            {
+            case block_id_classification::known:
+              skip_this_item = true; // we already have it; nothing to fetch
+              break;
+            case block_id_classification::dead_fork:
+              dlog("ignoring advertisement of block ${hash} from ${endpoint}: it is at or below our last irreversible block and is not ours",
+                   ("hash", item_hash)("endpoint", originating_peer->get_remote_endpoint()));
+              skip_this_item = true;
+              break;
+            case block_id_classification::implausible_future:
+              if (stalled_head_resync_due(originating_peer))
+              {
+                wlog("peer ${endpoint} advertised block ${hash} far past our head, and our head has not advanced for "
+                     "${seconds}s: we have probably fallen behind, restarting sync with them",
+                     ("endpoint", originating_peer->get_remote_endpoint())("hash", item_hash)
+                     ("seconds", (fc::time_point::now() - _last_head_advance_time).to_seconds()));
+                start_synchronizing_with_peer(originating_peer->shared_from_this());
+              }
+              else
+                wlog("ignoring advertisement of block ${hash} from ${endpoint}: it claims a height implausibly far past our head",
+                     ("hash", item_hash)("endpoint", originating_peer->get_remote_endpoint()));
+              skip_this_item = true;
+              break;
+            case block_id_classification::fetchable:
+              break;
+            }
+            if (skip_this_item)
               continue;
           }
           else
           {
-            // then it's a legacy_block_message_hash
+            // then it's a legacy_block_message_hash: it has no embedded block number, so the
+            // recent-message cache remains the only dedupe available for these peers
             if (_block_message_cache.contains_item(item_hash))
               continue;
           }
@@ -3400,7 +3659,12 @@ namespace graphene { namespace net {
       {
         for (const auto& item_and_time : originating_peer->items_requested_from_peer)
         {
-          if (is_item_in_any_peers_inventory(item_and_time.first))
+          // as in on_item_not_available_message: don't reschedule fetches for blocks the chain
+          // has already moved past while the request was in flight with the dead peer
+          bool still_needed = true;
+          if (item_and_time.first.item_type == block_message_type && originating_peer->advertise_blocks_by_block_id())
+            still_needed = classify_advertised_block_id(item_and_time.first.item_hash) == block_id_classification::fetchable;
+          if (still_needed && is_item_in_any_peers_inventory(item_and_time.first))
             _items_to_fetch.insert(prioritized_item_id(item_and_time.first, _items_to_fetch_sequence_counter++));
         }
         trigger_fetch_items_loop();
@@ -3411,12 +3675,85 @@ namespace graphene { namespace net {
       schedule_peer_for_deletion(originating_peer_ptr);
     } //on_connection_closed
 
+    void node_impl::refresh_cached_chain_state()
+    {
+      VERIFY_CORRECT_THREAD();
+      const uint32_t head_block_num = _delegate->get_block_number(_delegate->get_head_block_id());
+      if (head_block_num > _cached_head_block_num)
+      {
+        _cached_head_block_num = head_block_num;
+        _last_head_advance_time = fc::time_point::now();
+      }
+      _cached_last_irreversible_block_num = std::max(_cached_last_irreversible_block_num, _delegate->get_last_irreversible_block_num());
+    }
+
+    // Judge an advertised block id against the actual chain state.  Only valid for hashes that
+    // really are block ids (protocol >= GRAPHENE_NET_PROTOCOL_ADVERTISE_BLOCKS_BY_BLOCK_ID_VERSION
+    // peers); legacy block-message hashes have no embedded block number and must not be passed
+    // here.  This replaces dedupe decisions previously made against the bounded recent-message
+    // cache, whose ~20-block horizon made anything older look brand new -- the root enabler of
+    // the stale-refetch cascades in the 2026-07-09 incident.
+    node_impl::block_id_classification node_impl::classify_advertised_block_id(const item_hash_t& block_id_hash)
+    {
+      VERIFY_CORRECT_THREAD();
+      const uint32_t block_num = _delegate->get_block_number(block_id_hash); // decoded from the id itself
+      if (block_num == 0)
+        return block_id_classification::fetchable; // not decodable; let the fetch machinery sort it out
+      refresh_cached_chain_state();
+      if (block_num > _cached_head_block_num + GRAPHENE_NET_FUTURE_BLOCK_IDS_GRACE_BLOCKS)
+        return block_id_classification::implausible_future;
+      if (_delegate->has_item(item_id(block_message_type, block_id_hash)))
+        return block_id_classification::known;
+      if (block_num <= _cached_last_irreversible_block_num)
+        return block_id_classification::dead_fork;
+      return block_id_classification::fetchable;
+    }
+
+    // Decide whether an implausible_future advertisement from this peer should restart sync
+    // with it instead of being dropped.  The far-future filter is right when our head is
+    // moving; when it has been stuck for GRAPHENE_NET_STALLED_HEAD_RESYNC_SEC and a peer is
+    // still telling us about blocks past the grace window, we have most likely fallen behind
+    // (a chain-thread stall of 2+ minutes at 3 s blocks is enough) and the filter would
+    // otherwise drop every advert until a new peer connected.  Rate-limited per peer so a
+    // peer fabricating far-future ids costs us one synopsis exchange per interval at most.
+    bool node_impl::stalled_head_resync_due(peer_connection* peer)
+    {
+      VERIFY_CORRECT_THREAD();
+      if (_cached_head_block_num == 0 || _last_head_advance_time == fc::time_point())
+        return false; // no head observed yet; startup sync handles that
+      const fc::time_point now = fc::time_point::now();
+      if (now - _last_head_advance_time < fc::seconds(GRAPHENE_NET_STALLED_HEAD_RESYNC_SEC))
+        return false; // head is moving (or only momentarily behind), the filter's assumption holds
+      if (peer->we_need_sync_items_from_peer)
+        return false; // a sync with this peer is already under way; let it finish
+      if (now - peer->last_stalled_head_resync_time < fc::seconds(GRAPHENE_NET_STALLED_HEAD_RESYNC_SEC))
+        return false; // already restarted with this peer recently
+      peer->last_stalled_head_resync_time = now;
+      return true;
+    }
+
+    // Returns true when we have already disconnected so many peers over "invalid" blocks in
+    // the recent window that our own judgment is suspect (see the config constants).  When it
+    // returns false, the caller's impending disconnect is recorded against the window.
+    bool node_impl::invalid_block_disconnect_breaker_tripped()
+    {
+      VERIFY_CORRECT_THREAD();
+      fc::time_point window_start = fc::time_point::now() - fc::seconds(GRAPHENE_NET_INVALID_BLOCK_DISCONNECT_BREAKER_WINDOW_SEC);
+      while (!_recent_invalid_block_disconnect_times.empty() && _recent_invalid_block_disconnect_times.front() < window_start)
+        _recent_invalid_block_disconnect_times.pop_front();
+      if (_recent_invalid_block_disconnect_times.size() >= GRAPHENE_NET_INVALID_BLOCK_DISCONNECT_BREAKER_COUNT)
+        return true;
+      _recent_invalid_block_disconnect_times.push_back(fc::time_point::now());
+      return false;
+    }
+
     void node_impl::send_sync_block_to_node_delegate(const std::shared_ptr<full_block_type>& full_block)
     {
       dlog("in send_sync_block_to_node_delegate()");
 
       bool client_accepted_block = false;
       bool discontinue_fetching_blocks_from_peer = false;
+      bool sync_block_could_not_link = false;
       const uint32_t block_number = full_block->get_block_num();
       const block_id_type& block_id = full_block->get_block_id();
 
@@ -3431,6 +3768,7 @@ namespace graphene { namespace net {
           ilog("Successfully pushed sync block ${block_number} ${block_id}", (block_number)(block_id));
 
         _most_recent_blocks_accepted.push_back(block_id);
+        refresh_cached_chain_state();
 
         client_accepted_block = true;
       }
@@ -3442,6 +3780,22 @@ namespace graphene { namespace net {
              (block_number)(block_id));
         handle_message_exception = e;
         discontinue_fetching_blocks_from_peer = true;
+      }
+      catch (const unlinkable_block_exception& e)
+      {
+        // This is almost always a benign race rather than peer misbehavior: while this block was
+        // queued or in flight, our chain advanced past it (we received it first from another peer,
+        // or it was on a micro-fork branch that has since been orphaned).  The fork database also
+        // reports blocks that have fallen below its window as unlinkable.  Skip the block and keep
+        // the peers: disconnecting everyone who had it in flight is how routine delivery races
+        // amplified into the network-wide disconnect storm of 2026-07-09 (the live-mode path was
+        // made tolerant then; this is the sync-mode counterpart).
+        fc_wlog(fc::logger::get("sync"), "p2p could not link sync block #${block_number} ${block_id}, likely a stale delivery race; ignoring it: ${e}",
+                (block_number)(block_id)("e", (fc::exception)e));
+        wlog("Could not link sync block #${block_number} (id:${block_id}), likely a stale delivery race; ignoring it",
+             (block_number)(block_id));
+        handle_message_exception = e;
+        sync_block_could_not_link = true;
       }
       catch (const fc::canceled_exception&)
       {
@@ -3542,10 +3896,27 @@ namespace graphene { namespace net {
 
         } //for active peers
       }
+      else if (sync_block_could_not_link)
+      {
+        // The block was stale (or on an orphaned branch) by the time we processed it -- see the
+        // catch above.  This is not peer misbehavior: clean up the in-flight bookkeeping exactly
+        // as if the block had been handled, and let the sync state machine ask the affected peers
+        // for their next batch of item ids.  The fresh synopsis exchange naturally skips anything
+        // we already have.
+        if (_total_number_of_unfetched_items > 0)
+          --_total_number_of_unfetched_items;
+        for (const peer_connection_ptr& peer : _active_connections)
+        {
+          ASSERT_TASK_NOT_PREEMPTED(); // don't yield while iterating over _active_connections
+          if (peer->ids_of_items_being_processed.erase(block_id) > 0 && peer->idle())
+            peers_to_fetch_ids_from.insert(peer);
+        }
+      }
       else //client did not accept block
       {
         fc::exception disconnect_exception(FC_LOG_MESSAGE(error, "You offered us a block that we reject as invalid.  The invalid block was number: ${block_number} with hash ${block_id}",
                                                           (block_number)(block_id)));
+        const bool breaker_tripped = !discontinue_fetching_blocks_from_peer && invalid_block_disconnect_breaker_tripped();
         // invalid message received
         for (const peer_connection_ptr& peer : _active_connections)
         {
@@ -3558,6 +3929,17 @@ namespace graphene { namespace net {
               wlog("inhibiting fetching sync blocks from peer ${endpoint} because it is on a fork that's too old",
                    ("endpoint", peer->get_remote_endpoint()));
               peer->inhibit_fetching_sync_blocks = true;
+            }
+            else if (breaker_tripped)
+            {
+              // too many "invalid" rejections too quickly -- distrust our own judgment and keep
+              // the peer; clean up bookkeeping the same way the stale-delivery path does
+              wlog("invalid-block disconnect circuit breaker tripped: keeping peer ${endpoint} despite rejected sync block #${block_number}",
+                   ("endpoint", peer->get_remote_endpoint())(block_number));
+              peer->block_rejected_while_breaker_tripped = true;
+              peer->ids_of_items_being_processed.erase(block_id);
+              if (peer->idle())
+                peers_to_fetch_ids_from.insert(peer);
             }
             else
               peers_to_disconnect[peer] = std::make_pair(std::string("You offered us a block that we reject as invalid"), disconnect_exception);
@@ -3587,7 +3969,7 @@ namespace graphene { namespace net {
           (!_process_backlog_of_sync_blocks_done.valid() || _process_backlog_of_sync_blocks_done.ready()) &&
           get_number_of_handle_message_calls_in_progress() < _node_configuration.maximum_number_of_blocks_to_handle_at_one_time / 2 //DLN add hystersis to reduce number of times we process_backlog_of_sync_blocks
          )
-        _process_backlog_of_sync_blocks_done = async_task([=](){ process_backlog_of_sync_blocks(); }, "process_backlog_of_sync_blocks");
+        _process_backlog_of_sync_blocks_done = async_task([=, this](){ process_backlog_of_sync_blocks(); }, "process_backlog_of_sync_blocks");
     }
 
     uint32_t node_impl::get_number_of_handle_message_calls_in_progress()
@@ -3780,7 +4162,7 @@ namespace graphene { namespace net {
     {
       if (!node_is_shutting_down() &&
           (!_process_backlog_of_sync_blocks_done.valid() || _process_backlog_of_sync_blocks_done.ready()))
-        _process_backlog_of_sync_blocks_done = async_task([=](){ process_backlog_of_sync_blocks(); }, "process_backlog_of_sync_blocks");
+        _process_backlog_of_sync_blocks_done = async_task([=, this](){ process_backlog_of_sync_blocks(); }, "process_backlog_of_sync_blocks");
     }
 
     void node_impl::process_block_during_sync(peer_connection* originating_peer, const std::shared_ptr<full_block_type>& full_block)
@@ -3820,7 +4202,13 @@ namespace graphene { namespace net {
         // we don't know they're the same (for the peer in normal operation, it has only told us the
         // message id, for the peer in the sync case we only known the block_id).
         fc::time_point message_validated_time;
-        bool block_has_been_accepted = std::find(_most_recent_blocks_accepted.begin(), _most_recent_blocks_accepted.end(), block_id) != _most_recent_blocks_accepted.end();
+        // the recently-accepted list is a fast bounded check, but it is not authoritative:
+        // under heavy duplicate traffic its 200 entries can churn in under a minute, and the
+        // 2026-07-09 forensics recorded nodes re-pushing blocks they had accepted less than a
+        // minute earlier after exactly such a miss.  Fall back to asking the chain itself --
+        // one fork-db/block-log lookup per delivered block is trivial next to a push
+        bool block_has_been_accepted = std::find(_most_recent_blocks_accepted.begin(), _most_recent_blocks_accepted.end(), block_id) != _most_recent_blocks_accepted.end() ||
+                                       _delegate->has_item(item_id(block_message_type, block_id));
         if (!block_has_been_accepted &&
             _message_ids_currently_being_processed.find(block_id) == _message_ids_currently_being_processed.end())
         {
@@ -3842,6 +4230,13 @@ namespace graphene { namespace net {
           // well, we already got them, so remove those from our items_to_fetch
           for (const std::shared_ptr<full_transaction_type>& full_transaction : full_block->get_full_transactions())
             _items_to_fetch.get<item_id_index>().erase(item_id(trx_message_type, full_transaction->get_legacy_transaction_message_hash()));
+
+          // the same block may also be queued for fetching under its other alias (old peers
+          // advertise blocks by legacy message hash, newer peers by block id, and we can't tell
+          // they name the same block until we have it).  We just accepted it, so drop any
+          // still-unrequested fetch entries for either alias
+          _items_to_fetch.get<item_id_index>().erase(item_id(block_message_type, block_id));
+          _items_to_fetch.get<item_id_index>().erase(item_id(block_message_type, legacy_block_message_hash));
         }
         else
         {
@@ -3876,8 +4271,19 @@ namespace graphene { namespace net {
           }
           peer->clear_old_inventory();
         }
-        message_propagation_data propagation_data{message_receive_time, message_validated_time, originating_peer->node_id};
-        broadcast(full_block, propagation_data);
+        if (block_has_been_accepted)
+        {
+          // we didn't push this copy of the block -- an earlier copy was already accepted,
+          // typically through the sync mechanism, which does not advertise.  Offer it to our
+          // peers, but skip the rest of the broadcast bookkeeping: this copy was already cached
+          // and recorded as accepted when the first copy arrived
+          advertise_block(full_block);
+        }
+        else
+        {
+          message_propagation_data propagation_data{message_receive_time, message_validated_time, originating_peer->node_id};
+          broadcast(full_block, propagation_data);
+        }
 
         if (is_hard_fork_block(block_num))
         {
@@ -3916,18 +4322,32 @@ namespace graphene { namespace net {
       }
       catch (const fc::exception& e)
       {
-        // client rejected the block.  Disconnect the client and any other clients that offered us this block
+        // client rejected the block.  Disconnect the peer that sent it to us
         wlog("Failed to push block ${num} (id:${id}), client rejected block sent by peer",
              ("num", block_num)
              ("id", block_id));
 
-        disconnect_exception = e;
-        disconnect_reason = "You offered me a block that I have deemed to be invalid";
+        if (invalid_block_disconnect_breaker_tripped())
+        {
+          // too many "invalid" rejections too quickly -- the likely explanation is a systemic
+          // event or a local problem, not this many independently-misbehaving peers.  Keep the
+          // peer and use the reconciliation path instead of the punitive one
+          wlog("invalid-block disconnect circuit breaker tripped: keeping peer ${peer} despite rejected block ${num} (id:${id})",
+               ("peer", originating_peer->get_remote_endpoint())("num", block_num)("id", block_id));
+          originating_peer->block_rejected_while_breaker_tripped = true;
+          restart_sync_exception = e;
+        }
+        else
+        {
+          disconnect_exception = e;
+          disconnect_reason = "You offered me a block that I have deemed to be invalid";
 
-        peers_to_disconnect.insert( originating_peer->shared_from_this() );
-        for (const peer_connection_ptr& peer : _active_connections)
-          if (!peer->ids_of_items_to_get.empty() && peer->ids_of_items_to_get.front() == block_id)
-            peers_to_disconnect.insert(peer);
+          // Only the peer that actually delivered the rejected block is disconnected.  We used to
+          // also disconnect every peer that merely had the same block queued for fetching; those
+          // peers had sent us nothing yet, and that collective punishment turned single rejections
+          // into the mass peer-list wipes seen in the 2026-07-09 incident.
+          peers_to_disconnect.insert( originating_peer->shared_from_this() );
+        }
       }
 
       if (restart_sync_exception)
@@ -4154,7 +4574,9 @@ namespace graphene { namespace net {
         if (firewall_check_state->expected_node_id != peer->node_id && // it's not the node who is asking us to test
             !peer->firewall_check_state && // the peer isn't already performing a check for another node
             firewall_check_state->nodes_already_tested.find(peer->node_id) == firewall_check_state->nodes_already_tested.end() &&
-            peer->core_protocol_version >= GRAPHENE_NET_PROTOCOL_FIREWALL_CHECK_VERSION)
+            peer->core_protocol_version >= GRAPHENE_NET_PROTOCOL_FIREWALL_CHECK_VERSION &&
+            // a legacy peer can't be asked to check an IPv6 endpoint (not encodable in the legacy message)
+            (peer->peer_supports_ipv6 || firewall_check_state->endpoint_to_test.get_address().is_ipv4()))
         {
           wlog("forwarding firewall check for node ${to_check} to peer ${checker}",
                ("to_check", firewall_check_state->endpoint_to_test)
@@ -4192,7 +4614,7 @@ namespace graphene { namespace net {
           reply.result = firewall_check_result::unable_to_check;
           originating_peer->send_message(reply);
         }
-        else
+        else if (firewall_check_state->endpoint_to_test.get_address().is_ipv4())
         {
           legacy_check_firewall_reply_message reply;
           reply.node_id = firewall_check_state->expected_node_id;
@@ -4200,6 +4622,10 @@ namespace graphene { namespace net {
           reply.result = firewall_check_result::unable_to_check;
           originating_peer->send_message(reply);
         }
+        else
+          wlog("Not sending 'unable' firewall check reply to legacy peer ${peer}: endpoint ${endpoint} is not encodable in the legacy message",
+               ("peer", originating_peer->get_remote_endpoint())
+               ("endpoint", firewall_check_state->endpoint_to_test));
       }
       delete firewall_check_state;
     }
@@ -4232,15 +4658,18 @@ namespace graphene { namespace net {
       else
       {
         // we're being asked to check another node
-        // first, find out if we're currently connected to that node.  If we are, we
-        // can't perform the test
+        // we can't perform the test if we're currently connected to that node, or if
+        // we have no route to the endpoint (attempting it anyway would report
+        // unable_to_connect, falsely branding them firewalled)
         if (is_already_connected_to_id(check_firewall_message_received.node_id) ||
-            is_connection_to_endpoint_in_progress(check_firewall_message_received.endpoint_to_check))
+            is_connection_to_endpoint_in_progress(check_firewall_message_received.endpoint_to_check) ||
+            !can_route_to(check_firewall_message_received.endpoint_to_check.get_address()))
         {
           check_firewall_reply_message reply;
           reply.node_id = check_firewall_message_received.node_id;
           reply.endpoint_checked = check_firewall_message_received.endpoint_to_check;
           reply.result = firewall_check_result::unable_to_check;
+          originating_peer->send_message(reply);
         }
         else
         {
@@ -4301,7 +4730,7 @@ namespace graphene { namespace net {
             {
               original_peer->send_message(check_firewall_reply_message_received);
             }
-            else
+            else if (check_firewall_reply_message_received.endpoint_checked.get_address().is_ipv4())
             {
               legacy_check_firewall_reply_message legacy_reply;
               legacy_reply.node_id = check_firewall_reply_message_received.node_id;
@@ -4309,6 +4738,10 @@ namespace graphene { namespace net {
               legacy_reply.result = check_firewall_reply_message_received.result;
               original_peer->send_message(legacy_reply);
             }
+            else
+              wlog("Not forwarding firewall check reply to legacy peer ${peer}: endpoint ${endpoint} is not encodable in the legacy message",
+                   ("peer", original_peer->get_remote_endpoint())
+                   ("endpoint", check_firewall_reply_message_received.endpoint_checked));
           }
           delete originating_peer->firewall_check_state;
           originating_peer->firewall_check_state = nullptr;
@@ -4821,7 +5254,10 @@ namespace graphene { namespace net {
                                                      rejection_reason_code reason_code,
                                                      const std::string& reason_string)
     {
-      if (peer->peer_supports_ipv6)
+      // The legacy message can only encode an IPv4 endpoint.  A peer on an IPv6 socket that
+      // hasn't identified as IPv6-aware (nonconforming client) still gets the new message:
+      // legacy nodes ignore unknown message types, and callers disconnect afterward anyway.
+      if (peer->peer_supports_ipv6 || !remote_endpoint.get_address().is_ipv4())
       {
         connection_rejected_message rejection(_user_agent_string, core_protocol_version,
                                               remote_endpoint, reason_code, reason_string);
@@ -4881,15 +5317,20 @@ namespace graphene { namespace net {
                           user_data);
       peer->send_message(message(hello));
 
-      legacy_hello_message legacy_hello(_user_agent_string,
-                                        core_protocol_version,
-                                        fc::ip::legacy_address(local_endpoint.get_address()),
-                                        listening_port,
-                                        local_endpoint.port(),
-                                        _node_public_key,
-                                        signature,
-                                        user_data);
-      peer->send_message(message(legacy_hello));
+      // The legacy hello can't encode a native IPv6 address, and a peer reached over IPv6
+      // runs IPv6-aware code that already processed the new hello above.
+      if (local_endpoint.get_address().is_ipv4())
+      {
+        legacy_hello_message legacy_hello(_user_agent_string,
+                                          core_protocol_version,
+                                          fc::ip::legacy_address(local_endpoint.get_address()),
+                                          listening_port,
+                                          local_endpoint.port(),
+                                          _node_public_key,
+                                          signature,
+                                          user_data);
+        peer->send_message(message(legacy_hello));
+      }
     }
 
     void node_impl::connect_to_task(const peer_connection_ptr& new_peer,
@@ -4914,7 +5355,30 @@ namespace graphene { namespace net {
 
       try
       {
-        new_peer->connect_to(remote_endpoint, _actual_listening_endpoint);  // blocks until the connection is established and secure connection is negotiated
+        // Bind the outbound socket's local side to our advertised listening port so
+        // peers see us connecting from it. initiate_connect_to() opened the socket for
+        // the remote peer's address family, so the local bind address must use that same
+        // family or the bind fails (EINVAL for an IPv4 address on an IPv6 socket,
+        // EAFNOSUPPORT for an IPv6 address on an IPv4 socket). When we listen on a
+        // wildcard address, substitute the wildcard of the remote's family while keeping
+        // the port; when we listen on a specific address, only bind it if the families
+        // match, otherwise let the OS choose the local endpoint.
+        fc::optional<fc::ip::endpoint> local_endpoint;
+        if (_actual_listening_endpoint.port() != 0)
+        {
+          static const fc::ip::address ipv4_any;                       // 0.0.0.0
+          static const fc::ip::address ipv6_any{ fc::string("::") };   // ::
+          const fc::ip::address& listen_address = _actual_listening_endpoint.get_address();
+          const bool remote_is_ipv6 = remote_endpoint.get_address().is_ipv6();
+          if (listen_address == ipv4_any || listen_address == ipv6_any)
+            local_endpoint = fc::ip::endpoint(remote_is_ipv6 ? ipv6_any : ipv4_any,
+                                              _actual_listening_endpoint.port());
+          else if (listen_address.is_ipv6() == remote_is_ipv6)
+            local_endpoint = _actual_listening_endpoint;
+          // else: specific listening address of the other family; let the OS pick the local endpoint
+        }
+
+        new_peer->connect_to(remote_endpoint, local_endpoint);  // blocks until the connection is established and secure connection is negotiated
 
         // we connected to the peer.  guess they're not firewalled....
         new_peer->is_firewalled = firewalled_state::not_firewalled;
@@ -5001,12 +5465,12 @@ namespace graphene { namespace net {
     }
 
     // methods implementing node's public interface
-    void node_impl::set_node_delegate(node_delegate* del, fc::thread* thread_for_delegate_calls)
+    void node_impl::set_node_delegate(node_delegate* del)
     {
       VERIFY_CORRECT_THREAD();
       _delegate.reset();
       if (del)
-        _delegate.reset(new statistics_gathering_node_delegate_wrapper(del, thread_for_delegate_calls));
+        _delegate.reset(new statistics_gathering_node_delegate_wrapper(del));
     }
 
     void node_impl::load_configuration( const fc::path& configuration_directory )
@@ -5212,15 +5676,15 @@ namespace graphene { namespace net {
              !_bandwidth_monitor_loop_done.valid() &&
              !_dump_node_status_task_done.valid());
       if (_node_configuration.accept_incoming_connections)
-        _accept_loop_complete = async_task( [=](){ accept_loop(); }, "accept_loop");
-      _p2p_network_connect_loop_done = async_task( [=]() { p2p_network_connect_loop(); }, "p2p_network_connect_loop" );
-      _fetch_sync_items_loop_done = async_task( [=]() { fetch_sync_items_loop(); }, "fetch_sync_items_loop" );
-      _fetch_item_loop_done = async_task( [=]() { fetch_items_loop(); }, "fetch_items_loop" );
-      _advertise_inventory_loop_done = async_task( [=]() { advertise_inventory_loop(); }, "advertise_inventory_loop" );
-      _terminate_inactive_connections_loop_done = async_task( [=]() { terminate_inactive_connections_loop(); }, "terminate_inactive_connections_loop" );
-      _fetch_updated_peer_lists_loop_done = async_task([=](){ fetch_updated_peer_lists_loop(); }, "fetch_updated_peer_lists_loop");
-      _bandwidth_monitor_loop_done = async_task([=](){ bandwidth_monitor_loop(); }, "bandwidth_monitor_loop");
-      _dump_node_status_task_done = async_task([=](){ dump_node_status_task(); }, "dump_node_status_task");
+        _accept_loop_complete = async_task( [=, this](){ accept_loop(); }, "accept_loop");
+      _p2p_network_connect_loop_done = async_task( [=, this]() { p2p_network_connect_loop(); }, "p2p_network_connect_loop" );
+      _fetch_sync_items_loop_done = async_task( [=, this]() { fetch_sync_items_loop(); }, "fetch_sync_items_loop" );
+      _fetch_item_loop_done = async_task( [=, this]() { fetch_items_loop(); }, "fetch_items_loop" );
+      _advertise_inventory_loop_done = async_task( [=, this]() { advertise_inventory_loop(); }, "advertise_inventory_loop" );
+      _terminate_inactive_connections_loop_done = async_task( [=, this]() { terminate_inactive_connections_loop(); }, "terminate_inactive_connections_loop" );
+      _fetch_updated_peer_lists_loop_done = async_task([=, this](){ fetch_updated_peer_lists_loop(); }, "fetch_updated_peer_lists_loop");
+      _bandwidth_monitor_loop_done = async_task([=, this](){ bandwidth_monitor_loop(); }, "bandwidth_monitor_loop");
+      _dump_node_status_task_done = async_task([=, this](){ dump_node_status_task(); }, "dump_node_status_task");
     }
 
     void node_impl::add_node(const fc::ip::endpoint& ep)
@@ -5730,6 +6194,9 @@ namespace graphene { namespace net {
         if (peer->platform)
           peer_details["platform"] = *peer->platform;
 
+        peer_details["user_agent"] = peer->user_agent;
+        peer_details["core_protocol_version"] = peer->core_protocol_version;
+
         // provide these for debugging
         // warning: these are just approximations, if the peer is "downstream" of us, they may
         // have received blocks from other peers that we are unaware of
@@ -5749,6 +6216,34 @@ namespace graphene { namespace net {
       return (uint32_t)_active_connections.size();
     }
 
+    // queue a block for advertisement to our in-sync peers via the inventory loop.
+    // Unlike broadcast(), this does not touch the message cache or the recently-accepted
+    // list, so it is safe to call for a block that was already accepted earlier (a duplicate
+    // delivery must not add duplicate entries to those bounded structures, and must not
+    // advance the message cache's block clock -- doing so shrinks both duplicate-detection
+    // windows exactly when duplicates are most common).
+    void node_impl::advertise_block(const std::shared_ptr<full_block_type>& full_block)
+    {
+      VERIFY_CORRECT_THREAD();
+      // Never advertise a block older than our peers' duplicate-detection horizon (their message
+      // cache holds the last GRAPHENE_NET_MESSAGE_CACHE_DURATION_IN_BLOCKS blocks).  A peer can't
+      // recognize an older advertisement as something it already has, so it would fetch and
+      // re-push the block: wasted bandwidth and a chain-thread round trip at best, and
+      // historically the seed of the 2026-07-09 disconnect storm.  Only fresh blocks -- the only
+      // ones whose advertisement helps anyone -- pass.  Peers that genuinely lack older blocks
+      // obtain them through the sync path instead.
+      fc::time_point oldest_block_time_to_advertise =
+        fc::time_point::now() - fc::seconds(uint32_t(_recent_block_interval_in_seconds) * GRAPHENE_NET_MESSAGE_CACHE_DURATION_IN_BLOCKS);
+      if (fc::time_point(full_block->get_block_header().timestamp) < oldest_block_time_to_advertise)
+      {
+        dlog("not advertising block ${num} because it is older than the network's duplicate-detection window",
+             ("num", full_block->get_block_num()));
+        return;
+      }
+      _new_block_inventory.insert(full_block);
+      trigger_advertise_inventory_loop();
+    }
+
     void node_impl::broadcast(const std::shared_ptr<full_block_type>& full_block, const message_propagation_data& propagation_data)
     {
       VERIFY_CORRECT_THREAD();
@@ -5757,8 +6252,8 @@ namespace graphene { namespace net {
 
       _most_recent_blocks_accepted.push_back(block_id);
       _block_message_cache.cache_message(full_block, propagation_data);
-      _new_block_inventory.insert(full_block);
-      trigger_advertise_inventory_loop();
+      refresh_cached_chain_state();
+      advertise_block(full_block);
 
       /** Trigger block_accepted methods to potentially flush caches in both cases:
           - when node receives a block,
@@ -5798,6 +6293,7 @@ namespace graphene { namespace net {
       _most_recent_blocks_accepted.clear();
       _sync_item_type = current_head_block.item_type;
       _most_recent_blocks_accepted.push_back(current_head_block.item_hash);
+      refresh_cached_chain_state();
       _hard_fork_block_numbers = hard_fork_block_numbers;
     }
 
@@ -6004,8 +6500,7 @@ namespace graphene { namespace net {
 
   void node::set_node_delegate( node_delegate* del )
   {
-    fc::thread* delegate_thread = &fc::thread::current();
-    INVOKE_IN_IMPL(set_node_delegate, del, delegate_thread);
+    INVOKE_IN_IMPL(set_node_delegate, del);
   }
 
   void node::load_configuration( const fc::path& configuration_directory )
@@ -6201,7 +6696,7 @@ namespace graphene { namespace net {
     {
       network_node_info->messages_to_deliver.emplace(full_block);
       if (!network_node_info->message_sender_task_done.valid() || network_node_info->message_sender_task_done.ready())
-        network_node_info->message_sender_task_done = fc::async([=](){ message_sender(network_node_info); }, "simulated_network_sender");
+        network_node_info->message_sender_task_done = fc::async([=, this](){ message_sender(network_node_info); }, "simulated_network_sender");
     }
   }
 
@@ -6211,7 +6706,7 @@ namespace graphene { namespace net {
     {
       network_node_info->messages_to_deliver.emplace(full_transaction);
       if (!network_node_info->message_sender_task_done.valid() || network_node_info->message_sender_task_done.ready())
-        network_node_info->message_sender_task_done = fc::async([=](){ message_sender(network_node_info); }, "simulated_network_sender");
+        network_node_info->message_sender_task_done = fc::async([=, this](){ message_sender(network_node_info); }, "simulated_network_sender");
     }
   }
 
@@ -6229,9 +6724,8 @@ namespace graphene { namespace net {
       , BOOST_PP_CAT(_, BOOST_PP_CAT(method_name, _delay_after_accumulator))(boost::accumulators::tag::rolling_window::window_size = ROLLING_WINDOW_SIZE)
 
 
-    statistics_gathering_node_delegate_wrapper::statistics_gathering_node_delegate_wrapper(node_delegate* delegate, fc::thread* thread_for_delegate_calls) :
-      _node_delegate(delegate),
-      _thread(thread_for_delegate_calls)
+    statistics_gathering_node_delegate_wrapper::statistics_gathering_node_delegate_wrapper(node_delegate* delegate) :
+      _node_delegate(delegate)
       BOOST_PP_SEQ_FOR_EACH(INITIALIZE_ACCUMULATOR, unused, NODE_DELEGATE_METHOD_NAMES)
     {}
 #undef INITIALIZE_ACCUMULATOR
@@ -6266,77 +6760,13 @@ namespace graphene { namespace net {
       return statistics;
     }
 
-// define VERBOSE_NODE_DELEGATE_LOGGING to log whenever the node delegate throws exceptions
-//#define VERBOSE_NODE_DELEGATE_LOGGING
-#ifdef VERBOSE_NODE_DELEGATE_LOGGING
-#  define INVOKE_AND_COLLECT_STATISTICS(method_name, ...) \
-    try \
-    { \
-      if (_thread->is_current()) \
-      { \
-         call_statistics_collector statistics_collector(#method_name, \
-            &_ ## method_name ## _execution_accumulator, \
-            &_ ## method_name ## _delay_before_accumulator, \
-            &_ ## method_name ## _delay_after_accumulator); \
-        call_statistics_collector::actual_execution_measurement_helper helper(statistics_collector); \
-        return _node_delegate->method_name(__VA_ARGS__); \
-      } \
-      else \
-        return _thread->async([&](){ \
-         call_statistics_collector statistics_collector(#method_name, \
-            &_ ## method_name ## _execution_accumulator, \
-            &_ ## method_name ## _delay_before_accumulator, \
-            &_ ## method_name ## _delay_after_accumulator); \
-          call_statistics_collector::actual_execution_measurement_helper helper(statistics_collector); \
-          return _node_delegate->method_name(__VA_ARGS__); \
-        }, "invoke " BOOST_STRINGIZE(method_name)).wait(); \
-    } \
-    catch (const fc::exception& e) \
-    { \
-      dlog("node_delegate threw fc::exception: ${e}", ("e", e)); \
-      throw; \
-    } \
-    catch (const std::exception& e) \
-    { \
-      dlog("node_delegate threw std::exception: ${e}", ("e", e.what())); \
-      throw; \
-    } \
-    catch (...) \
-    { \
-      dlog("node_delegate threw unrecognized exception"); \
-      throw; \
-    }
-#else
+// The node delegate is always invoked directly on the p2p thread: the old cross-thread
+// marshalling (and the VERBOSE_NODE_DELEGATE_LOGGING debug variant that retained it) was
+// removed after years of disuse.  Thread safety is the callee's responsibility -- the block
+// log supports concurrent readers, the fork database takes its own locks, and chain
+// mutations are serialized through the chain plugin's write queue.
 #define INVOKE_AND_COLLECT_STATISTICS( method_name, ... ) \
-   FC_UNUSED( _thread ) \
    return _node_delegate->method_name(__VA_ARGS__);
-/*
-#  define INVOKE_AND_COLLECT_STATISTICS(method_name, ...) \
-    if ( _thread->is_current()) \
-    { \
-      call_statistics_collector statistics_collector(#method_name, \
-         &_ ## method_name ## _execution_accumulator, \
-         &_ ## method_name ## _delay_before_accumulator, \
-         &_ ## method_name ## _delay_after_accumulator); \
-      call_statistics_collector::actual_execution_measurement_helper helper(statistics_collector); \
-      return _node_delegate->method_name(__VA_ARGS__); \
-    } \
-    else \
-      return _thread->async([&](){ \
-         call_statistics_collector statistics_collector(#method_name, \
-            &_ ## method_name ## _execution_accumulator, \
-            &_ ## method_name ## _delay_before_accumulator, \
-            &_ ## method_name ## _delay_after_accumulator); \
-        call_statistics_collector::actual_execution_measurement_helper helper(statistics_collector); \
-        return _node_delegate->method_name(__VA_ARGS__); \
-      }, "invoke " BOOST_STRINGIZE(method_name)).wait()
-*/
-#endif
-
-    hive::protocol::chain_id_type statistics_gathering_node_delegate_wrapper::get_old_chain_id() const
-    {
-      INVOKE_AND_COLLECT_STATISTICS(get_old_chain_id);
-    }
 
     hive::protocol::chain_id_type statistics_gathering_node_delegate_wrapper::get_new_chain_id() const
     {
@@ -6418,6 +6848,11 @@ namespace graphene { namespace net {
     item_hash_t statistics_gathering_node_delegate_wrapper::get_head_block_id() const
     {
       INVOKE_AND_COLLECT_STATISTICS(get_head_block_id);
+    }
+
+    uint32_t statistics_gathering_node_delegate_wrapper::get_last_irreversible_block_num() const
+    {
+      INVOKE_AND_COLLECT_STATISTICS(get_last_irreversible_block_num);
     }
 
     uint32_t statistics_gathering_node_delegate_wrapper::estimate_last_known_fork_from_git_revision_timestamp(uint32_t unix_timestamp) const

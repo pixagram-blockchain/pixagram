@@ -10,13 +10,20 @@ INCLUDE(hive_build_types)
 project( Hive )
 cmake_minimum_required( VERSION 3.22.1 )
 
+# Vendored subprojects (e.g. libraries/vendor/zstd) declare cmake minimums
+# below 3.5, which CMake 4 rejects outright. This is the documented escape
+# hatch for third-party code we do not patch.
+if( NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM )
+  set( CMAKE_POLICY_VERSION_MINIMUM 3.5 )
+endif()
+
 if(POLICY CMP0167)
    cmake_policy(SET CMP0167 OLD)
 endif()
 
 set( BLOCKCHAIN_NAME "Hive" )
 
-set( CMAKE_CXX_STANDARD 17 )
+set( CMAKE_CXX_STANDARD 20 )
 set( CMAKE_CXX_EXTENSIONS OFF )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
@@ -35,11 +42,17 @@ set( INSTALLER_APP_ID "68ad7005-8eee-49c9-95ce-9eed97e5b347" )
 set(CMAKE_EXPORT_COMPILE_COMMANDS "ON")
 set(CMAKE_VERBOSE_MAKEFILE "ON")
 
-# Compiler caching support (sccache preferred, ccache fallback)
+# Compiler caching support (sccache preferred, ccache fallback).
+# Disabled when cross-compiling: wrapping the buildroot aarch64 cross-gcc with sccache mishandles
+# the -MF dependency-file output (the in-tree equihash/blake2b C compile fails with
+# "opening dependency file ...o.d: No such file or directory"). The gated cross build runs
+# infrequently, so losing the cache there is acceptable. Native (x86_64) builds are unaffected.
 find_program(SCCACHE_PROGRAM sccache)
 find_program(CCACHE_PROGRAM ccache)
 
-if(SCCACHE_PROGRAM)
+if(CMAKE_CROSSCOMPILING)
+  message(STATUS "Cross-compiling: compiler caching (sccache/ccache) disabled")
+elseif(SCCACHE_PROGRAM)
   message(STATUS "Found sccache: ${SCCACHE_PROGRAM}")
   set(CMAKE_C_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
   set(CMAKE_CXX_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
@@ -169,6 +182,8 @@ endif( WIN32 )
 
 
 SET( BOOST_COMPONENTS )
+# NOTE: boost_system is header-only since 1.69; its compiled stub (and CMake
+# config) were removed in Boost 1.89, so it must not be requested as a component.
 LIST( APPEND  BOOST_COMPONENTS
       atomic
       chrono
@@ -178,7 +193,6 @@ LIST( APPEND  BOOST_COMPONENTS
       filesystem
       iostreams
       regex
-      system
       thread
       program_options
       unit_test_framework )

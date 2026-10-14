@@ -19,20 +19,20 @@
 #include <hive/chain/detail/state/decline_voting_rights_request_object.hpp>
 #include <hive/chain/detail/state/reward_fund_object.hpp>
 #include <hive/chain/detail/state/recurrent_transfer_object.hpp>
-#include <hive/chain/transaction_object.hpp>
+#include <hive/chain/detail/state/transaction_object.hpp>
 
 #include <hive/chain/util/reward.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -188,7 +188,7 @@ BOOST_AUTO_TEST_CASE( undo_delayed_votes )
     performs such check on feed history object, where allocation depends on size instead
     */
 
-    ACTOR_DEFAULT_FEE( alice )
+    ACTOR( NO_VESTING,  alice );
     generate_block();
     ISSUE_FUNDS( "alice", HIVE_asset( 100'000'000 ) );
     BOOST_REQUIRE( compare_delayed_vote_count("alice", {}) );
@@ -532,7 +532,7 @@ BOOST_AUTO_TEST_CASE( undo_generate_blocks )
   {
     BOOST_TEST_MESSAGE( "--- Testing: undo_generate_blocks" );
 
-    ACTORS( (alice)(bob)(chuck)(dan) )
+    ACTORS( HIVE_asset( 15'000 ), (alice)(bob)(chuck)(dan) ); // extra RC for comments
 
     struct _data
     {
@@ -1637,7 +1637,7 @@ BOOST_AUTO_TEST_CASE( debug_update_undo_bug )
   {
     BOOST_TEST_MESSAGE( "--- Test for undo related bug with debug_update" );
 
-    ACTOR(alice)
+    ACTOR( DEFAULT_VESTING, alice);
     generate_block();
 
     const auto& alice_account = db->get_account( "alice" );

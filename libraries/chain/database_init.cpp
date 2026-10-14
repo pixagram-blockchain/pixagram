@@ -8,12 +8,13 @@
 #include <hive/chain/evaluator_registry.hpp>
 #include <hive/chain/custom_operation_interpreter.hpp>
 #include <hive/chain/witness_schedule.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
-#include <hive/chain/global_property_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/global_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/reward_fund_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 
 #include <hive/chain/util/rd_setup.hpp>
 #include <hive/chain/util/state_checker_tools.hpp>
@@ -230,7 +231,10 @@ void database::init_genesis()
     } inhibitor(*this);
 
     // Create blockchain accounts
-    public_key_type      init_public_key(HIVE_INIT_PUBLIC_KEY);
+    public_key_type init_public_key( HIVE_INIT_PUBLIC_KEY );
+    const authority locked_auth( 1 );
+    const authority open_auth( 0 );
+
     // Pixa genesis 3-of-3 multisig authorities: each account is controlled by
     // three independent signers (no key shared between accounts) and all three signatures are required
     // (weight_threshold == 3). The memo key is a single key (not consensus)
@@ -266,87 +270,38 @@ void database::init_genesis()
     const authority       team_posting = make_3of3( "PIX6D4SVPEf1YFUhK3gfq3u53Sfmy3GhTf8NvfUn8xuvQXiEbRnaM", "PIX5w8bqbjwvfypCYje6p8T4NjptRNwqJg2e2WuDUW9eyZWRqjHFc", team_third_posting );
     const public_key_type team_memo( "PIX7EoXL9gboyYtcrA1dPR6ydVzyUySSi9qetikKVMeQkdMzhDzzi" );
 
-    create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME, rex_memo );
+    // Account creation order fixes account ids and must not change.
+    const auto& ico_account = create< account_object >( PIXA_ICO_ACCOUNT, HIVE_GENESIS_TIME, rex_memo );
+    create< account_authority_object >( ico_account, rex_owner, rex_active, rex_posting );
 
-    create< account_authority_object >( [&]( account_authority_object& auth )
-    {
-      auth.account = PIXA_ICO_ACCOUNT;
-      auth.owner = rex_owner;
-      auth.active = rex_active;
-      auth.posting = rex_posting;
-    });
+    const auto& miner_account = create< account_object >( HIVE_MINER_ACCOUNT, HIVE_GENESIS_TIME );
+    create< account_authority_object >( miner_account, locked_auth, locked_auth, locked_auth );
 
-    create< account_object >( HIVE_MINER_ACCOUNT, HIVE_GENESIS_TIME );
-    create< account_authority_object >( [&]( account_authority_object& auth )
-    {
-      auth.account = HIVE_MINER_ACCOUNT;
-      auth.owner.weight_threshold = 1;
-      auth.active.weight_threshold = 1;
-      auth.posting.weight_threshold = 1;
-    });
-
-    create< account_object >( HIVE_NULL_ACCOUNT, HIVE_GENESIS_TIME );
-    create< account_authority_object >( [&]( account_authority_object& auth )
-    {
-      auth.account = HIVE_NULL_ACCOUNT;
-      auth.owner.weight_threshold = 1;
-      auth.active.weight_threshold = 1;
-      auth.posting.weight_threshold = 1;
-    });
+    const auto& null_account = create< account_object >( HIVE_NULL_ACCOUNT, HIVE_GENESIS_TIME );
+    create< account_authority_object >( null_account, locked_auth, locked_auth, locked_auth );
 
 #if defined(IS_TEST_NET) || defined(HIVE_CONVERTER_ICEBERG_PLUGIN_ENABLED)
-    create< account_object >( OBSOLETE_TREASURY_ACCOUNT, HIVE_GENESIS_TIME );
-    create< account_authority_object >([&](account_authority_object& auth)
-    {
-      auth.account = OBSOLETE_TREASURY_ACCOUNT;
-      auth.owner.weight_threshold = 1;
-      auth.active.weight_threshold = 1;
-      auth.posting.weight_threshold = 1;
-    } );
+    const auto& old_treasury = create< account_object >( OBSOLETE_TREASURY_ACCOUNT, HIVE_GENESIS_TIME );
+    create< account_authority_object >( old_treasury, locked_auth, locked_auth, locked_auth );
 #endif
 
-    create< account_object >( NEW_HIVE_TREASURY_ACCOUNT, HIVE_GENESIS_TIME );
-    create< account_authority_object >([&](account_authority_object& auth)
-    {
-      // No keys: HF21 (which fires at block 1 on a fresh chain) calls
-      // lock_account() on the treasury and wipes any authority we'd set
-      // here. Funds leave the treasury only via DAO proposal payments.
-      auth.account = NEW_HIVE_TREASURY_ACCOUNT;
-      auth.owner.weight_threshold = 1;
-      auth.active.weight_threshold = 1;
-      auth.posting.weight_threshold = 1;
-    } );
+    // No keys: HF21 (which fires at block 1 on a fresh chain) calls
+    // lock_account() on the treasury and wipes any authority we'd set
+    // here. Funds leave the treasury only via DAO proposal payments.
+    const auto& new_treasury = create< account_object >( NEW_HIVE_TREASURY_ACCOUNT, HIVE_GENESIS_TIME );
+    create< account_authority_object >( new_treasury, locked_auth, locked_auth, locked_auth );
 
-    create< account_object >( PIXA_TEAM_ACCOUNT, HIVE_GENESIS_TIME, team_memo );
-    create< account_authority_object >([&](account_authority_object& auth)
-    {
-      auth.account = PIXA_TEAM_ACCOUNT;
-      auth.owner = team_owner;
-      auth.active = team_active;
-      auth.posting = team_posting;
-    } );
+    const auto& team_account = create< account_object >( PIXA_TEAM_ACCOUNT, HIVE_GENESIS_TIME, team_memo );
+    create< account_authority_object >( team_account, team_owner, team_active, team_posting );
 
-    create< account_object >( HIVE_TEMP_ACCOUNT, HIVE_GENESIS_TIME );
-    create< account_authority_object >( [&]( account_authority_object& auth )
-    {
-      auth.account = HIVE_TEMP_ACCOUNT;
-      auth.owner.weight_threshold = 0;
-      auth.active.weight_threshold = 0;
-      auth.posting.weight_threshold = 0;
-    });
+    const auto& temp_account = create< account_object >( HIVE_TEMP_ACCOUNT, HIVE_GENESIS_TIME );
+    create< account_authority_object >( temp_account, open_auth, open_auth, open_auth );
 
     const auto init_witness = [&]( const account_name_type& account_name )
     {
-      create< account_object >( account_name, HIVE_GENESIS_TIME, init_public_key );
-
-      create< account_authority_object >( [&]( account_authority_object& auth )
-      {
-        auth.account = account_name;
-        auth.owner.add_authority( init_public_key, 1 );
-        auth.owner.weight_threshold = 1;
-        auth.active  = auth.owner;
-        auth.posting = auth.active;
-      });
+      const auto& witness_account = create< account_object >( account_name, HIVE_GENESIS_TIME, init_public_key );
+      const authority init_auth( 1, init_public_key, 1 );
+      create< account_authority_object >( witness_account, init_auth, init_auth, init_auth );
 
       create< witness_object >( [&]( witness_object& w )
       {
@@ -376,53 +331,21 @@ void database::init_genesis()
     // keys and its authority is unsatisfiable so nobody can ever sign as it.
     {
       const char* STEEM_ACCOUNT_NAME = "steem";
-      create< account_object >( STEEM_ACCOUNT_NAME, public_key_type(), HIVE_GENESIS_TIME, HIVE_GENESIS_TIME, true, nullptr, true, VEST_asset( 0 ) );
-      create< account_authority_object >( [&]( account_authority_object& auth )
-      {
-        auth.account = STEEM_ACCOUNT_NAME;
-        auth.owner.weight_threshold = 1;
-        auth.active.weight_threshold = 1;
-        auth.posting.weight_threshold = 1;
-      } );
+      const auto& steem_account = create< account_object >( STEEM_ACCOUNT_NAME, public_key_type(), HIVE_GENESIS_TIME, HIVE_GENESIS_TIME, true, nullptr, true, VEST_asset( 0 ) );
+      create< account_authority_object >( steem_account, locked_auth, locked_auth, locked_auth );
     }
 
     const auto& dgpo = create< dynamic_global_property_object >( HIVE_INIT_MINER_NAME );
-    const VEST_asset ico_vests( asset( 75000000000000ll, VESTS_SYMBOL ) );    // 75 M PP for pixa.rex (sales)
-    const VEST_asset team_vests( asset( 25000000000000ll, VESTS_SYMBOL ) );   // 25 M PP for pixa.team
-    const HBD_asset  omnibus_hbd( asset( 245098039ll, HBD_SYMBOL ) );         // ~245 098 PXS = 25 M PIXA-equivalent of 25 M VESTS (1:1 vesting price) at genesis median 1 PXS = 102 PIXA
-    const HIVE_asset ico_fund = ico_vests * HIVE_INITIAL_VESTING_PRICE;
-    const HIVE_asset team_fund = team_vests * HIVE_INITIAL_VESTING_PRICE;
-
-    modify( get_account( PIXA_ICO_ACCOUNT ), [&]( account_object& a )
-    {
-      a.vesting_shares = ico_vests;
-    } );
-
-    modify( get_account( NEW_HIVE_TREASURY_ACCOUNT ), [&]( account_object& a )
-    {
-      // Treasury holds liquid PXS only - VESTS would be locked unspendable
-      // by HF21's lock_account, and the proposal payout pipeline draws
-      // exclusively from hbd_balance.
-      a.hbd_balance = omnibus_hbd;
-    } );
-
-    modify( get_account( PIXA_TEAM_ACCOUNT ), [&]( account_object& a )
-    {
-      a.vesting_shares = team_vests;
-    } );
-
-    modify( dgpo, [&]( dynamic_global_property_object& gpo )
-    {
-      gpo.total_vesting_shares += ico_vests + team_vests;
-      gpo.total_vesting_fund_hive += ico_fund + team_fund;
-      gpo.current_supply += ico_fund + team_fund;
-      gpo.current_hbd_supply += omnibus_hbd;
-    } );
+    temp_HIVE_balance initial_reward_balance;
+    const auto& rf = create< reward_fund_object >( HIVE_POST_REWARD_FUND_NAME, std::move( initial_reward_balance ), HIVE_GENESIS_TIME );
+    // As a shortcut in payout processing, we use the id as an array index.
+    // The IDs must be assigned this way. The assertion is a dummy check to ensure this happens.
+    FC_ASSERT( rf.get_id() == reward_fund_id_type() );
 
     // Seed feed history BEFORE update_virtual_supply (which reads it via
     // get_feed_history to convert PXS -> PIXA-equivalent for virtual_supply).
 #if defined(IS_TEST_NET) || defined(HIVE_CONVERTER_ICEBERG_PLUGIN_ENABLED)
-    create< feed_history_object >( [&]( feed_history_object& o )
+    const auto& feed_history = create< feed_history_object >( [&]( feed_history_object& o )
     {
       o.current_median_history = HBD_price( 1, 1 );
       o.market_median_history = o.current_median_history;
@@ -432,7 +355,7 @@ void database::init_genesis()
 #else
     // Mainnet seed: 1 PXS = 102 PIXA so PXS-denominated allocations have a
     // PIXA-equivalent for conversions before witnesses publish their feeds.
-    create< feed_history_object >( [&]( feed_history_object& o )
+    const auto& feed_history = create< feed_history_object >( [&]( feed_history_object& o )
     {
       o.current_median_history = HBD_price( 1000, 102000 );
       o.market_median_history = o.current_median_history;
@@ -445,6 +368,57 @@ void database::init_genesis()
     // reads it via get_hardfork_property_object).
     create< hardfork_property_object >( HIVE_GENESIS_TIME );
 
+    // Pixagram genesis allocations. The VESTS are issued at their stated amounts and backed by the
+    // PIXA they are worth at HIVE_INITIAL_VESTING_PRICE, rather than converted from PIXA, so the
+    // amounts cannot shift by a rounding unit.
+    const VEST_asset ico_vests( asset( 75000000000000ll, VESTS_SYMBOL ) );    // 75 M PP for pixa.rex (sales)
+    const VEST_asset team_vests( asset( 25000000000000ll, VESTS_SYMBOL ) );   // 25 M PP for pixa.team
+    const HBD_asset  omnibus_hbd( asset( 245098039ll, HBD_SYMBOL ) );         // ~245 098 PXS = 25 M PIXA-equivalent of 25 M VESTS (1:1 vesting price) at genesis median 1 PXS = 102 PIXA
+    const HIVE_asset ico_fund = ico_vests * HIVE_INITIAL_VESTING_PRICE;
+    const HIVE_asset team_fund = team_vests * HIVE_INITIAL_VESTING_PRICE;
+
+#ifdef IS_TEST_NET
+    // Unit-test builds skip the funding unless a test asks for it: 100M VESTS would dwarf the stake
+    // of every test account, and resource credit prices scale with total VESTS, so the upstream
+    // test suite could not afford a single transaction. Mainnet and mirrornet always fund.
+    const bool fund_genesis_accounts = configuration_data.get_pixa_genesis_allocations();
+#else
+    const bool fund_genesis_accounts = true;
+#endif
+    if( fund_genesis_accounts )
+    {
+      temp_VEST_balance ico_vest_balance;
+      temp_VEST_balance team_vest_balance;
+      temp_HBD_balance omnibus_hbd_balance;
+      modify( dgpo, [&]( dynamic_global_property_object& gpo )
+      {
+        ico_vest_balance = gpo.issue_VESTS( ico_vests );
+        team_vest_balance = gpo.issue_VESTS( team_vests );
+        temp_HIVE_balance vesting_fund = gpo.issue_HIVE( ico_fund + team_fund );
+        gpo.access_total_vesting_fund_hive().transfer_from( vesting_fund );
+        // virtual_supply is recomputed by update_virtual_supply() below
+        omnibus_hbd_balance = gpo.issue_HBD( omnibus_hbd, feed_history.current_median_history );
+      } );
+
+      modify( ico_account, [&]( account_object& a )
+      {
+        a.access_vesting().transfer_from( ico_vest_balance );
+      } );
+
+      modify( new_treasury, [&]( account_object& a )
+      {
+        // Treasury holds liquid PXS only - VESTS would be locked unspendable
+        // by HF21's lock_account, and the proposal payout pipeline draws
+        // exclusively from hbd_balance.
+        a.access_hbd_balance().transfer_from( omnibus_hbd_balance );
+      } );
+
+      modify( team_account, [&]( account_object& a )
+      {
+        a.access_vesting().transfer_from( team_vest_balance );
+      } );
+    }
+
     // Recompute virtual_supply now that current_supply (PIXA) and
     // current_hbd_supply (PXS) have been seeded; uses the genesis median feed.
     update_virtual_supply();
@@ -454,22 +428,24 @@ void database::init_genesis()
     if( HIVE_INIT_SUPPLY != 0 || HIVE_HBD_INIT_SUPPLY != 0 )
     {
       HIVE_asset to_vest( HIVE_INITIAL_VESTING );
-      VEST_asset initial_vests( to_vest * HIVE_INITIAL_VESTING_PRICE );
 
-      modify( get_account( HIVE_INIT_MINER_NAME ), [&]( account_object& a )
-      {
-        a.balance = HIVE_asset( HIVE_INIT_SUPPLY ) - to_vest;
-        a.hbd_balance = HBD_asset( HIVE_HBD_INIT_SUPPLY );
-        a.vesting_shares = initial_vests;
-        FC_ASSERT( a.balance.amount >= 0 && a.hbd_balance.amount >= 0 && a.vesting_shares.amount >= 0, "Invalid testnet configuration" );
-      } );
+      temp_HIVE_balance init_hive_balance;
+      temp_HBD_balance init_hbd_balance;
+      temp_VEST_balance init_vest_balance;
       modify( dgpo, [&]( dynamic_global_property_object& gpo )
       {
-        gpo.current_supply += HIVE_asset( HIVE_INIT_SUPPLY );
-        gpo.current_hbd_supply += HBD_asset( HIVE_HBD_INIT_SUPPLY );
-        gpo.init_hbd_supply = HBD_asset( HIVE_HBD_INIT_SUPPLY );
-        gpo.total_vesting_fund_hive += to_vest;
-        gpo.total_vesting_shares += initial_vests;
+        init_hive_balance = gpo.issue_HIVE( HIVE_asset( HIVE_INIT_SUPPLY ) );
+        init_hbd_balance = gpo.issue_HBD( HBD_asset( HIVE_HBD_INIT_SUPPLY ), feed_history.current_median_history );
+        gpo.access_initial_hbd_supply() = HBD_asset( HIVE_HBD_INIT_SUPPLY );
+        temp_HIVE_balance to_be_vested;
+        to_be_vested.transfer_from( init_hive_balance, to_vest );
+        init_vest_balance = gpo.convert_HIVE_to_VESTS( to_be_vested, HIVE_INITIAL_VESTING_PRICE );
+      } );
+      modify( get_account( HIVE_INIT_MINER_NAME ), [&]( account_object& a )
+      {
+        a.access_hive_balance().transfer_from( init_hive_balance );
+        a.access_hbd_balance().transfer_from( init_hbd_balance );
+        a.access_vesting().transfer_from( init_vest_balance );
       } );
       update_virtual_supply();
     }
@@ -514,9 +490,15 @@ void database::init_genesis()
   FC_CAPTURE_AND_RETHROW()
 }
 
+void database::set_live_flush_interval( uint32_t flush_blocks )
+{
+  _live_flush_blocks = flush_blocks;
+}
+
 void database::set_flush_interval( uint32_t flush_blocks )
 {
   _flush_blocks = flush_blocks;
+  // 0 means "nothing scheduled" - the next applied block flushes and schedules from itself.
   _next_flush_block = 0;
 }
 

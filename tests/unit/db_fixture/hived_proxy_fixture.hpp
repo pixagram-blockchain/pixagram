@@ -109,59 +109,50 @@ public:
     return fixture->get_current_time_iso_string();
   }
 
-  const account_object& account_create(
+  void account_create(
     const fc::string& name,
     const fc::string& creator,
     const private_key_type& creator_key,
-    const share_type& fee,
+    const HIVE_asset& initial_vesting,
     const public_key_type& key,
     const public_key_type& post_key,
     const fc::string& json_metadata
   )
   {
     FC_ASSERT(fixture);
-    return fixture->account_create(name, creator, creator_key, fee, key, post_key, json_metadata);
+    fixture->account_create(name, creator, creator_key, initial_vesting, key, post_key, json_metadata);
   }
 
-  const account_object& account_create(
+  void account_create(
     const fc::string& name,
     const public_key_type& key,
-    const public_key_type& post_key
+    const public_key_type& post_key,
+    const HIVE_asset& initial_vesting
   )
   {
     FC_ASSERT(fixture);
-    return fixture->account_create(name, key, post_key);
+    fixture->account_create(name, key, post_key, initial_vesting);
   }
 
-  const account_object& account_create_default_fee(
-    const fc::string& name,
-    const public_key_type& key,
-    const public_key_type& post_key
-  )
-  {
-    FC_ASSERT(fixture);
-    return fixture->account_create_default_fee(name, key, post_key);
-  }
-
-  const account_object& account_create(
+  void account_create(
     const fc::string& name,
     const public_key_type& key
   )
   {
     FC_ASSERT(fixture);
-    return fixture->account_create(name, key);
+    fixture->account_create(name, key);
   }
 
-  const witness_object& witness_create(
+  void witness_create(
     const fc::string& owner,
     const private_key_type& owner_key,
     const fc::string& url,
     const public_key_type& signing_key,
-    const share_type& fee
+    const HIVE_asset& fee
   )
   {
     FC_ASSERT(fixture);
-    return fixture->witness_create(owner, owner_key, url, signing_key, fee);
+    fixture->witness_create(owner, owner_key, url, signing_key, fee);
   }
 
   void account_update( const fc::string& account, const fc::ecc::public_key& memo_key, const fc::string& metadata,
@@ -179,10 +170,10 @@ public:
     return fixture->account_update2(account, owner, active, posting, memo_key, metadata, posting_metadata, key);
   }
 
-  void push_transaction( const operation& op, const fc::ecc::private_key& key )
+  full_transaction_ptr push_transaction( const operation& op, const fc::ecc::private_key& key )
   {
     FC_ASSERT(fixture);
-    return fixture->push_transaction(op, key);
+    return fixture->push_transaction( op, key );
   }
   full_transaction_ptr push_transaction( const signed_transaction& tx, const fc::ecc::private_key& key = fc::ecc::private_key() )
   {

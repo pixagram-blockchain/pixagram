@@ -3,17 +3,17 @@
 #include <boost/test/unit_test.hpp>
 
 #include <hive/chain/util/owner_update_limit_mgr.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -69,18 +69,10 @@ BOOST_AUTO_TEST_CASE( update_operation )
 
       BOOST_REQUIRE_EQUAL( (bool)executor, true );
 
-      ACTORS_EXT( (*executor), (alice) );
+      ACTORS_EXT( (*executor), HIVE_asset( 50'000 ), (alice) ); // extra RC for account creation
       executor->fund( "alice", HIVE_asset( 1'000'000 ) );
       executor->generate_block();
-
-      executor->db_plugin->debug_update( [=]( database& db )
-      {
-        db.modify( db.get_witness_schedule_object(), [&]( witness_schedule_object& wso )
-        {
-          wso.median_props.account_creation_fee = HIVE_asset( 100 );
-        });
-      });
-
+      executor->set_account_creation_fee( HIVE_asset( 100 ) );
       executor->generate_block();
 
       BOOST_TEST_MESSAGE( "Creating account bob with alice" );
@@ -291,7 +283,7 @@ BOOST_AUTO_TEST_CASE( pack_transaction_basic )
       BOOST_TEST_MESSAGE( "Testing: transaction's pack before and after HF26" );
       BOOST_REQUIRE_EQUAL( (bool)executor, true );
 
-      ACTORS_EXT( (*executor), (alice)(bob) );
+      ACTORS_EXT( (*executor), HIVE_asset( 15'000 ), (alice)(bob) ); // extra RC for various operations
       executor->fund( "alice", HIVE_asset( 1'000'000 ) );
       executor->fund( "bob", HIVE_asset( 1'000'000 ) );
       executor->generate_block();

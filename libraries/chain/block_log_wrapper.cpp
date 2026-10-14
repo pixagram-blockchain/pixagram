@@ -2,6 +2,7 @@
 
 #include <hive/chain/block_log.hpp>
 #include <hive/chain/database.hpp>
+#include <hive/chain/database_exceptions.hpp>
 #include <hive/chain/split_block_log.hpp>
 //#include <regex>
 
@@ -111,12 +112,9 @@ void block_log_wrapper::close_storage()
   // Simply close remaining logs
   for( auto it = _logs.begin(); it != _logs.end(); ++it )
   {
-    block_log_ptr_t& log_ref = *it;
-    if( log_ref )
-    {
-      log_ref->close();
-      log_ref.reset();
-    }
+    block_log_ptr_t removed_log = it->ptr.exchange( block_log_ptr_t() );
+    if( removed_log )
+      removed_log->close();
   }
 }
 
@@ -159,7 +157,7 @@ void block_log_wrapper::skip_first_parts( uint32_t parts_to_skip )
 
 std::shared_ptr< block_log > block_log_wrapper::get_head_log() const
 {
-  return std::atomic_load( &( _logs.back() ) );
+  return _logs.back().ptr.load();
 }
 
 std::tuple<std::unique_ptr<char[]>, size_t, block_attributes_t> block_log_wrapper::read_raw_head_block() const
@@ -387,9 +385,10 @@ std::vector<block_id_type> block_log_wrapper::get_blockchain_synopsis(
         wlog("Unable to generate a usable synopsis because the peer we're generating it for forked too long ago "
              "(our chains diverge before block #${reference_point_block_num}",
              (reference_point_block_num));
-        // TODO: get the right type of exception here
-        //FC_THROW_EXCEPTION(graphene::net::block_older_than_undo_history, "Peer is on a fork I'm unable to switch to");
-        FC_THROW("Peer is on a fork I'm unable to switch to");
+        // throw the typed internal exception so the p2p plugin can translate it for the network
+        // layer, which knows how to disconnect this peer with a meaningful reason.  A generic
+        // exception here escapes the network layer's handling entirely.
+        FC_THROW_EXCEPTION(internal_peer_is_on_an_unreachable_fork, "Peer is on a fork I'm unable to switch to");
       }
     }
     else
@@ -427,7 +426,7 @@ const block_log_wrapper::block_log_ptr_t block_log_wrapper::get_block_log_corres
   if( request_part_number > _logs.size() )
     return block_log_ptr_t();
 
-  return std::atomic_load( &(_logs[ request_part_number-1 ]) );
+  return _logs[ request_part_number-1 ].ptr.load();
 }
 
 block_log_wrapper::full_block_range_t block_log_wrapper::read_block_range_by_num(
@@ -738,7 +737,7 @@ void block_log_wrapper::common_open_and_init( bool read_only, bool allow_artifac
     bool open_ro = part_number < head_part_number ? true : read_only;
     internal_open_and_init( nth_part_log, cit->part_file, open_ro, allow_artifacts_regeneration );
     // Part numbers are always positive.
-    std::atomic_store( &( _logs[ part_number-1 ] ), nth_part_log );
+    _logs[ part_number-1 ].ptr.store( nth_part_log );
     if( last_block_id != block_id_type() )
     {
       // Verify that part's tail block links with previous part's head block.
@@ -834,8 +833,8 @@ void block_log_wrapper::internal_append( uint32_t first_block_num, size_t block_
         block_part_number -1 > (unsigned int)_block_log_split )
       {
         uint32_t removed_part_number = block_part_number -1 -(unsigned int)_block_log_split; // is > 0
-        block_log_ptr_t& log_ref = _logs[ removed_part_number -1 ];
-        block_log_ptr_t removed_log = std::atomic_exchange( &log_ref, block_log_ptr_t() );
+        atomic_block_log_ptr_t& log_ref = _logs[ removed_part_number -1 ];
+        block_log_ptr_t removed_log = log_ref.ptr.exchange( block_log_ptr_t() );
         // Set log to be closed, destroyed & have its files wiped when it's safe to do so.
         _garbage_collection.push_back( removed_log );
         // Try garbage collection.
@@ -853,14 +852,14 @@ uint32_t block_log_wrapper::get_actual_tail_block_num() const
   //FC_ASSERT( get_head_log(), "Using unopened block log?" );
   size_t log_number = _logs.size();
   FC_ASSERT( log_number > 0 && "get_actual_tail_block_num", "Uninitialized block_log_wrapper object?" );
-  FC_ASSERT( std::atomic_load( &(_logs[log_number -1]) ), "Head log not initialized?" );
+  FC_ASSERT( _logs[log_number -1].ptr.load(), "Head log not initialized?" );
 
   uint32_t block_num = 0;
   do
   {
     block_num = 1 + (log_number-1) * BLOCKS_IN_SPLIT_BLOCK_LOG_FILE;
     --log_number;
-  } while ( log_number > 0 && std::atomic_load( &(_logs[log_number -1]) ) );
+  } while ( log_number > 0 && _logs[log_number -1].ptr.load() );
 
   return block_num;
 

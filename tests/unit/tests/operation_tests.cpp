@@ -23,12 +23,12 @@
 #include <hive/chain/detail/state/recurrent_transfer_object.hpp>
 
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -44,9 +44,9 @@
 
 #include <hive/chain/util/reward.hpp>
 
-#include <hive/chain/rc/rc_objects.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/rc/rc_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 
@@ -170,8 +170,8 @@ BOOST_AUTO_TEST_CASE( account_create_apply )
     const account_authority_object& acct_auth = db->get< account_authority_object, by_account >( "alice" );
 
     BOOST_REQUIRE_EQUAL( acct.get_name(), "alice" );
-    BOOST_REQUIRE( acct_auth.owner == authority( 1, priv_key.get_public_key(), 1 ) );
-    BOOST_REQUIRE( acct_auth.active == authority( 2, priv_key.get_public_key(), 2 ) );
+    BOOST_REQUIRE( acct_auth.get_owner() == authority( 1, priv_key.get_public_key(), 1 ) );
+    BOOST_REQUIRE( acct_auth.get_active() == authority( 2, priv_key.get_public_key(), 2 ) );
     BOOST_REQUIRE( acct.memo_key == priv_key.get_public_key() );
     CHECK_NO_PROXY( acct );
     BOOST_REQUIRE_EQUAL( acct.get_creation_time(), db->head_block_time() );
@@ -190,8 +190,8 @@ BOOST_AUTO_TEST_CASE( account_create_apply )
     HIVE_REQUIRE_ASSERT( push_transaction( tx, init_account_priv_key ), "db.find_account( name ) == nullptr" );
 
     BOOST_REQUIRE_EQUAL( acct.get_name(), "alice" );
-    BOOST_REQUIRE( acct_auth.owner == authority( 1, priv_key.get_public_key(), 1 ) );
-    BOOST_REQUIRE( acct_auth.active == authority( 2, priv_key.get_public_key(), 2 ) );
+    BOOST_REQUIRE( acct_auth.get_owner() == authority( 1, priv_key.get_public_key(), 1 ) );
+    BOOST_REQUIRE( acct_auth.get_active() == authority( 2, priv_key.get_public_key(), 2 ) );
     BOOST_REQUIRE( acct.memo_key == priv_key.get_public_key() );
     CHECK_NO_PROXY( acct );
     BOOST_REQUIRE_EQUAL( acct.get_creation_time(), db->head_block_time() );
@@ -229,7 +229,7 @@ BOOST_AUTO_TEST_CASE( account_create_apply )
     validate_database();
 
     issue_funds( HIVE_TEMP_ACCOUNT, HIVE_asset( 10'000 ) );
-    vest( HIVE_TEMP_ACCOUNT, HIVE_asset( 10'000 ) );
+    vest( HIVE_TEMP_ACCOUNT, HIVE_asset( 30'000 ) ); // extra RC for account creation
 
     BOOST_TEST_MESSAGE( "--- Test account creation with temp account does not set recovery account" );
     op.creator = HIVE_TEMP_ACCOUNT;
@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE( account_update_validate )
 
     BOOST_TEST_MESSAGE( "Testing: account_update_validate" );
 
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
 
     account_update_operation op;
     op.account = "alice";
@@ -287,14 +287,14 @@ BOOST_AUTO_TEST_CASE( account_update_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: account_update_authorities" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     private_key_type active_key = generate_private_key( "new_key" );
 
     db_plugin->debug_update( [&]( database& db )
     {
       db.modify( db.get< account_authority_object, by_account >( "alice" ), [&]( account_authority_object& a )
       {
-        a.active = authority( 1, active_key.get_public_key(), 1 );
+        a.set_active( authority( 1, active_key.get_public_key(), 1 ) );
       } );
     } );
 
@@ -346,7 +346,7 @@ BOOST_AUTO_TEST_CASE( account_update_authorities )
     BOOST_TEST_MESSAGE( "--- Up to HF28 it was a test failure when owner key and active key are present. Now the transaction passes." );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION - 3*HIVE_BLOCK_INTERVAL );
     HIVE_REQUIRE_ASSERT( push_transaction( tx, {active_key, alice_private_key} ),
-      "util::owner_update_limit_mgr::check( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ), _db.head_block_time(), account_auth.previous_owner_update, account_auth.last_owner_update ) && \"update\"" );
+      "util::owner_update_limit_mgr::check( _db.has_hardfork( HIVE_HARDFORK_1_26_AUTH_UPDATE ), _db.head_block_time(), account_auth.get_previous_owner_update(), account_auth.get_last_owner_update() ) && \"update\"" );
 
     validate_database();
   }
@@ -359,7 +359,7 @@ BOOST_AUTO_TEST_CASE( account_update_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: account_update_apply" );
 
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     private_key_type new_private_key = generate_private_key( "new_key" );
 
     BOOST_TEST_MESSAGE( "--- Test normal update" );
@@ -380,8 +380,8 @@ BOOST_AUTO_TEST_CASE( account_update_apply )
     const account_authority_object& acct_auth = db->get< account_authority_object, by_account >( "alice" );
 
     BOOST_REQUIRE_EQUAL( acct.get_name(), "alice" );
-    BOOST_REQUIRE( acct_auth.owner == authority( 1, new_private_key.get_public_key(), 1 ) );
-    BOOST_REQUIRE( acct_auth.active == authority( 2, new_private_key.get_public_key(), 2 ) );
+    BOOST_REQUIRE( acct_auth.get_owner() == authority( 1, new_private_key.get_public_key(), 1 ) );
+    BOOST_REQUIRE( acct_auth.get_active() == authority( 2, new_private_key.get_public_key(), 2 ) );
     BOOST_REQUIRE( acct.memo_key == new_private_key.get_public_key() );
 
     validate_database();
@@ -390,7 +390,7 @@ BOOST_AUTO_TEST_CASE( account_update_apply )
     tx.operations.clear();
     op.account = "bob";
     tx.operations.push_back( op );
-    HIVE_REQUIRE_THROW( push_transaction( tx, new_private_key ), fc::exception )
+    HIVE_REQUIRE_THROW( push_transaction( tx, new_private_key ), fc::exception );
     validate_database();
 
 
@@ -426,7 +426,7 @@ BOOST_AUTO_TEST_CASE( comment_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: comment_authorities" );
 
-    ACTORS( (alice)(bob) );
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_blocks( 60 / HIVE_BLOCK_INTERVAL );
 
     comment_operation op;
@@ -470,7 +470,8 @@ BOOST_AUTO_TEST_CASE( comment_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: comment_apply" );
 
-    ACTORS( (alice)(bob)(sam) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam) );
+    vest( "sam", HIVE_asset( 15'000 ) ); // extra RC for various operations
     generate_blocks( 60 / HIVE_BLOCK_INTERVAL );
 
     comment_operation op;
@@ -580,9 +581,9 @@ BOOST_AUTO_TEST_CASE( comment_apply )
         com.accumulate_vote_rshares( -com.get_net_rshares() + 10, 0 ); //com.net_rshares = 10;
       } );
 
-      db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& o )
+      db.modify( db.get_reward_fund(), [&]( reward_fund_object& rfo )
       {
-        o.total_reward_shares2 = hive::chain::util::evaluate_reward_curve( 10 );
+        rfo.access_recent_claims() = hive::chain::util::evaluate_reward_curve( 10 );
       } );
     } );
 
@@ -644,7 +645,7 @@ BOOST_AUTO_TEST_CASE( comment_delete_apply )
   try
   {
     BOOST_TEST_MESSAGE( "Testing: comment_delete_apply" );
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     generate_block();
 
     vest( "alice", HIVE_asset( 1'000'000 ) );
@@ -767,7 +768,7 @@ BOOST_AUTO_TEST_CASE( vote_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: vote_apply" );
 
-    ACTORS( (alice)(bob)(sam)(dave) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(dave) );
     generate_block();
 
     vest( "alice", HIVE_asset( 10'000 ) );
@@ -807,7 +808,7 @@ BOOST_AUTO_TEST_CASE( vote_apply )
     vote( "alice", "foo", "alice", HIVE_100_PERCENT, alice_post_key );
 
     auto itr = vote_idx.find( boost::make_tuple( alice_comment->get_id(), alice_id ) );
-    int64_t max_vote_denom = ( db->get_dynamic_global_properties().vote_power_reserve_rate * HIVE_VOTING_MANA_REGENERATION_SECONDS ) / (60*60*24);
+    int64_t max_vote_denom = ( db->get_dynamic_global_properties().get_vote_power_reserve_rate() * HIVE_VOTING_MANA_REGENERATION_SECONDS ) / (60*60*24);
 
     BOOST_REQUIRE_EQUAL( _alice.last_vote_time, db->head_block_time() );
     BOOST_REQUIRE_EQUAL( alice_comment_cashout->get_net_rshares(), ( old_mana - _alice.voting_manabar.current_mana ) - HIVE_VOTE_DUST_THRESHOLD );
@@ -972,7 +973,7 @@ BOOST_AUTO_TEST_CASE( vote_apply )
     old_manabar.regenerate_mana( params, db->head_block_time() );
     old_downvote_manabar.regenerate_mana( params, db->head_block_time() );
     alice_weight = params.max_mana * 60 * 60 * 24;
-    max_vote_denom = db->get_dynamic_global_properties().vote_power_reserve_rate * HIVE_VOTING_MANA_REGENERATION_SECONDS;
+    max_vote_denom = db->get_dynamic_global_properties().get_vote_power_reserve_rate() * HIVE_VOTING_MANA_REGENERATION_SECONDS;
     alice_weight = ( alice_weight + max_vote_denom - 1 ) / max_vote_denom;
 
     old_net_rshares = bob_comment_cashout->get_net_rshares();
@@ -1022,7 +1023,7 @@ BOOST_AUTO_TEST_CASE( vote_weights )
     // - [early_voting_seconds+mid_voting_seconds .. cashout-HIVE_UPVOTE_LOCKOUT_SECONDS)
     // - [cashout-HIVE_UPVOTE_LOCKOUT_SECONDS .. cashout)
 
-    ACTORS(
+    ACTORS( DEFAULT_VESTING,
       ( author0 ) ( voter0 ) ( author1 ) ( voter1 ) ( author2 ) ( voter2 ) ( author3 ) ( voter3 ) //pattern upvoters
       ( author4 ) ( voter4 ) ( author5 ) ( voter5 ) ( author6 ) ( voter6 ) ( author7 ) ( voter7 ) //pattern downvoters
       ( author01 ) ( voter01 ) ( author11 ) ( voter11 ) ( author21 ) ( voter21 ) ( author31 ) ( voter31 ) //upvote from small to pattern
@@ -1033,7 +1034,7 @@ BOOST_AUTO_TEST_CASE( vote_weights )
       ( author43 ) ( voter43 ) ( author53 ) ( voter53 ) ( author63 ) ( voter63 ) ( author73 ) ( voter73 ) //downvote from big upvote to pattern
       ( author04 ) ( voter04 ) ( author14 ) ( voter14 ) ( author24 ) ( voter24 ) ( author34 ) ( voter34 ) //upvote from big downvote to zero
       ( author44 ) ( voter44 ) ( author54 ) ( voter54 ) ( author64 ) ( voter64 ) ( author74 ) ( voter74 ) //downvote from big upvote to zero
-    )
+    );
     generate_block();
 
     // values must be small enough so mana has time to regenerate after initial vote before first edit
@@ -1136,7 +1137,7 @@ BOOST_AUTO_TEST_CASE( vote_weights )
     }
 
     //votes in early window
-    generate_blocks( creation_time + fc::seconds( dgpo.early_voting_seconds - 6 ), false );
+    generate_blocks( creation_time + fc::seconds( dgpo.get_early_voting_seconds() - 6 ), false );
     vote_op.weight = PAT_UPVOTE_PERCENT; //pattern vote and vote edits into pattern upvote
     for( auto i : { 0,8,16,24 } )
       VOTE( i );
@@ -1150,7 +1151,7 @@ BOOST_AUTO_TEST_CASE( vote_weights )
     generate_block();
 
     //votes in mid window
-    generate_blocks( creation_time + fc::seconds( dgpo.early_voting_seconds + dgpo.mid_voting_seconds / 2 ), false );
+    generate_blocks( creation_time + fc::seconds( dgpo.get_early_voting_seconds() + dgpo.get_mid_voting_seconds() / 2 ), false );
     vote_op.weight = PAT_UPVOTE_PERCENT; //pattern vote and edits into pattern upvote
     for( auto i : { 1,9,17,25 } )
       VOTE( i );
@@ -1300,7 +1301,7 @@ BOOST_AUTO_TEST_CASE( transfer_authorities )
 {
   try
   {
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     fund( "alice", HIVE_asset( 10'000 ) );
 
     BOOST_TEST_MESSAGE( "Testing: transfer_authorities" );
@@ -1339,7 +1340,7 @@ BOOST_AUTO_TEST_CASE( pixa_ico_liquid_transfer_rejected_even_with_multisig )
 {
   try
   {
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
 
     const auto pixa_multisig_key1 = generate_private_key( "pixa-multisig-key-1" );
     const auto pixa_multisig_key2 = generate_private_key( "pixa-multisig-key-2" );
@@ -1369,7 +1370,7 @@ BOOST_AUTO_TEST_CASE( signature_stripping )
     // Legitimate tx signed by (Alice, Bob) goes through.
     // Sam shouldn't be able to add or remove signatures to get the transaction to process multiple times.
 
-    ACTORS( (alice)(bob)(sam)(corp) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(corp) );
     fund( "corp", HIVE_asset( 10'000 ) );
 
     account_update_operation update_op;
@@ -1425,7 +1426,7 @@ BOOST_AUTO_TEST_CASE( transfer_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: transfer_apply" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
     fund( "alice", HIVE_asset( 10'000 ) );
     issue_funds( "bob", HBD_asset( 1'000 ) );
@@ -1532,7 +1533,7 @@ BOOST_AUTO_TEST_CASE( transfer_to_vesting_authorities )
 {
   try
   {
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     fund( "alice", HIVE_asset( 10'000 ) );
 
     BOOST_TEST_MESSAGE( "Testing: transfer_to_vesting_authorities" );
@@ -1573,7 +1574,10 @@ BOOST_AUTO_TEST_CASE( transfer_to_vesting_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: transfer_to_vesting_apply" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
+    generate_block();
+    const auto& alice = db->get_account( "alice" );
+    const auto& bob = db->get_account( "bob" );
     fund( "alice", HIVE_asset( 10'000 ) );
 
     const auto& gpo = db->get_dynamic_global_properties();
@@ -1662,7 +1666,7 @@ BOOST_AUTO_TEST_CASE( withdraw_vesting_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: withdraw_vesting_authorities" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     vest( "alice", HIVE_asset( 10'000 ) );
 
     withdraw_vesting_operation op;
@@ -1701,7 +1705,7 @@ BOOST_AUTO_TEST_CASE( withdraw_vesting_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: withdraw_vesting_apply" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
     vest( "alice", HIVE_asset( 10'000 ) );
 
@@ -1793,13 +1797,15 @@ BOOST_AUTO_TEST_CASE( withdraw_vesting_apply )
       db.modify( wso, [&]( witness_schedule_object& w )
       {
         w.median_props.account_creation_fee = HIVE_asset( 10'000 );
-      });
+      } );
 
       db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        gpo.current_supply += wso.median_props.account_creation_fee - HIVE_asset( 1 ) - gpo.get_total_vesting_fund_hive();
-        gpo.total_vesting_fund_hive = wso.median_props.account_creation_fee - HIVE_asset( 1 );
-      });
+        temp_HIVE_balance hive_to_burn;
+        gpo.access_total_vesting_fund_hive().transfer_to( hive_to_burn,
+          gpo.get_total_vesting_fund_hive() - wso.median_props.account_creation_fee + HIVE_asset( 1 ) );
+        gpo.burn_HIVE( hive_to_burn );
+      } );
 
       db.update_virtual_supply();
     } );
@@ -1856,7 +1862,7 @@ BOOST_AUTO_TEST_CASE( witness_update_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: witness_update_authorities" );
 
-    ACTORS( (alice)(bob) );
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     fund( "alice", HIVE_asset( 10'000 ) );
 
     private_key_type signing_key = generate_private_key( "new_key" );
@@ -1900,7 +1906,7 @@ BOOST_AUTO_TEST_CASE( witness_update_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: witness_update_apply" );
 
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     fund( "alice", HIVE_asset( 10'000 ) );
 
     private_key_type signing_key = generate_private_key( "new_key" );
@@ -1937,7 +1943,7 @@ BOOST_AUTO_TEST_CASE( witness_update_apply )
     BOOST_REQUIRE( alice_witness.virtual_last_update == 0 );
     BOOST_REQUIRE( alice_witness.virtual_position == 0 );
     BOOST_REQUIRE( alice_witness.virtual_scheduled_time == fc::uint128_max_value() );
-    BOOST_REQUIRE_EQUAL( alice.get_hive_balance(), HIVE_asset( 10'000 ) ); // No fee
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), HIVE_asset( 10'000 ) ); // No fee
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test failure when witness_update sets non-zero hbd_interest_rate" );
@@ -1976,7 +1982,7 @@ BOOST_AUTO_TEST_CASE( witness_update_apply )
     BOOST_REQUIRE( alice_witness.virtual_last_update == 0 );
     BOOST_REQUIRE( alice_witness.virtual_position == 0 );
     BOOST_REQUIRE( alice_witness.virtual_scheduled_time == fc::uint128_max_value() );
-    BOOST_REQUIRE_EQUAL( alice.get_hive_balance(), HIVE_asset( 10'000 ) );
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), HIVE_asset( 10'000 ) );
     validate_database();
 
     BOOST_TEST_MESSAGE( "--- Test failure when upgrading a non-existent account" );
@@ -2007,11 +2013,11 @@ BOOST_AUTO_TEST_CASE( account_witness_vote_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: account_witness_vote_authorities" );
 
-    ACTORS( (alice)(bob)(sam) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam) );
 
     fund( "alice", HIVE_asset( 1'000 ) );
     private_key_type alice_witness_key = generate_private_key( "alice_witness" );
-    witness_create( "alice", alice_private_key, "foo.bar", alice_witness_key.get_public_key(), 1000 );
+    witness_create( "alice", alice_private_key, "foo.bar", alice_witness_key.get_public_key(), HIVE_asset( 1000 ) );
     witness_plugin->add_signing_key( alice_witness_key );
 
     account_witness_vote_operation op;
@@ -2053,12 +2059,16 @@ BOOST_AUTO_TEST_CASE( account_witness_vote_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: account_witness_vote_apply" );
 
-    ACTORS( (alice)(bob)(sam) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam) );
+    vest( "sam", HIVE_asset( 25'000 ) ); // extra RC for various operations
+    generate_block();
+    const auto& alice = db->get_account( "alice" );
+    const auto& bob = db->get_account( "bob" );
     vest( "alice" , HIVE_asset( 5'000 ) );
     fund( "sam", HIVE_asset( 1'000 ) );
 
     private_key_type sam_witness_key = generate_private_key( "sam_key" );
-    witness_create( "sam", sam_private_key, "foo.bar", sam_witness_key.get_public_key(), 1000 );
+    witness_create( "sam", sam_private_key, "foo.bar", sam_witness_key.get_public_key(), HIVE_asset( 1000 ) );
     witness_plugin->add_signing_key( sam_witness_key );
     const witness_object& sam_witness = db->get_witness( "sam" );
 
@@ -2163,14 +2173,14 @@ BOOST_AUTO_TEST_CASE(account_witness_vote_apply_delay)
   {
     BOOST_TEST_MESSAGE("Testing: account_witness_vote_apply_delay");
 
-    ACTORS((alice)(bob)(sam))
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam) );
     vest("alice", HIVE_asset( 5'000 ));
     //vests are going to vote after HIVE_DELAYED_VOTING_TOTAL_INTERVAL_SECONDS
     //note that account creation also vests a bit for new account
     fund("sam", HIVE_asset( 1'000 ));
 
     private_key_type sam_witness_key = generate_private_key("sam_key");
-    witness_create("sam", sam_private_key, "foo.bar", sam_witness_key.get_public_key(), 1000);
+    witness_create("sam", sam_private_key, "foo.bar", sam_witness_key.get_public_key(), HIVE_asset( 1000 ) );
     witness_plugin->add_signing_key( sam_witness_key );
 
     generate_block();
@@ -2284,10 +2294,10 @@ BOOST_AUTO_TEST_CASE( account_object_by_governance_vote_expiration_ts_idx )
   {
     BOOST_TEST_MESSAGE( "Testing: account_object_by_governance_vote_expiration_ts_idx" );
 
-    ACTORS( (alice)(bob)(acc1)(acc2)(acc3)(acc4)(accw) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(acc1)(acc2)(acc3)(acc4)(accw) );
     signed_transaction tx;
     private_key_type accw_witness_key = generate_private_key( "accw_key" );
-    witness_create( "accw", accw_private_key, "foo.bar", accw_witness_key.get_public_key(), 1000 );
+    witness_create( "accw", accw_private_key, "foo.bar", accw_witness_key.get_public_key(), HIVE_asset( 1000 ) );
     witness_plugin->add_signing_key( accw_witness_key );
 
     //Cannot use vote_proposal() and witness_vote() because of differ DB Fixture
@@ -2366,7 +2376,7 @@ BOOST_AUTO_TEST_CASE( account_witness_proxy_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: account_witness_proxy_authorities" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
 
     account_witness_proxy_operation op;
     op.account = "bob";
@@ -2426,7 +2436,10 @@ BOOST_AUTO_TEST_CASE( proxy_cleared_operation_basic )
 
     BOOST_TEST_MESSAGE( "Testing: 'proxy_cleared_operation' virtual operation" );
 
-    ACTORS( (alice)(bob)(carol)(dan) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol)(dan) );
+    generate_block();
+    const auto& alice = db->get_account( "alice" );
+    const auto& bob = db->get_account( "bob" );
     vest( "alice", HIVE_asset( 1'000 ) );
     vest( "bob", HIVE_asset( 3'000 ) );
     vest( "carol", HIVE_asset( 3'000 ) );
@@ -2560,7 +2573,12 @@ BOOST_AUTO_TEST_CASE( account_witness_proxy_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: account_witness_proxy_apply" );
 
-    ACTORS( (alice)(bob)(sam)(dave) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(dave) );
+    generate_block();
+    const auto& alice = db->get_account( "alice" );
+    const auto& bob = db->get_account( "bob" );
+    const auto& sam = db->get_account( "sam" );
+    const auto& dave = db->get_account( "dave" );
     vest( "alice", HIVE_asset( 1'000 ) );
     vest( "bob", HIVE_asset( 3'000 ) );
     vest( "sam", HIVE_asset( 5'000 ) );
@@ -2709,7 +2727,7 @@ BOOST_AUTO_TEST_CASE( account_witness_proxy_too_long )
   {
     BOOST_TEST_MESSAGE( "Testing: account_witness_proxy too long chain" );
 
-    ACTORS( (alice)(bob)(sam)(dave)(greg)(henry) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(dave)(greg)(henry) );
     vest( "alice", HIVE_asset( 1'000 ) );
     vest( "bob", HIVE_asset( 3'000 ) );
     vest( "sam", HIVE_asset( 5'000 ) );
@@ -2800,7 +2818,7 @@ BOOST_AUTO_TEST_CASE( account_witness_proxy_apply_delay )
   {
     BOOST_TEST_MESSAGE( "Testing: account_witness_proxy_apply_delay" );
 
-    ACTORS( (alice)(bob)(sam)(dave) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(dave) );
     vest( "alice", HIVE_asset( 1'000 ) );
     //vests are going to vote after HIVE_DELAYED_VOTING_TOTAL_INTERVAL_SECONDS
     //note that account creation also vests a bit for new account
@@ -3007,7 +3025,7 @@ BOOST_AUTO_TEST_CASE( custom_json_rate_limit )
   {
     BOOST_TEST_MESSAGE( "Testing: custom_json_rate_limit" );
 
-    ACTORS( (alice)(bob)(sam) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam) );
 
     BOOST_TEST_MESSAGE( "--- Testing 5 custom json ops as separate transactions" );
 
@@ -3074,13 +3092,13 @@ BOOST_AUTO_TEST_CASE( custom_json_rate_limit )
 
 BOOST_AUTO_TEST_CASE( custom_binary_authorities )
 {
-  ACTORS( (alice) )
+  ACTORS( DEFAULT_VESTING, (alice) );
 
   custom_binary_operation op;
   op.required_owner_auths.insert( "alice" );
   op.required_active_auths.insert( "bob" );
   op.required_posting_auths.insert( "sam" );
-  op.required_auths.push_back( db->get< account_authority_object, by_account >( "alice" ).posting );
+  op.required_auths.push_back( db->get< account_authority_object, by_account >( "alice" ).get_posting().to_authority() );
 
   flat_set< account_name_type > acc_auths;
   flat_set< account_name_type > acc_expected;
@@ -3103,7 +3121,7 @@ BOOST_AUTO_TEST_CASE( custom_binary_authorities )
   op.get_required_posting_authorities( acc_auths );
   BOOST_REQUIRE( acc_auths == acc_expected );
 
-  expected.push_back( db->get< account_authority_object, by_account >( "alice" ).posting );
+  expected.push_back( db->get< account_authority_object, by_account >( "alice" ).get_posting().to_authority() );
   op.get_required_authorities( auths );
   BOOST_REQUIRE( auths == expected );
 }
@@ -3123,9 +3141,9 @@ BOOST_AUTO_TEST_CASE( feed_publish_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: feed_publish_authorities" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     fund( "alice", HIVE_asset( 10'000 ) );
-    witness_create( "alice", alice_private_key, "foo.bar", alice_private_key.get_public_key(), 1000 );
+    witness_create( "alice", alice_private_key, "foo.bar", alice_private_key.get_public_key(), HIVE_asset( 1000 ) );
     witness_plugin->add_signing_key( alice_private_key );
 
     feed_publish_operation op;
@@ -3163,9 +3181,9 @@ BOOST_AUTO_TEST_CASE( feed_publish_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: feed_publish_apply" );
 
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     fund( "alice", HIVE_asset( 10'000 ) );
-    witness_create( "alice", alice_private_key, "foo.bar", alice_private_key.get_public_key(), 1000 );
+    witness_create( "alice", alice_private_key, "foo.bar", alice_private_key.get_public_key(), HIVE_asset( 1000 ) );
     witness_plugin->add_signing_key( alice_private_key );
 
     BOOST_TEST_MESSAGE( "--- Test publishing price feed" );
@@ -3235,7 +3253,7 @@ BOOST_AUTO_TEST_CASE( convert_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: convert_authorities" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     fund( "alice", HIVE_asset( 7'500 ) );
     fund( "alice", HBD_asset( 2'500 ) );
 
@@ -3275,7 +3293,7 @@ BOOST_AUTO_TEST_CASE( convert_apply )
   try
   {
     BOOST_TEST_MESSAGE( "Testing: convert_apply" );
-    ACTORS( (alice)(bob) );
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     fund( "alice", HIVE_asset( 7'500 ) );
     fund( "bob", HIVE_asset( 3'000 ) );
     fund( "alice", HBD_asset( 2'500 ) );
@@ -3363,7 +3381,7 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: collateralized_convert_authorities" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
 
     set_price_feed( HBD_price( 1000, 4000 ) );
 
@@ -3417,7 +3435,7 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_authorities )
     tx.operations.clear();
     tx.operations.push_back( op );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
-    HIVE_REQUIRE_ASSERT( push_transaction( tx, alice_private_key ), "!fhistory.current_median_history.is_null()" );
+    HIVE_REQUIRE_ASSERT( push_transaction( tx, alice_private_key ), "!exchange_rate.is_null()" );
 
     validate_database();
   }
@@ -3433,7 +3451,10 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_apply )
     // Testing mainnet convert values here, which are dependent on feed values.
     auto auto_reset( set_mainnet_feed_values() );
 
-    ACTORS( (alice)(bob) );
+    // move HBD from initminer to treasury to avoid hitting debt limit earlier than the test requires
+    transfer( HIVE_INIT_MINER_NAME, db->get_treasury_name(), get_hbd_balance( HIVE_INIT_MINER_NAME ).to_asset(), "", init_account_priv_key );
+
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
 
     generate_block();
 
@@ -3613,18 +3634,18 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_apply )
     BOOST_TEST_MESSAGE( "--- Setting amount of HBD in the system to the edge of upper soft limit" );
     {
       fc::uint128_t amount( dgpo.get_current_supply().amount.value );
-      uint16_t limit2 = 2 * dgpo.hbd_stop_percent + HIVE_1_BASIS_POINT; //there is rounding when percent is calculated, hence some strange correction
+      uint16_t limit2 = 2 * dgpo.get_hbd_stop_percent() + HIVE_1_BASIS_POINT; //there is rounding when percent is calculated, hence some strange correction
       amount = ( amount * limit2 ) / ( 2 * HIVE_100_PERCENT - limit2 );
       HBD_asset new_hbd = HIVE_asset( fc::uint128_to_int64(amount) ) * feed.current_median_history;
       new_hbd -= dgpo.get_current_hbd_supply() - db->get_treasury().get_hbd_balance();
       issue_funds( "alice", new_hbd, false );
       uint16_t percent = db->calculate_HBD_percent();
-      BOOST_REQUIRE_EQUAL( percent, dgpo.hbd_stop_percent );
+      BOOST_REQUIRE_EQUAL( percent, dgpo.get_hbd_stop_percent() );
     }
 
     BOOST_TEST_MESSAGE( "--- Test failure on too many HBD in the system" );
     op.amount = ASSET( "0.042 TESTS" ); //minimal amount of collateral that gives nonzero HBD at current price
-    HIVE_REQUIRE_ASSERT( push_transaction( op, alice_private_key ), "percent_hbd <= dgpo.hbd_stop_percent" );
+    HIVE_REQUIRE_ASSERT( push_transaction( op, alice_private_key ), "percent_hbd <= dgpo.get_hbd_stop_percent()" );
 
     const auto& collateralized_convert_request_idx = db->get_index< collateralized_convert_request_index, by_owner >();
     BOOST_REQUIRE( collateralized_convert_request_idx.empty() );
@@ -3649,25 +3670,28 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_apply )
       convert_hbd_to_hive( "bob", 0, HBD_asset( 20'000 ), bob_private_key );
     }
     generate_block();
-    BOOST_REQUIRE_EQUAL( dgpo.hbd_print_rate, 0 );
+    BOOST_REQUIRE_EQUAL( dgpo.get_hbd_print_rate(), 0 );
 
     BOOST_TEST_MESSAGE( "--- Test failed - conversion initiated while at or above upper soft limit" );
     op.amount = ASSET( "1000.000 TESTS" );
-    HIVE_REQUIRE_ASSERT( push_transaction( op, alice_private_key ), "dgpo.hbd_print_rate > 0" );
+    HIVE_REQUIRE_ASSERT( push_transaction( op, alice_private_key ), "dgpo.get_hbd_print_rate() > 0" );
 
     //since we are already on the edge of HBD upper soft limit which means we can't convert more anyway,
     //let's use the opportunity and test what happens when we try to cross hard limit
     {
-      auto extra_hbd = dgpo.get_current_hbd_supply();
-      int16_t diff = HIVE_HBD_HARD_LIMIT - dgpo.hbd_stop_percent;
+      //use circulating HBD (treasury HBD does not count towards the debt) so the parked initial supply
+      //does not inflate the amount needed to cross the hard limit
+      auto circulating_hbd = dgpo.get_current_hbd_supply() - db->get_treasury().get_hbd_balance();
+      auto extra_hbd = circulating_hbd;
+      int16_t diff = HIVE_HBD_HARD_LIMIT - dgpo.get_hbd_stop_percent();
       if( diff < 0 )
         diff = 0; //just in case we'd have incorrect configuration with hard limit below upper soft limit
       extra_hbd.amount *= diff;
-      extra_hbd.amount /= dgpo.hbd_stop_percent; //HBD supply multiplied by the same factor as a difference between hard and upper soft limit
-      extra_hbd += dgpo.get_current_hbd_supply(); //to always have some value above hard limit
+      extra_hbd.amount /= dgpo.get_hbd_stop_percent(); //HBD supply multiplied by the same factor as a difference between hard and upper soft limit
+      extra_hbd += circulating_hbd; //to always have some value above hard limit
       issue_funds( "bob", extra_hbd );
 
-      generate_blocks( HIVE_FEED_INTERVAL_BLOCKS - ( dgpo.head_block_number % HIVE_FEED_INTERVAL_BLOCKS ) );
+      generate_blocks( HIVE_FEED_INTERVAL_BLOCKS - ( dgpo.get_head_block_number() % HIVE_FEED_INTERVAL_BLOCKS ) );
       //last feed update should've put up artificial price of HIVE
       auto recent_ops = get_last_operations( 2 );
       auto sys_warn_op = recent_ops.back().get< system_warning_operation >();
@@ -3686,7 +3710,7 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_apply )
     generate_block(); //actual conversion
     alice_balance += HIVE_asset( 500'011 ); //excess collateral (1000 - 23.809 * 21/1) - alice used fee corrected market_median_price...
     BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), alice_balance );
-    BOOST_REQUIRE_EQUAL( get_hive_balance( "bob" ), HIVE_asset( 273'619 ) ); //...but bob used artificial current_median_history
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "bob" ), HIVE_asset( 274'204 ) ); //...but bob used artificial current_median_history
       //(for HF25 values of 9%/10%/10% lower/upper/hard cap expected value is 199.102)
       //(for 9%/10%/30% expected value is 383.222)
       //with different limits value will change, but should be less than 400.000 TESTS
@@ -3697,9 +3721,9 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_apply )
 
     BOOST_TEST_MESSAGE( "--- Test failed - conversion initiated while artificial price is active" );
     op.amount = ASSET( "1000.000 TESTS" );
-    HIVE_REQUIRE_ASSERT( push_transaction( op, alice_private_key ), "dgpo.hbd_print_rate > 0" );
+    HIVE_REQUIRE_ASSERT( push_transaction( op, alice_private_key ), "dgpo.get_hbd_print_rate() > 0" );
 
-    generate_blocks( HIVE_FEED_INTERVAL_BLOCKS - ( dgpo.head_block_number % HIVE_FEED_INTERVAL_BLOCKS ) );
+    generate_blocks( HIVE_FEED_INTERVAL_BLOCKS - ( dgpo.get_head_block_number() % HIVE_FEED_INTERVAL_BLOCKS ) );
 
     //since HBD on treasury does not count the price should now be back to normal price
     BOOST_REQUIRE_EQUAL( feed.current_median_history, price_1_for_20 );
@@ -3746,16 +3770,16 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_narrow_price )
   try
   {
     BOOST_TEST_MESSAGE( "Testing: collateralized_convert_narrow_price" );
-    ACTORS( (alice) );
+    ACTORS( DEFAULT_VESTING, (alice) );
 
     generate_block();
 
-    const auto& feed = db->get_feed_history();
+    const auto& exchange_rate = db->get_hbd_price();
     db->skip_price_feed_limit_check = false;
 
     HBD_price price_1_for_2( 1, 2 );
     set_price_feed( price_1_for_2 );
-    BOOST_REQUIRE_EQUAL( feed.current_median_history, price_1_for_2 );
+    BOOST_REQUIRE_EQUAL( exchange_rate, price_1_for_2 );
 
     //prevent HBD interest from interfering with the test
     flat_map< string, vector<char> > props;
@@ -3790,48 +3814,48 @@ BOOST_AUTO_TEST_CASE( collateralized_convert_wide_price )
   try
   {
     BOOST_TEST_MESSAGE( "Testing: collateralized_convert_wide_price" );
-    ACTORS( ( alice ) );
+    ACTORS( DEFAULT_VESTING, ( alice ) );
 
     generate_block();
 
-    const auto& feed = db->get_feed_history();
+    const auto& exchange_rate = db->get_hbd_price();
     db->skip_price_feed_limit_check = false;
 
     HBD_price price_1_for_2( 4611686018427387000, 9223372036854774000 );
     set_price_feed( price_1_for_2 );
-    BOOST_REQUIRE_EQUAL( feed.current_median_history, price_1_for_2 );
+    BOOST_REQUIRE_EQUAL( exchange_rate, price_1_for_2 );
 
     //prevent HBD interest from interfering with the test
     flat_map< string, vector<char> > props;
     props[ "hbd_interest_rate" ] = fc::raw::pack_to_vector( 0 );
     set_witness_props( props );
 
-    issue_funds( "alice", HIVE_asset( 50'000'000'000 ) );
+    issue_funds( "alice", HIVE_asset( 2'500'000'000'000 ) );
 
     BOOST_TEST_MESSAGE( "--- Test failure on too many HBD in the system" );
     collateralized_convert_operation op;
     op.owner = "alice";
-    op.amount = ASSET( "42000000.000 TESTS" );
-    HIVE_REQUIRE_ASSERT( push_transaction( op, alice_private_key ), "percent_hbd <= dgpo.hbd_stop_percent" );
+    op.amount = ASSET( "2100000000.000 TESTS" );
+    HIVE_REQUIRE_ASSERT( push_transaction( op, alice_private_key ), "percent_hbd <= dgpo.get_hbd_stop_percent()" );
 
     BOOST_TEST_MESSAGE( "--- Test ok - conversion at 50 cents per HIVE, both initial and actual" );
-    op.amount = ASSET( "4200000.000 TESTS" );
+    op.amount = ASSET( "210000000.000 TESTS" );
     auto conversion_time = db->head_block_time();
     auto alice_balance = get_hive_balance( "alice" );
     push_transaction( op, alice_private_key );
-    alice_balance -= HIVE_asset( 4'200'000'000 );
+    alice_balance -= HIVE_asset( 210'000'000'000 );
 
     BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), alice_balance );
-    BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), HBD_asset( 1'000'000'000 ) );
+    BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), HBD_asset( 50'000'000'000 ) );
 
     generate_blocks( conversion_time + HIVE_COLLATERALIZED_CONVERSION_DELAY - fc::seconds( HIVE_BLOCK_INTERVAL ) );
 
     BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), alice_balance );
-    BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), HBD_asset( 1'000'000'000 ) );
+    BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), HBD_asset( 50'000'000'000 ) );
     generate_block(); //actual conversion
-    alice_balance += HIVE_asset( 2'100'000'000 );
+    alice_balance += HIVE_asset( 105'000'000'000 );
     BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), alice_balance );
-    BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), HBD_asset( 1'000'000'000 ) );
+    BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), HBD_asset( 50'000'000'000 ) );
 
     validate_database();
   }
@@ -3853,7 +3877,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: limit_order_create_authorities" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     fund( "alice", HIVE_asset( 10'000 ) );
     fund( "bob", HIVE_asset( 10'000 ) );
 
@@ -3898,7 +3922,8 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: limit_order_create_apply" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
+    generate_block();
     fund( "alice", HIVE_asset( 1'000'000 ) );
     fund( "bob", HBD_asset( 1'000'000 ) );
 
@@ -3966,10 +3991,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
 
     auto limit_order = limit_order_idx.find( boost::make_tuple( "alice", op.orderid ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, op.owner );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, op.orderid );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale, op.amount_to_sell.amount );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( op.amount_to_sell, op.min_to_receive ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), op.owner );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), op.orderid );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), op.amount_to_sell );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( op.amount_to_sell, op.min_to_receive ) );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 990'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hbd_balance(), HBD_asset( 0 ) );
@@ -3984,10 +4009,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
 
     limit_order = limit_order_idx.find( boost::make_tuple( "alice", op.orderid ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, op.owner );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, op.orderid );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale, 10000 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( ASSET( "10.000 TESTS" ), op.min_to_receive ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), op.owner );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), op.orderid );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "10.000 TESTS" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( ASSET( "10.000 TESTS" ), op.min_to_receive ) );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 990'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hbd_balance(), HBD_asset( 0 ) );
@@ -4025,10 +4050,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
 
     limit_order = limit_order_idx.find( boost::make_tuple( "alice", 1 ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, "alice" );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, op.orderid );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale, 5000 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( ASSET( "10.000 TESTS" ), ASSET( "15.000 TBD" ) ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), "alice" );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), op.orderid );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "5.000 TESTS" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( ASSET( "10.000 TESTS" ), ASSET( "15.000 TBD" ) ) );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "bob", op.orderid ) ) == limit_order_idx.end() );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 990'000 ) );
@@ -4053,10 +4078,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
 
     limit_order = limit_order_idx.find( boost::make_tuple( "bob", 1 ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, "bob" );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, 1 );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale.value, 7500 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( ASSET( "15.000 TBD" ), ASSET( "10.000 TESTS" ) ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), "bob" );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), 1 );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "7.500 TBD" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( ASSET( "15.000 TBD" ), ASSET( "10.000 TESTS" ) ) );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 1 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 990'000 ) );
@@ -4104,10 +4129,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
     limit_order = limit_order_idx.find( boost::make_tuple( "bob", 4 ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
     BOOST_REQUIRE( limit_order_idx.find(boost::make_tuple( "alice", 4 ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, "bob" );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, 4 );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale.value, 1000 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( ASSET( "12.000 TBD" ), ASSET( "10.000 TESTS" ) ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), "bob" );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), 4 );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "1.000 TBD" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( ASSET( "12.000 TBD" ), ASSET( "10.000 TESTS" ) ) );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 975'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hbd_balance(), HBD_asset( 33'500 ) );
@@ -4146,10 +4171,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create_apply )
     limit_order = limit_order_idx.find( boost::make_tuple( "alice", 5 ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
     BOOST_REQUIRE( limit_order_idx.find(boost::make_tuple( "bob", 5 ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, "alice" );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, 5 );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale.value, 9091 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( ASSET( "20.000 TESTS" ), ASSET( "22.000 TBD" ) ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), "alice" );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), 5 );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "9.091 TESTS" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( ASSET( "20.000 TESTS" ), ASSET( "22.000 TBD" ) ) );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 955'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hbd_balance(), HBD_asset( 45'500 ) );
@@ -4166,7 +4191,7 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: limit_order_create2_authorities" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     fund( "alice", HIVE_asset( 10'000 ) );
     fund( "bob", HIVE_asset( 10'000 ) );
 
@@ -4217,7 +4242,8 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: limit_order_create2_apply" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
+    generate_block();
     fund( "alice", HIVE_asset( 1'000'000 ) );
     fund( "bob", HBD_asset( 1'000'000 ) );
 
@@ -4305,10 +4331,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
 
     auto limit_order = limit_order_idx.find( boost::make_tuple( "alice", op.orderid ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, op.owner );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, op.orderid );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale, op.amount_to_sell.amount );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, op.exchange_rate );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), op.owner );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), op.orderid );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), op.amount_to_sell );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), op.exchange_rate );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 990'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hbd_balance(), HBD_asset( 0 ) );
@@ -4323,10 +4349,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
 
     limit_order = limit_order_idx.find( boost::make_tuple( "alice", op.orderid ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, op.owner );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, op.orderid );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale, 10000 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, op.exchange_rate );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), op.owner );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), op.orderid );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "10.000 TESTS" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), op.exchange_rate );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 990'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hbd_balance(), HBD_asset( 0 ) );
@@ -4364,10 +4390,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
 
     limit_order = limit_order_idx.find( boost::make_tuple( "alice", 1 ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, "alice" );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, op.orderid );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale, 5000 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( ASSET( "2.000 TESTS" ), ASSET( "3.000 TBD" ) ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), "alice" );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), op.orderid );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "5.000 TESTS" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( ASSET( "2.000 TESTS" ), ASSET( "3.000 TBD" ) ) );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "bob", op.orderid ) ) == limit_order_idx.end() );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 990'000 ) );
@@ -4392,10 +4418,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
 
     limit_order = limit_order_idx.find( boost::make_tuple( "bob", 1 ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, "bob" );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, 1 );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale.value, 7500 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( ASSET( "3.000 TBD" ), ASSET( "2.000 TESTS" ) ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), "bob" );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), 1 );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "7.500 TBD" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( ASSET( "3.000 TBD" ), ASSET( "2.000 TESTS" ) ) );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 1 ) ) == limit_order_idx.end() );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 990'000 ) );
@@ -4443,10 +4469,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     limit_order = limit_order_idx.find( boost::make_tuple( "bob", 4 ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
     BOOST_REQUIRE( limit_order_idx.find(boost::make_tuple( "alice", 4 ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, "bob" );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, 4 );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale.value, 1000 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, op.exchange_rate );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), "bob" );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), 4 );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "1.000 TBD" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), op.exchange_rate );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 975'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hbd_balance(), HBD_asset( 33'500 ) );
@@ -4462,10 +4488,6 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     push_transaction( tx, bob_private_key );
 
     BOOST_TEST_MESSAGE( "--- Test filling limit order with better order when partial order is worse." );
-
-    //auto& gpo = db->get_dynamic_global_properties();
-    //auto start_hbd = gpo.get_current_hbd_supply();
-
 
     op.owner = "alice";
     op.orderid = 5;
@@ -4486,10 +4508,10 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     limit_order = limit_order_idx.find( boost::make_tuple( "alice", 5 ) );
     BOOST_REQUIRE( limit_order != limit_order_idx.end() );
     BOOST_REQUIRE( limit_order_idx.find(boost::make_tuple( "bob", 5 ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, "alice" );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, 5 );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale.value, 9091 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( ASSET( "1.000 TESTS" ), ASSET( "1.100 TBD" ) ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), "alice" );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), 5 );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "9.091 TESTS" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( ASSET( "1.000 TESTS" ), ASSET( "1.100 TBD" ) ) );
     BOOST_REQUIRE( limit_order->get_market() == std::make_pair( HBD_SYMBOL, HIVE_SYMBOL ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_balance(), HIVE_asset( 955'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hbd_balance(), HBD_asset( 45'500 ) );
@@ -4497,7 +4519,8 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     BOOST_REQUIRE_EQUAL( db->get_account( "bob" ).get_hbd_balance(), HBD_asset( 954'500 ) );
 
     BOOST_TEST_MESSAGE( "--- Test filling best order with multiple matches." );
-    ACTORS( (sam)(dave) )
+    ACTORS( DEFAULT_VESTING, (sam)(dave) );
+    generate_block();
     fund( "sam", HIVE_asset( 1'000'000 ) );
     fund( "dave", HBD_asset( 1'000'000 ) );
 
@@ -4553,16 +4576,16 @@ BOOST_AUTO_TEST_CASE( limit_order_create2_apply )
     BOOST_REQUIRE_EQUAL( fill_order_op.current_pays, ASSET( "15.000 TBD" ) );
 
     limit_order = limit_order_idx.find( boost::make_tuple( "bob", 6 ) );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, "bob" );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, 6 );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale.value, 5000 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( ASSET( "1.000 TESTS" ), ASSET( "1.000 TBD" ) ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), "bob" );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), 6 );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "5.000 TESTS" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( ASSET( "1.000 TESTS" ), ASSET( "1.000 TBD" ) ) );
 
     limit_order = limit_order_idx.find( boost::make_tuple( "alice", 6 ) );
-    BOOST_REQUIRE_EQUAL( limit_order->seller, "alice" );
-    BOOST_REQUIRE_EQUAL( limit_order->orderid, 6 );
-    BOOST_REQUIRE_EQUAL( limit_order->for_sale.value, 20000 );
-    BOOST_REQUIRE_EQUAL( limit_order->sell_price, price( ASSET( "1.000 TESTS" ), ASSET( "2.000 TBD" ) ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_seller(), "alice" );
+    BOOST_REQUIRE_EQUAL( limit_order->get_orderid(), 6 );
+    BOOST_REQUIRE_EQUAL( limit_order->amount_for_sale(), ASSET( "20.000 TESTS" ) );
+    BOOST_REQUIRE_EQUAL( limit_order->get_sell_price(), price( ASSET( "1.000 TESTS" ), ASSET( "2.000 TBD" ) ) );
     validate_database();
   }
   FC_LOG_AND_RETHROW()
@@ -4583,7 +4606,7 @@ BOOST_AUTO_TEST_CASE( limit_order_cancel_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: limit_order_cancel_authorities" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     fund( "alice", HIVE_asset( 10'000 ) );
     fund( "bob", HIVE_asset( 10'000 ) );
 
@@ -4643,7 +4666,7 @@ BOOST_AUTO_TEST_CASE( limit_order_cancel_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: limit_order_cancel_apply" );
 
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     fund( "alice", HIVE_asset( 10'000 ) );
 
     const auto& limit_order_idx = db->get_index< limit_order_index >().indices().get< by_account >();
@@ -4678,8 +4701,8 @@ BOOST_AUTO_TEST_CASE( limit_order_cancel_apply )
     push_transaction( tx, alice_private_key );
 
     BOOST_REQUIRE( limit_order_idx.find( boost::make_tuple( "alice", 5 ) ) == limit_order_idx.end() );
-    BOOST_REQUIRE_EQUAL( alice.get_hive_balance(), HIVE_asset( 10'000 ) );
-    BOOST_REQUIRE_EQUAL( alice.get_hbd_balance(), HBD_asset( 0 ) );
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), HIVE_asset( 10'000 ) );
+    BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), HBD_asset( 0 ) );
   }
   FC_LOG_AND_RETHROW()
 }
@@ -4717,7 +4740,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
   {
     BOOST_TEST_MESSAGE( "Testing: account recovery" );
 
-    ACTORS( (alice) );
+    ACTORS( HIVE_asset( 40'000 ), (alice) ); // extra RC for various operations
     fund( "alice", HIVE_asset( 1'000'000 ) );
     generate_block();
 
@@ -4752,7 +4775,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
     vest( "bob", HIVE_asset( 1'000 ) );
 
     const auto& bob_auth = db->get< account_authority_object, by_account >( "bob" );
-    BOOST_REQUIRE( bob_auth.owner == acc_create.owner );
+    BOOST_REQUIRE( bob_auth.get_owner() == acc_create.owner );
 
 
     BOOST_TEST_MESSAGE( "Changing bob's owner authority" );
@@ -4768,7 +4791,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
     tx.operations.push_back( acc_update );
     push_transaction( tx, generate_private_key( "bob_owner" ) );
 
-    BOOST_REQUIRE( bob_auth.owner == *acc_update.owner );
+    BOOST_REQUIRE( bob_auth.get_owner() == *acc_update.owner );
 
 
     BOOST_TEST_MESSAGE( "Creating recover request for bob with alice" );
@@ -4783,7 +4806,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
     tx.operations.push_back( request );
     push_transaction( tx, alice_private_key );
 
-    BOOST_REQUIRE( bob_auth.owner == *acc_update.owner );
+    BOOST_REQUIRE( bob_auth.get_owner() == *acc_update.owner );
 
 
     BOOST_TEST_MESSAGE( "Recovering bob's account with original owner auth and new secret" );
@@ -4799,7 +4822,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
 
     tx.operations.push_back( recover );
     push_transaction( tx, {generate_private_key( "bob_owner" ), generate_private_key( "new_key" )} );
-    const auto& owner1 = db->get< account_authority_object, by_account >("bob").owner;
+    const auto& owner1 = db->get< account_authority_object, by_account >("bob").get_owner();
 
     BOOST_REQUIRE( owner1 == recover.new_owner_authority );
 
@@ -4824,7 +4847,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
 
     tx.operations.push_back( recover );
     HIVE_REQUIRE_THROW( push_transaction( tx, {generate_private_key( "bob_owner" ), generate_private_key( "idontknow" )} ), fc::exception );
-    const auto& owner2 = db->get< account_authority_object, by_account >("bob").owner;
+    const auto& owner2 = db->get< account_authority_object, by_account >("bob").get_owner();
     BOOST_REQUIRE( owner2 == authority( 1, generate_private_key( "new_key" ).get_public_key(), 1 ) );
 
 
@@ -4837,7 +4860,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
 
     tx.operations.push_back( recover );
     HIVE_REQUIRE_THROW( push_transaction( tx, {generate_private_key( "foo bar" ), generate_private_key( "idontknow" )} ), fc::exception );
-    const auto& owner3 = db->get< account_authority_object, by_account >("bob").owner;
+    const auto& owner3 = db->get< account_authority_object, by_account >("bob").get_owner();
     BOOST_REQUIRE( owner3 == authority( 1, generate_private_key( "new_key" ).get_public_key(), 1 ) );
 
 
@@ -4851,7 +4874,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
     tx.operations.push_back( recover );
     push_transaction( tx, {generate_private_key( "bob_owner" ), generate_private_key( "foo bar" )} );
 
-    const auto& owner4 = db->get< account_authority_object, by_account >("bob").owner;
+    const auto& owner4 = db->get< account_authority_object, by_account >("bob").get_owner();
     BOOST_REQUIRE( owner4 == recover.new_owner_authority );
 
     BOOST_TEST_MESSAGE( "Creating a recovery request that will expire" );
@@ -4890,7 +4913,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
     tx.operations.push_back( recover );
     tx.set_expiration( db->head_block_time() );
     HIVE_REQUIRE_THROW( push_transaction( tx, {generate_private_key( "expire" ), generate_private_key( "bob_owner" )} ), fc::exception );
-    const auto& owner5 = db->get< account_authority_object, by_account >("bob").owner;
+    const auto& owner5 = db->get< account_authority_object, by_account >("bob").get_owner();
     BOOST_REQUIRE( owner5 == authority( 1, generate_private_key( "foo bar" ).get_public_key(), 1 ) );
 
     BOOST_TEST_MESSAGE( "Expiring owner authority history" );
@@ -4922,7 +4945,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
     tx.operations.push_back( recover );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
     HIVE_REQUIRE_THROW( push_transaction( tx, {generate_private_key( "bob_owner" ), generate_private_key( "last key" )} ), fc::exception );
-    const auto& owner6 = db->get< account_authority_object, by_account >("bob").owner;
+    const auto& owner6 = db->get< account_authority_object, by_account >("bob").get_owner();
     BOOST_REQUIRE( owner6 == authority( 1, generate_private_key( "new_key" ).get_public_key(), 1 ) );
 
     recover.recent_owner_authority = authority( 1, generate_private_key( "foo bar" ).get_public_key(), 1 );
@@ -4932,7 +4955,7 @@ BOOST_AUTO_TEST_CASE( account_recovery )
     tx.operations.push_back( recover );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
     push_transaction( tx, {generate_private_key( "foo bar" ), generate_private_key( "last key" )} );
-    const auto& owner7 = db->get< account_authority_object, by_account >("bob").owner;
+    const auto& owner7 = db->get< account_authority_object, by_account >("bob").get_owner();
     BOOST_REQUIRE( owner7 == authority( 1, generate_private_key( "last key" ).get_public_key(), 1 ) );
   }
   FC_LOG_AND_RETHROW()
@@ -4944,7 +4967,7 @@ BOOST_AUTO_TEST_CASE( change_recovery_account )
   {
     BOOST_TEST_MESSAGE( "Testing change_recovery_account_operation" );
 
-    ACTORS( (alice)(bob)(sam)(tyler) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(tyler) );
 
     auto change_recovery_account = [&]( const std::string& account_to_recover, const std::string& new_recovery_account )
     {
@@ -5129,7 +5152,11 @@ BOOST_AUTO_TEST_CASE( escrow_transfer_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: escrow_transfer_apply" );
 
-    ACTORS( (alice)(bob)(sam) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam) );
+    generate_block();
+    const auto& alice = db->get_account( "alice" );
+    const auto& bob = db->get_account( "bob" );
+    const auto& sam = db->get_account( "sam" );
 
     fund( "alice", HIVE_asset( 10'000 ) );
 
@@ -5188,18 +5215,18 @@ BOOST_AUTO_TEST_CASE( escrow_transfer_apply )
 
     const auto& escrow = db->get_escrow( op.from, op.escrow_id );
 
-    BOOST_REQUIRE_EQUAL( escrow.escrow_id, op.escrow_id );
-    BOOST_REQUIRE_EQUAL( escrow.from, op.from );
-    BOOST_REQUIRE_EQUAL( escrow.to, op.to );
-    BOOST_REQUIRE_EQUAL( escrow.agent, op.agent );
-    BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, op.ratification_deadline );
-    BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, op.escrow_expiration );
+    BOOST_REQUIRE_EQUAL( escrow.get_escrow_id(), op.escrow_id );
+    BOOST_REQUIRE_EQUAL( escrow.get_from(), op.from );
+    BOOST_REQUIRE_EQUAL( escrow.get_to(), op.to );
+    BOOST_REQUIRE_EQUAL( escrow.get_agent(), op.agent );
+    BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), op.ratification_deadline );
+    BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), op.escrow_expiration );
     BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), op.get_hbd_amount() );
     BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), op.get_hive_amount() );
     BOOST_REQUIRE_EQUAL( escrow.get_fee(), op.fee );
-    BOOST_REQUIRE( !escrow.to_approved );
-    BOOST_REQUIRE( !escrow.agent_approved );
-    BOOST_REQUIRE( !escrow.disputed );
+    BOOST_REQUIRE( !escrow.is_to_approved() );
+    BOOST_REQUIRE( !escrow.is_agent_approved() );
+    BOOST_REQUIRE( !escrow.is_disputed() );
     BOOST_REQUIRE_EQUAL( alice.get_hive_balance(), alice_hive_balance );
     BOOST_REQUIRE_EQUAL( alice.get_hbd_balance(), alice_hbd_balance );
     BOOST_REQUIRE_EQUAL( bob.get_hive_balance(), bob_hive_balance );
@@ -5286,7 +5313,9 @@ BOOST_AUTO_TEST_CASE( escrow_approve_apply )
   try
   {
     BOOST_TEST_MESSAGE( "Testing: escrow_approve_apply" );
-    ACTORS( (alice)(bob)(sam)(dave) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(dave) );
+    vest( "alice", HIVE_asset( 15'000 ) ); // extra RC for various operations
+    generate_block();
     fund( "alice", HIVE_asset( 10'000 ) );
 
     escrow_transfer_operation et_op;
@@ -5337,16 +5366,16 @@ BOOST_AUTO_TEST_CASE( escrow_approve_apply )
     push_transaction( tx, bob_private_key );
 
     auto& escrow = db->get_escrow( op.from, op.escrow_id );
-    BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-    BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-    BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-    BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+    BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+    BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+    BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+    BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
     BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), HBD_asset( 0 ) );
     BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), HIVE_asset( 1'000 ) );
     BOOST_REQUIRE_EQUAL( escrow.get_fee(), ASSET( "0.100 TESTS" ) );
-    BOOST_REQUIRE( escrow.to_approved );
-    BOOST_REQUIRE( !escrow.agent_approved );
-    BOOST_REQUIRE( !escrow.disputed );
+    BOOST_REQUIRE( escrow.is_to_approved() );
+    BOOST_REQUIRE( !escrow.is_agent_approved() );
+    BOOST_REQUIRE( !escrow.is_disputed() );
 
 
     BOOST_TEST_MESSAGE( "--- failure on repeat approval" );
@@ -5354,16 +5383,16 @@ BOOST_AUTO_TEST_CASE( escrow_approve_apply )
     tx.set_expiration( db->head_block_time() + HIVE_BLOCK_INTERVAL );
     HIVE_REQUIRE_THROW( push_transaction( tx, bob_private_key ), fc::exception );
 
-    BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-    BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-    BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-    BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+    BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+    BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+    BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+    BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
     BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), HBD_asset( 0 ) );
     BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), HIVE_asset( 1'000 ) );
     BOOST_REQUIRE_EQUAL( escrow.get_fee(), ASSET( "0.100 TESTS" ) );
-    BOOST_REQUIRE( escrow.to_approved );
-    BOOST_REQUIRE( !escrow.agent_approved );
-    BOOST_REQUIRE( !escrow.disputed );
+    BOOST_REQUIRE( escrow.is_to_approved() );
+    BOOST_REQUIRE( !escrow.is_agent_approved() );
+    BOOST_REQUIRE( !escrow.is_disputed() );
 
 
     BOOST_TEST_MESSAGE( "--- failure trying to repeal after approval" );
@@ -5374,16 +5403,16 @@ BOOST_AUTO_TEST_CASE( escrow_approve_apply )
     tx.operations.push_back( op );
     HIVE_REQUIRE_THROW( push_transaction( tx, bob_private_key ), fc::exception );
 
-    BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-    BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-    BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-    BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+    BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+    BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+    BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+    BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
     BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), HBD_asset( 0 ) );
     BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), HIVE_asset( 1'000 ) );
     BOOST_REQUIRE_EQUAL( escrow.get_fee(), ASSET( "0.100 TESTS" ) );
-    BOOST_REQUIRE( escrow.to_approved );
-    BOOST_REQUIRE( !escrow.agent_approved );
-    BOOST_REQUIRE( !escrow.disputed );
+    BOOST_REQUIRE( escrow.is_to_approved() );
+    BOOST_REQUIRE( !escrow.is_agent_approved() );
+    BOOST_REQUIRE( !escrow.is_disputed() );
 
 
     BOOST_TEST_MESSAGE( "--- success refunding from because of repeal" );
@@ -5539,16 +5568,16 @@ BOOST_AUTO_TEST_CASE( escrow_approve_apply )
       BOOST_REQUIRE_EQUAL( accept_op.fee, et_op.fee );
 
       const auto& escrow = db->get_escrow( op.from, op.escrow_id );
-      BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-      BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-      BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-      BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+      BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+      BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+      BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+      BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
       BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), HBD_asset( 0 ) );
       BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), HIVE_asset( 1'000 ) );
       BOOST_REQUIRE_EQUAL( escrow.get_fee(), ASSET( "0.000 TESTS" ) );
-      BOOST_REQUIRE( escrow.to_approved );
-      BOOST_REQUIRE( escrow.agent_approved );
-      BOOST_REQUIRE( !escrow.disputed );
+      BOOST_REQUIRE( escrow.is_to_approved() );
+      BOOST_REQUIRE( escrow.is_agent_approved() );
+      BOOST_REQUIRE( !escrow.is_disputed() );
     }
 
     BOOST_REQUIRE_EQUAL( get_hive_balance( "sam" ), HIVE_asset( et_op.fee ) );
@@ -5560,16 +5589,16 @@ BOOST_AUTO_TEST_CASE( escrow_approve_apply )
     generate_blocks( et_op.ratification_deadline + HIVE_BLOCK_INTERVAL, true );
     {
       const auto& escrow = db->get_escrow( op.from, op.escrow_id );
-      BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-      BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-      BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-      BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+      BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+      BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+      BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+      BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
       BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), HBD_asset( 0 ) );
       BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), HIVE_asset( 1'000 ) );
       BOOST_REQUIRE_EQUAL( escrow.get_fee(), ASSET( "0.000 TESTS" ) );
-      BOOST_REQUIRE( escrow.to_approved );
-      BOOST_REQUIRE( escrow.agent_approved );
-      BOOST_REQUIRE( !escrow.disputed );
+      BOOST_REQUIRE( escrow.is_to_approved() );
+      BOOST_REQUIRE( escrow.is_agent_approved() );
+      BOOST_REQUIRE( !escrow.is_disputed() );
     }
 
     BOOST_REQUIRE_EQUAL( get_hive_balance( "sam" ), HIVE_asset( et_op.fee ) );
@@ -5642,7 +5671,7 @@ BOOST_AUTO_TEST_CASE( escrow_dispute_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: escrow_dispute_apply" );
 
-    ACTORS( (alice)(bob)(sam)(dave) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(dave) );
     fund( "alice", HIVE_asset( 10'000 ) );
 
     escrow_transfer_operation et_op;
@@ -5679,16 +5708,16 @@ BOOST_AUTO_TEST_CASE( escrow_dispute_apply )
     HIVE_REQUIRE_THROW( push_transaction( tx, bob_private_key ), fc::exception );
 
     const auto& escrow = db->get_escrow( et_op.from, et_op.escrow_id );
-    BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-    BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-    BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-    BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+    BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+    BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+    BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+    BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
     BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), et_op.get_hbd_amount() );
     BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), et_op.get_hive_amount() );
     BOOST_REQUIRE_EQUAL( escrow.get_fee(), et_op.fee );
-    BOOST_REQUIRE( escrow.to_approved );
-    BOOST_REQUIRE( !escrow.agent_approved );
-    BOOST_REQUIRE( !escrow.disputed );
+    BOOST_REQUIRE( escrow.is_to_approved() );
+    BOOST_REQUIRE( !escrow.is_agent_approved() );
+    BOOST_REQUIRE( !escrow.is_disputed() );
 
 
     BOOST_TEST_MESSAGE( "--- failure when to does not match escrow" );
@@ -5709,16 +5738,16 @@ BOOST_AUTO_TEST_CASE( escrow_dispute_apply )
     tx.operations.push_back( op );
     HIVE_REQUIRE_THROW( push_transaction( tx, alice_private_key ), fc::exception );
 
-    BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-    BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-    BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-    BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+    BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+    BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+    BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+    BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
     BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), et_op.get_hbd_amount() );
     BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), et_op.get_hive_amount() );
     BOOST_REQUIRE_EQUAL( escrow.get_fee(), ASSET( "0.000 TESTS" ) );
-    BOOST_REQUIRE( escrow.to_approved );
-    BOOST_REQUIRE( escrow.agent_approved );
-    BOOST_REQUIRE( !escrow.disputed );
+    BOOST_REQUIRE( escrow.is_to_approved() );
+    BOOST_REQUIRE( escrow.is_agent_approved() );
+    BOOST_REQUIRE( !escrow.is_disputed() );
 
 
     BOOST_TEST_MESSAGE( "--- failure when agent does not match escrow" );
@@ -5729,16 +5758,16 @@ BOOST_AUTO_TEST_CASE( escrow_dispute_apply )
     tx.operations.push_back( op );
     HIVE_REQUIRE_THROW( push_transaction( tx, alice_private_key ), fc::exception );
 
-    BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-    BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-    BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-    BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+    BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+    BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+    BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+    BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
     BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), et_op.get_hbd_amount() );
     BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), et_op.get_hive_amount() );
     BOOST_REQUIRE_EQUAL( escrow.get_fee(), ASSET( "0.000 TESTS" ) );
-    BOOST_REQUIRE( escrow.to_approved );
-    BOOST_REQUIRE( escrow.agent_approved );
-    BOOST_REQUIRE( !escrow.disputed );
+    BOOST_REQUIRE( escrow.is_to_approved() );
+    BOOST_REQUIRE( escrow.is_agent_approved() );
+    BOOST_REQUIRE( !escrow.is_disputed() );
 
 
     BOOST_TEST_MESSAGE( "--- failure when escrow is expired" );
@@ -5752,16 +5781,16 @@ BOOST_AUTO_TEST_CASE( escrow_dispute_apply )
 
     {
       const auto& escrow = db->get_escrow( et_op.from, et_op.escrow_id );
-      BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-      BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-      BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-      BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+      BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+      BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+      BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+      BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
       BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), et_op.get_hbd_amount() );
       BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), et_op.get_hive_amount() );
       BOOST_REQUIRE_EQUAL( escrow.get_fee(), ASSET( "0.000 TESTS" ) );
-      BOOST_REQUIRE( escrow.to_approved );
-      BOOST_REQUIRE( escrow.agent_approved );
-      BOOST_REQUIRE( !escrow.disputed );
+      BOOST_REQUIRE( escrow.is_to_approved() );
+      BOOST_REQUIRE( escrow.is_agent_approved() );
+      BOOST_REQUIRE( !escrow.is_disputed() );
     }
 
 
@@ -5785,16 +5814,16 @@ BOOST_AUTO_TEST_CASE( escrow_dispute_apply )
 
     {
       const auto& escrow = db->get_escrow( et_op.from, et_op.escrow_id );
-      BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-      BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-      BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-      BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+      BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+      BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+      BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+      BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
       BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), et_op.get_hbd_amount() );
       BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), et_op.get_hive_amount() );
       BOOST_REQUIRE_EQUAL( escrow.get_fee(), ASSET( "0.000 TESTS" ) );
-      BOOST_REQUIRE( escrow.to_approved );
-      BOOST_REQUIRE( escrow.agent_approved );
-      BOOST_REQUIRE( escrow.disputed );
+      BOOST_REQUIRE( escrow.is_to_approved() );
+      BOOST_REQUIRE( escrow.is_agent_approved() );
+      BOOST_REQUIRE( escrow.is_disputed() );
     }
 
 
@@ -5806,16 +5835,16 @@ BOOST_AUTO_TEST_CASE( escrow_dispute_apply )
 
     {
       const auto& escrow = db->get_escrow( et_op.from, et_op.escrow_id );
-      BOOST_REQUIRE_EQUAL( escrow.to, "bob" );
-      BOOST_REQUIRE_EQUAL( escrow.agent, "sam" );
-      BOOST_REQUIRE_EQUAL( escrow.ratification_deadline, et_op.ratification_deadline );
-      BOOST_REQUIRE_EQUAL( escrow.escrow_expiration, et_op.escrow_expiration );
+      BOOST_REQUIRE_EQUAL( escrow.get_to(), "bob" );
+      BOOST_REQUIRE_EQUAL( escrow.get_agent(), "sam" );
+      BOOST_REQUIRE_EQUAL( escrow.get_ratification_deadline(), et_op.ratification_deadline );
+      BOOST_REQUIRE_EQUAL( escrow.get_escrow_expiration(), et_op.escrow_expiration );
       BOOST_REQUIRE_EQUAL( escrow.get_hbd_balance(), et_op.get_hbd_amount() );
       BOOST_REQUIRE_EQUAL( escrow.get_hive_balance(), et_op.get_hive_amount() );
       BOOST_REQUIRE_EQUAL( escrow.get_fee(), ASSET( "0.000 TESTS" ) );
-      BOOST_REQUIRE( escrow.to_approved );
-      BOOST_REQUIRE( escrow.agent_approved );
-      BOOST_REQUIRE( escrow.disputed );
+      BOOST_REQUIRE( escrow.is_to_approved() );
+      BOOST_REQUIRE( escrow.is_agent_approved() );
+      BOOST_REQUIRE( escrow.is_disputed() );
     }
   }
   FC_LOG_AND_RETHROW()
@@ -5914,7 +5943,7 @@ BOOST_AUTO_TEST_CASE( escrow_release_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: escrow_release_apply" );
 
-    ACTORS( (alice)(bob)(sam)(dave) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(dave) );
     fund( "alice", HIVE_asset( 10'000 ) );
 
     escrow_transfer_operation et_op;
@@ -6329,7 +6358,8 @@ BOOST_AUTO_TEST_CASE( escrow_limit )
   {
     BOOST_TEST_MESSAGE( "Testing: escrow_limit" );
 
-    ACTORS((alice)(bob)(sam))
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam) );
+    vest( "alice", HIVE_asset( 1'500'000 ) ); // extra RC - alice runs ton of escrow_transfers in a row
     fund( "alice", HIVE_asset( 10'000 ) );
     generate_block();
 
@@ -6595,7 +6625,7 @@ BOOST_AUTO_TEST_CASE( transfer_to_savings_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: transfer_to_savings_apply" );
 
-    ACTORS( (alice)(bob) );
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     issue_funds( "alice", HIVE_asset( 10'000 ) );
@@ -6781,7 +6811,7 @@ BOOST_AUTO_TEST_CASE( transfer_from_savings_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: transfer_from_savings_apply" );
 
-    ACTORS( (alice)(bob) );
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     issue_funds( "alice", HIVE_asset( 10'000 ) );
@@ -6854,12 +6884,12 @@ BOOST_AUTO_TEST_CASE( transfer_from_savings_apply )
     BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), HIVE_asset( 0 ) );
     BOOST_REQUIRE_EQUAL( get_hive_savings( "alice" ), HIVE_asset( 9'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).savings_withdraw_requests, op.request_id + 1 );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).from, op.from );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).to, op.to );
-    BOOST_REQUIRE_EQUAL( to_string( db->get_savings_withdraw( "alice", op.request_id ).memo ), op.memo );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).request_id, op.request_id );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).amount, op.amount );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).complete, db->head_block_time() + HIVE_SAVINGS_WITHDRAW_TIME );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_from(), op.from );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_to(), op.to );
+    BOOST_REQUIRE_EQUAL( to_string( db->get_savings_withdraw( "alice", op.request_id ).get_memo() ), op.memo );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_request_id(), op.request_id );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_withdraw_amount(), op.amount );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_completion_time(), db->head_block_time() + HIVE_SAVINGS_WITHDRAW_TIME );
     validate_database();
 
 
@@ -6874,12 +6904,12 @@ BOOST_AUTO_TEST_CASE( transfer_from_savings_apply )
     BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), HBD_asset( 0 ) );
     BOOST_REQUIRE_EQUAL( get_hbd_savings( "alice" ), HBD_asset( 8'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).savings_withdraw_requests, op.request_id + 1 );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).from, op.from );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).to, op.to );
-    BOOST_REQUIRE_EQUAL( to_string( db->get_savings_withdraw( "alice", op.request_id ).memo ), op.memo );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).request_id, op.request_id );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).amount, op.amount );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).complete, db->head_block_time() + HIVE_SAVINGS_WITHDRAW_TIME );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_from(), op.from );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_to(), op.to );
+    BOOST_REQUIRE_EQUAL( to_string( db->get_savings_withdraw( "alice", op.request_id ).get_memo() ), op.memo );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_request_id(), op.request_id );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_withdraw_amount(), op.amount );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_completion_time(), db->head_block_time() + HIVE_SAVINGS_WITHDRAW_TIME );
     validate_database();
 
 
@@ -6903,12 +6933,12 @@ BOOST_AUTO_TEST_CASE( transfer_from_savings_apply )
     BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), HIVE_asset( 0 ) );
     BOOST_REQUIRE_EQUAL( get_hive_savings( "alice" ), HIVE_asset( 8'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).savings_withdraw_requests, op.request_id + 1 );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).from, op.from );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).to, op.to );
-    BOOST_REQUIRE_EQUAL( to_string( db->get_savings_withdraw( "alice", op.request_id ).memo ), op.memo );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).request_id, op.request_id );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).amount, op.amount );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).complete, db->head_block_time() + HIVE_SAVINGS_WITHDRAW_TIME );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_from(), op.from );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_to(), op.to );
+    BOOST_REQUIRE_EQUAL( to_string( db->get_savings_withdraw( "alice", op.request_id ).get_memo() ), op.memo );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_request_id(), op.request_id );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_withdraw_amount(), op.amount );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_completion_time(), db->head_block_time() + HIVE_SAVINGS_WITHDRAW_TIME );
     validate_database();
 
 
@@ -6923,12 +6953,12 @@ BOOST_AUTO_TEST_CASE( transfer_from_savings_apply )
     BOOST_REQUIRE_EQUAL( get_hbd_balance( "alice" ), HBD_asset( 0 ) );
     BOOST_REQUIRE_EQUAL( get_hbd_savings( "alice" ), HBD_asset( 7'000 ) );
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).savings_withdraw_requests, op.request_id + 1 );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).from, op.from );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).to, op.to );
-    BOOST_REQUIRE_EQUAL( to_string( db->get_savings_withdraw( "alice", op.request_id ).memo ), op.memo );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).request_id, op.request_id );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).amount, op.amount );
-    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).complete, db->head_block_time() + HIVE_SAVINGS_WITHDRAW_TIME );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_from(), op.from );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_to(), op.to );
+    BOOST_REQUIRE_EQUAL( to_string( db->get_savings_withdraw( "alice", op.request_id ).get_memo() ), op.memo );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_request_id(), op.request_id );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_withdraw_amount(), op.amount );
+    BOOST_REQUIRE_EQUAL( db->get_savings_withdraw( "alice", op.request_id ).get_completion_time(), db->head_block_time() + HIVE_SAVINGS_WITHDRAW_TIME );
     validate_database();
 
 
@@ -7037,7 +7067,7 @@ BOOST_AUTO_TEST_CASE( cancel_transfer_from_savings_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: cancel_transfer_from_savings_apply" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     issue_funds( "alice", HIVE_asset( 10'000 ) );
@@ -7127,10 +7157,7 @@ BOOST_AUTO_TEST_CASE( decline_voting_rights_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: decline_voting_rights_apply" );
 
-    ACTORS( (alice)(bob) );
-    generate_block();
-    vest( "alice", HIVE_asset( 10'000 ) );
-    vest( "bob", HIVE_asset( 10'000 ) );
+    ACTORS( HIVE_asset( 25'000 ), (alice)(bob) );
     generate_block();
 
     account_witness_proxy_operation proxy;
@@ -7192,7 +7219,7 @@ BOOST_AUTO_TEST_CASE( decline_voting_rights_apply )
 
     generate_blocks( db->head_block_time() + HIVE_OWNER_AUTH_RECOVERY_PERIOD - fc::seconds( HIVE_BLOCK_INTERVAL ), true );
     BOOST_REQUIRE( db->get_account( "alice" ).can_vote );
-    witness_create( "alice", alice_private_key, "foo.bar", alice_private_key.get_public_key(), 0 );
+    witness_create( "alice", alice_private_key, "foo.bar", alice_private_key.get_public_key(), HIVE_asset( 0 ) );
     witness_plugin->add_signing_key( alice_private_key );
 
     account_witness_vote_operation witness_vote;
@@ -7373,7 +7400,7 @@ BOOST_AUTO_TEST_CASE( account_create_with_delegation_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: account_create_with_delegation_apply" );
     signed_transaction tx;
-    ACTORS( (alice) );
+    ACTORS( DEFAULT_VESTING, (alice) );
     // 150 * fee = ( 5 * HIVE ) + SP
     //auto& gpo = db->get_dynamic_global_properties();
     generate_blocks(1);
@@ -7419,30 +7446,33 @@ BOOST_AUTO_TEST_CASE( claim_reward_balance_apply )
     BOOST_TEST_MESSAGE( "Testing: claim_reward_balance_apply" );
     BOOST_TEST_MESSAGE( "--- Setting up test state" );
 
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
 
     db_plugin->debug_update( []( database& db )
     {
-      db.modify( db.get_account( "alice" ), []( account_object& a )
+      temp_HIVE_balance hive, reward_as_hive;
+      temp_HBD_balance hbd;
+      temp_VEST_balance reward_vests;
+      db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        a.reward_hive_balance = HIVE_asset( 10'000 );
-        a.reward_hbd_balance = HBD_asset( 10'000 );
-        a.reward_vesting_balance = VEST_asset( 10'000'000 );
-        a.reward_vesting_hive = HIVE_asset( 10'000 );
-      });
+        hive = gpo.issue_HIVE( HIVE_asset( 20'000 ) );
+        hbd = gpo.issue_HBD( HBD_asset( 10'000 ), db.get_hbd_price() );
+        reward_vests = gpo.issue_VESTS( VEST_asset( 10'000'000 ), true );
+        reward_as_hive.transfer_from( hive, HIVE_asset( 10'000 ) );
+        gpo.access_pending_rewarded_vesting_hive() += reward_as_hive.as_asset();
+      } );
 
-      db.modify( db.get_dynamic_global_properties(), []( dynamic_global_property_object& gpo )
+      db.modify( db.get_account( "alice" ), [&]( account_object& a )
       {
-        gpo.current_supply += HIVE_asset( 20'000 );
-        gpo.current_hbd_supply += HBD_asset( 10'000 );
-        gpo.virtual_supply += HIVE_asset( 20'000 );
-        gpo.pending_rewarded_vesting_shares += VEST_asset( 10'000'000 );
-        gpo.pending_rewarded_vesting_hive += HIVE_asset( 10'000 );
-      });
-    });
+        a.access_hive_rewards().transfer_from( hive, HIVE_asset( 10'000 ) );
+        a.access_hbd_rewards().transfer_from( hbd, HBD_asset( 10'000 ) );
+        a.access_vest_rewards().transfer_from( reward_vests );
+        a.access_vest_rewards_as_hive().transfer_from( reward_as_hive );
+      } );
+    } );
 
     generate_block();
     validate_database();
@@ -7528,11 +7558,11 @@ BOOST_AUTO_TEST_CASE( delegate_vesting_shares_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: delegate_vesting_shares_authorities" );
     signed_transaction tx;
-    ACTORS( (alice)(bob)(sam) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam) );
     vest( "alice", HIVE_asset( 10'000'000 ) );
 
     delegate_vesting_shares_operation op;
-    op.vesting_shares = ASSET( "300.000000 VESTS" );
+    op.vesting_shares = ASSET( "2000000.000000 VESTS" );
     op.delegator = "alice";
     op.delegatee = "bob";
 
@@ -7568,10 +7598,10 @@ BOOST_AUTO_TEST_CASE( delegate_vesting_shares_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: delegate_vesting_shares_apply" );
     signed_transaction tx;
-    ACTORS( (alice)(bob)(charlie) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(charlie) );
     generate_block();
 
-    vest( "alice", HIVE_asset( 1'000'000 ) );
+    vest( "alice", HIVE_asset( 15'000'000 ) );
 
     generate_block();
 
@@ -7710,7 +7740,7 @@ BOOST_AUTO_TEST_CASE( delegate_vesting_shares_apply )
     BOOST_REQUIRE_EQUAL( itr->get_rshares(), old_manabar.current_mana - db->get_account( "bob" ).voting_manabar.current_mana - HIVE_VOTE_DUST_THRESHOLD );
 
     generate_block();
-    ACTORS( (sam)(dave) )
+    ACTORS( DEFAULT_VESTING, (sam)(dave) );
     generate_block();
 
     const account_object& sam_acc = db->get_account( "sam" );
@@ -7832,12 +7862,12 @@ BOOST_AUTO_TEST_CASE( delegate_vesting_shares_apply )
     auto end = db->get_index< vesting_delegation_expiration_index, by_id >().end();
     auto& gpo = db->get_dynamic_global_properties();
 
-    BOOST_REQUIRE_EQUAL( gpo.delegation_return_period, HIVE_DELEGATION_RETURN_PERIOD_HF20 );
+    BOOST_REQUIRE_EQUAL( gpo.get_delegation_return_period(), HIVE_DELEGATION_RETURN_PERIOD_HF20 );
 
     BOOST_REQUIRE( exp_obj != end );
     BOOST_REQUIRE_EQUAL( exp_obj->get_delegator(), sam_id );
     BOOST_REQUIRE_EQUAL( exp_obj->get_vesting(), sam_vest );
-    BOOST_REQUIRE_EQUAL( exp_obj->get_expiration_time(), db->head_block_time() + gpo.delegation_return_period );
+    BOOST_REQUIRE_EQUAL( exp_obj->get_expiration_time(), db->head_block_time() + gpo.get_delegation_return_period() );
     BOOST_REQUIRE_EQUAL( db->get_account( "sam" ).get_delegated_vesting(), sam_vest );
     BOOST_REQUIRE_EQUAL( db->get_account( "dave" ).get_received_vesting(), VEST_asset( 0 ) );
     delegation = db->find< vesting_delegation_object, by_delegation >( boost::make_tuple( sam_acc.get_id(), dave_acc.get_id() ) );
@@ -7893,10 +7923,10 @@ BOOST_AUTO_TEST_CASE( issue_971_vesting_removal )
   try
   {
     BOOST_TEST_MESSAGE( "Test Issue 971 Vesting Removal" );
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
-    vest( "alice", HIVE_asset( 1'000'000 ) );
+    vest( "alice", HIVE_asset( 8'000'000 ) );
 
     generate_block();
 
@@ -8027,21 +8057,24 @@ BOOST_AUTO_TEST_CASE( comment_beneficiaries_apply )
   try
   {
     BOOST_TEST_MESSAGE( "Test Comment Beneficiaries" );
-    ACTORS( (alice)(bob)(sam)(dave) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(dave) );
     generate_block();
+    vest( "bob", HIVE_asset( 20'000 ) ); // vest enough for bob's votes to not fall below HIVE_VOTE_DUST_THRESHOLD
 
     db_plugin->debug_update( [=]( database& db )
     {
-      db.modify( db.get_dynamic_global_properties(), [=]( dynamic_global_property_object& gpo )
+      temp_HBD_balance cleared;
+      db.modify( db.get_treasury(), [&]( account_object& a )
       {
-        gpo.proposal_fund_percent = 0;
-      });
+        a.access_hbd_balance().transfer_to( cleared );
+      } );
 
-      db.modify( db.get_treasury(), [=]( account_object& a )
+      db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        a.hbd_balance.amount.value = 0;
-      });
-    });
+        gpo.set_proposal_fund_percent( 0 );
+        gpo.burn_HBD( cleared, db.get_hbd_price() );
+      } );
+    } );
 
     set_price_feed( HBD_price( 1000, 1000 ) );
 
@@ -8130,13 +8163,25 @@ BOOST_AUTO_TEST_CASE( comment_beneficiaries_apply )
 
     db_plugin->debug_update( [=]( database& db )
     {
-      db.modify( db.get_dynamic_global_properties(), [=]( dynamic_global_property_object& gpo )
+      db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        gpo.current_supply -= gpo.get_total_reward_fund_hive();
-        gpo.total_reward_fund_hive = HIVE_asset( 100'000 );
-        gpo.current_supply += gpo.get_total_reward_fund_hive();
-      });
-    });
+        db.modify( db.get_reward_fund(), [&]( reward_fund_object& rfo )
+        {
+          HIVE_asset difference( rfo.get_reward_balance() - HIVE_asset( 100'000 ) );
+          temp_HIVE_balance tmp;
+          if( difference.amount >= 0 )
+          {
+            rfo.access_reward_balance().transfer_to( tmp, difference );
+            gpo.burn_HIVE( tmp );
+          }
+          else
+          {
+            tmp = gpo.issue_HIVE( -difference );
+            rfo.access_reward_balance().transfer_from( tmp );
+          }
+        } );
+      } );
+    } );
 
     generate_block();
 
@@ -8159,19 +8204,21 @@ BOOST_AUTO_TEST_CASE( comment_options_apply )
   try
   {
     BOOST_TEST_MESSAGE( "Test Comment options" );
-    ACTORS( (alice)(bob)(sam)(dave) )
+    ACTORS( HIVE_asset( 20'000 ), (alice)(bob)(sam)(dave) ); // vest enough to cross HIVE_VOTE_DUST_THRESHOLD
     generate_block();
 
     db_plugin->debug_update( [=]( database& db )
     {
-      db.modify( db.get_dynamic_global_properties(), [=]( dynamic_global_property_object& gpo )
+      temp_HBD_balance cleared;
+      db.modify( db.get_treasury(), [&]( account_object& a )
       {
-        gpo.proposal_fund_percent = 0;
+        a.access_hbd_balance().transfer_to( cleared );
       } );
 
-      db.modify( db.get_treasury(), [=]( account_object& a )
+      db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        a.hbd_balance.amount.value = 0;
+        gpo.set_proposal_fund_percent( 0 );
+        gpo.burn_HBD( cleared, db.get_hbd_price() );
       } );
     } );
 
@@ -8281,11 +8328,23 @@ BOOST_AUTO_TEST_CASE( comment_options_apply )
 
     auto set_reward_pool = [=]( database& db )
     {
-      db.modify( db.get_dynamic_global_properties(), [=]( dynamic_global_property_object& gpo )
+      db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        gpo.current_supply -= gpo.get_total_reward_fund_hive();
-        gpo.total_reward_fund_hive = HIVE_asset( 100'000 );
-        gpo.current_supply += gpo.get_total_reward_fund_hive();
+        db.modify( db.get_reward_fund(), [&]( reward_fund_object& rfo )
+        {
+          HIVE_asset difference( rfo.get_reward_balance() - HIVE_asset( 100'000 ) );
+          temp_HIVE_balance tmp;
+          if( difference.amount >= 0 )
+          {
+            rfo.access_reward_balance().transfer_to( tmp, difference );
+            gpo.burn_HIVE( tmp );
+          }
+          else
+          {
+            tmp = gpo.issue_HIVE( -difference );
+            rfo.access_reward_balance().transfer_from( tmp );
+          }
+        } );
       } );
     };
 
@@ -8307,8 +8366,8 @@ BOOST_AUTO_TEST_CASE( comment_options_apply )
     BOOST_REQUIRE( db->find_comment_cashout( *db->get_comment( "alice", string( "test2" ) ) ) == nullptr );
     //alice got reward for test2 comment as author...
     BOOST_REQUIRE_EQUAL( get_hive_rewards( "alice" ), HIVE_asset( 0 ) );
-    BOOST_REQUIRE_EQUAL( get_hbd_rewards( "alice" ), HBD_asset( 18635 ) );
-    BOOST_REQUIRE_EQUAL( get_vest_rewards_as_hive( "alice" ), HIVE_asset( 18635 ) );
+    BOOST_REQUIRE_EQUAL( get_hbd_rewards( "alice" ), HBD_asset( 25771 ) );
+    BOOST_REQUIRE_EQUAL( get_vest_rewards_as_hive( "alice" ), HIVE_asset( 25771 ) );
     //...but no curation for sam
     BOOST_REQUIRE_EQUAL( get_hive_rewards( "sam" ), HIVE_asset( 0 ) );
     BOOST_REQUIRE_EQUAL( get_hbd_rewards( "sam" ), HBD_asset( 0 ) );
@@ -8320,8 +8379,8 @@ BOOST_AUTO_TEST_CASE( comment_options_apply )
     BOOST_REQUIRE( db->find_comment_cashout( *db->get_comment( "alice", string( "test3" ) ) ) == nullptr );
     //alice and dave got reward for test3 comment but they sum to 0.010 HBD
     BOOST_REQUIRE_EQUAL( get_hive_rewards( "alice" ), HIVE_asset( 0 ) );
-    BOOST_REQUIRE_EQUAL( get_hbd_rewards( "alice" ), HBD_asset( 18635 + 2 ) );
-    BOOST_REQUIRE_EQUAL( get_vest_rewards_as_hive( "alice" ), HIVE_asset( 18635 + 3 ) );
+    BOOST_REQUIRE_EQUAL( get_hbd_rewards( "alice" ), HBD_asset( 25771 + 2 ) );
+    BOOST_REQUIRE_EQUAL( get_vest_rewards_as_hive( "alice" ), HIVE_asset( 25771 + 3 ) );
     BOOST_REQUIRE_EQUAL( get_hive_rewards( "dave" ), HIVE_asset( 0 ) );
     BOOST_REQUIRE_EQUAL( get_hbd_rewards( "dave" ), HBD_asset( 0 ) );
     BOOST_REQUIRE_EQUAL( get_vest_rewards_as_hive( "dave" ), HIVE_asset( 5 ) );
@@ -8335,19 +8394,22 @@ BOOST_AUTO_TEST_CASE( comment_options_deleted_permlink_reuse )
   try
   {
     BOOST_TEST_MESSAGE( "Test if comment options persist through deleted comment reuse" );
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
+    vest( "alice", HIVE_asset( 15'000 ) ); // extra RC for various operations
     generate_block();
 
     db_plugin->debug_update( [=]( database& db )
     {
-      db.modify( db.get_dynamic_global_properties(), [=]( dynamic_global_property_object& gpo )
+      temp_HBD_balance cleared;
+      db.modify( db.get_treasury(), [&]( account_object& a )
       {
-        gpo.proposal_fund_percent = 0;
+        a.access_hbd_balance().transfer_to( cleared );
       } );
 
-      db.modify( db.get_treasury(), [=]( account_object& a )
+      db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        a.hbd_balance.amount.value = 0;
+        gpo.set_proposal_fund_percent( 0 );
+        gpo.burn_HBD( cleared, db.get_hbd_price() );
       } );
     } );
 
@@ -8420,7 +8482,7 @@ BOOST_AUTO_TEST_CASE( message_when_author_or_comment_doesnt_exist )
   try
   {
     BOOST_TEST_MESSAGE( "Test if correct message is generate if an account doesn't exist" );
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -8447,7 +8509,7 @@ BOOST_AUTO_TEST_CASE( witness_set_properties_validate )
   {
     BOOST_TEST_MESSAGE( "Testing: witness_set_properties_validate" );
 
-    ACTORS( (alice) )
+    ACTORS( DEFAULT_VESTING, (alice) );
     fund( "alice", HIVE_asset( 10'000 ) );
     private_key_type signing_key = generate_private_key( "old_key" );
 
@@ -8644,7 +8706,7 @@ BOOST_AUTO_TEST_CASE( witness_set_properties_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: witness_set_properties_apply" );
 
-    ACTORS( (alice) )
+    ACTORS( HIVE_asset( 15'000 ), (alice) ); // extra RC for various operations
     fund( "alice", HIVE_asset( 10'000 ) );
     private_key_type signing_key = generate_private_key( "old_key" );
 
@@ -8860,7 +8922,7 @@ BOOST_AUTO_TEST_CASE( claim_account_apply )
   try
   {
     BOOST_TEST_MESSAGE( "Testing: claim_account_apply" );
-    ACTORS( (alice) )
+    ACTORS( HIVE_asset( 10'000'000 ), (alice) ); // alice needs a lot of RC for account token claims
     generate_block();
 
     issue_funds( "alice", HIVE_asset( 20'000 ) );
@@ -8877,7 +8939,7 @@ BOOST_AUTO_TEST_CASE( claim_account_apply )
     auto get_subsidy_pools = [&]( int64_t& con_subs, int64_t &ncon_subs )
     {
       // get consensus and non-consensus subsidies
-      con_subs = db->get_dynamic_global_properties().available_account_subsidies;
+      con_subs = db->get_dynamic_global_properties().get_available_account_subsidies();
       ncon_subs = db->get< rc_pool_object >().get_pool( resource_new_accounts );
     };
 
@@ -8943,7 +9005,7 @@ BOOST_AUTO_TEST_CASE( claim_account_apply )
     tx.clear();
     tx.operations.push_back( op );
     tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
-    HIVE_REQUIRE_THROW( push_transaction( tx, alice_private_key ), fc::assert_exception );
+    HIVE_REQUIRE_ASSERT( push_transaction( tx, alice_private_key ), "o_fee == wso.median_props.account_creation_fee && \"Wrong fee\"" );
     validate_database();
 
 
@@ -9020,7 +9082,7 @@ BOOST_AUTO_TEST_CASE( claim_account_apply )
     {
       db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        gpo.available_account_subsidies = 0;
+        gpo.set_available_account_subsidies( 0 );
       });
     });
     generate_block();
@@ -9145,8 +9207,8 @@ BOOST_AUTO_TEST_CASE( create_claimed_account_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: create_claimed_account_apply" );
 
-    ACTORS( (alice) )
-    vest( HIVE_TEMP_ACCOUNT, HIVE_asset( 10'000 ) );
+    ACTORS( HIVE_asset( 50'000 ), (alice) ); // extra RC for account creation
+    vest( HIVE_TEMP_ACCOUNT, HIVE_asset( 50'000 ) ); // temp also creates account
     generate_block();
 
     signed_transaction tx;
@@ -9178,7 +9240,8 @@ BOOST_AUTO_TEST_CASE( create_claimed_account_apply )
     generate_block();
     op.owner = authority( 1, "bob", 1 );
     tx.clear();
-    BOOST_REQUIRE_THROW( push_transaction( tx, alice_private_key ), fc::exception );
+    tx.operations.push_back( op );
+    HIVE_REQUIRE_ASSERT( push_transaction( tx, alice_private_key ), "a != nullptr" );
     validate_database();
 
 
@@ -9192,9 +9255,9 @@ BOOST_AUTO_TEST_CASE( create_claimed_account_apply )
     const auto& bob_auth = db->get< account_authority_object, by_account >( "bob" );
 
     BOOST_REQUIRE_EQUAL( bob.get_name(), "bob" );
-    BOOST_REQUIRE( bob_auth.owner == authority( 1, priv_key.get_public_key(), 1 ) );
-    BOOST_REQUIRE( bob_auth.active == authority( 2, priv_key.get_public_key(), 2 ) );
-    BOOST_REQUIRE( bob_auth.posting == authority( 3, priv_key.get_public_key(), 3 ) );
+    BOOST_REQUIRE( bob_auth.get_owner() == authority( 1, priv_key.get_public_key(), 1 ) );
+    BOOST_REQUIRE( bob_auth.get_active() == authority( 2, priv_key.get_public_key(), 2 ) );
+    BOOST_REQUIRE( bob_auth.get_posting() == authority( 3, priv_key.get_public_key(), 3 ) );
     BOOST_REQUIRE( bob.memo_key == priv_key.get_public_key() );
 
     CHECK_NO_PROXY( bob );
@@ -9241,7 +9304,7 @@ BOOST_AUTO_TEST_CASE( account_auth_tests )
 {
   try
   {
-    ACTORS( (alice)(bob)(charlie) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(charlie) );
     generate_block();
 
     issue_funds( "alice", HIVE_asset( 20'000 ) );
@@ -9261,19 +9324,23 @@ BOOST_AUTO_TEST_CASE( account_auth_tests )
     {
       db.modify( db.get< account_authority_object, by_account >( "alice"), [&]( account_authority_object& auth )
       {
-        auth.active.add_authority( "bob", 1 );
-        auth.posting.add_authority( "charlie", 1 );
-      });
+        authority new_active = auth.get_active().to_authority();
+        new_active.add_authority( "bob", 1 );
+        auth.set_active( new_active );
+        authority new_posting = auth.get_posting().to_authority();
+        new_posting.add_authority( "charlie", 1 );
+        auth.set_posting( new_posting );
+      } );
 
       db.modify( db.get< account_authority_object, by_account >( "bob" ), [&]( account_authority_object& auth )
       {
-        auth.posting = authority( 1, bob_posting_private_key.get_public_key(), 1 );
-      });
+        auth.set_posting( authority( 1, bob_posting_private_key.get_public_key(), 1 ) );
+      } );
 
       db.modify( db.get< account_authority_object, by_account >( "charlie" ), [&]( account_authority_object& auth )
       {
-        auth.posting = authority( 1, charlie_posting_private_key.get_public_key(), 1 );
-      });
+        auth.set_posting( authority( 1, charlie_posting_private_key.get_public_key(), 1 ) );
+      } );
     });
 
     generate_block();
@@ -9614,7 +9681,7 @@ BOOST_AUTO_TEST_CASE( account_update2_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: account_update2_apply" );
 
-    ACTORS( (alice)(sam) )
+    ACTORS( DEFAULT_VESTING, (alice)(sam) );
     private_key_type new_private_key = generate_private_key( "new_key" );
 
     BOOST_TEST_MESSAGE( "--- Test normal update" );
@@ -9636,8 +9703,8 @@ BOOST_AUTO_TEST_CASE( account_update2_apply )
     const account_authority_object& acct_auth = db->get< account_authority_object, by_account >( "alice" );
 
     BOOST_REQUIRE_EQUAL( acct.get_name(), "alice" );
-    BOOST_REQUIRE( acct_auth.owner == authority( 1, new_private_key.get_public_key(), 1 ) );
-    BOOST_REQUIRE( acct_auth.active == authority( 2, new_private_key.get_public_key(), 2 ) );
+    BOOST_REQUIRE( acct_auth.get_owner() == authority( 1, new_private_key.get_public_key(), 1 ) );
+    BOOST_REQUIRE( acct_auth.get_active() == authority( 2, new_private_key.get_public_key(), 2 ) );
     BOOST_REQUIRE( acct.memo_key == new_private_key.get_public_key() );
 
     validate_database();
@@ -9646,7 +9713,7 @@ BOOST_AUTO_TEST_CASE( account_update2_apply )
     tx.operations.clear();
     op.account = "bob";
     tx.operations.push_back( op );
-    HIVE_REQUIRE_THROW( push_transaction( tx, new_private_key ), fc::exception )
+    HIVE_REQUIRE_THROW( push_transaction( tx, new_private_key ), fc::exception );
     validate_database();
 
 
@@ -9717,12 +9784,13 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_validate )
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
     op.from = "alice";
 
-    //ABW: we might consider moving that check to execution and allow 1 execution in case of edit, so users
-    //can modify amount on last transfer without changing schedule (like last lease payment is usually connected
-    //with buyout sum, so it is larger than usual)
-    BOOST_TEST_MESSAGE( " --- executions is less than 2" );
+    // Since HF29 a single execution is allowed at the protocol level so that an existing recurrent
+    // transfer can be modified down to its last remaining execution (the >= 2 requirement for creation
+    // is now enforced in the evaluator). validate() therefore only rejects executions == 0.
+    BOOST_TEST_MESSAGE( " --- executions equal to 1 is valid at protocol level" );
     op.executions = 1;
-    HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
+    op.validate();
+    BOOST_TEST_MESSAGE( " --- executions equal to 0 is invalid" );
     op.executions = 0;
     HIVE_REQUIRE_THROW( op.validate(), fc::assert_exception );
 
@@ -9736,7 +9804,7 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_apply )
   {
     BOOST_TEST_MESSAGE( "Testing: recurrent_transfer_apply" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).open_recurrent_transfers, 0 );
@@ -9861,7 +9929,7 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_hbd )
   {
     BOOST_TEST_MESSAGE( "Testing: recurrent_transfer with HBD" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).open_recurrent_transfers, 0 );
@@ -9902,11 +9970,12 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_max_open_transfers )
   try
   {
     BOOST_TEST_MESSAGE( "Testing: too many open recurrent transfers" );
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
+    vest( "alice", HIVE_asset( 60'000 ) ); // extra RC - alice runs tons of recurrent_transfers in one block
 
     generate_block();
 
-    #define CREATE_ACTORS(z, n, text) ACTORS( (actor ## n) );
+    #define CREATE_ACTORS(z, n, text) ACTORS( DEFAULT_VESTING, (actor ## n) );
     BOOST_PP_REPEAT(HIVE_MAX_OPEN_RECURRENT_TRANSFERS, CREATE_ACTORS, )
     generate_block();
 
@@ -9921,7 +9990,8 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_max_open_transfers )
     op.recurrence = 72;
     op.executions = 13;
 
-    for (int i = 0; i < HIVE_MAX_OPEN_RECURRENT_TRANSFERS; i++) {
+    for( int i = 0; i < HIVE_MAX_OPEN_RECURRENT_TRANSFERS; ++i )
+    {
       op.to = "actor" + std::to_string(i);
       push_transaction(op, alice_private_key);
     }
@@ -9983,10 +10053,10 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_max_transfer_processed_per_block )
   try
   {
     BOOST_TEST_MESSAGE( "Testing: too many open recurrent transfers" );
-    ACTORS( (alice)(bob)(eve)(martin) )
+    ACTORS( HIVE_asset( 60'000 ), (alice)(bob)(eve)(martin) ); // extra RC to cover tons of recurrent transfers in single block
     generate_block();
 
-    #define CREATE_ACTORS(z, n, text) ACTORS( (actor ## n) );
+    #define CREATE_ACTORS(z, n, text) ACTORS( DEFAULT_VESTING, (actor ## n) );
     BOOST_PP_REPEAT(251, CREATE_ACTORS, )
 
     generate_block();
@@ -10005,20 +10075,23 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_max_transfer_processed_per_block )
     op.executions = 25;
 
     // 1000 recurrent transfers
-    for (int k = 0; k < 4; k++) {
+    for( int k = 0; k < 4; ++k )
+    {
       op.from = senders[k];
-      for (int i = 0; i < 250; i++) {
+      for( int i = 0; i < 250; ++i )
+      {
         op.to = "actor" + std::to_string(i);
-        push_transaction(op, senders_keys[k]);
+        push_transaction( op, senders_keys[k] );
       }
     }
 
     // Those transfers won't be executed on the first block but on the second
-    for (int k = 0; k < 4; k++) {
+    for( int k = 0; k < 4; ++k )
+    {
       op.from = senders[k];
       op.to = "actor250";
       op.amount = ASSET( "3.000 TESTS" );
-      push_transaction(op, senders_keys[k]);
+      push_transaction( op, senders_keys[k] );
     }
 
     BOOST_TEST_MESSAGE( "Testing: executing the first 1000 recurrent transfers");
@@ -10085,7 +10158,7 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_pair_id_basic )
   {
     BOOST_TEST_MESSAGE( "Recurrent_transfer with two pair_ids" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).open_recurrent_transfers, 0 );
@@ -10149,7 +10222,7 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_pair_id_crud )
   {
     BOOST_TEST_MESSAGE( "crud operations with recurrent transfers and pair_ids" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).open_recurrent_transfers, 0 );
@@ -10251,7 +10324,7 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_same_pair_id_different_receivers )
   {
     BOOST_TEST_MESSAGE( "recurrent transfer with the same pair_id but different receivers" );
 
-    ACTORS( (alice)(bob)(dave) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(dave) );
     generate_block();
 
     BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).open_recurrent_transfers, 0 );
@@ -10314,7 +10387,8 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_exact_max )
   {
     BOOST_TEST_MESSAGE( "recurrent_transfer with exactly max allowed end date" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
+    vest( "alice", HIVE_asset( 10'000 ) ); // extra RC for recurrent transfers
     generate_block();
 
     issue_funds( "alice", HBD_asset( 200'000 ) );
@@ -10367,7 +10441,7 @@ BOOST_AUTO_TEST_CASE( failed_recurrent_transfer )
 
     configuration_data.set_min_recurrent_transfers_recurrence( 1 );
 
-    ACTORS( (alice)(bob)(carol)(dan) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol)(dan) );
     generate_block();
 
     issue_funds( "alice", HBD_asset( 7'000 ) );
@@ -10423,7 +10497,7 @@ BOOST_AUTO_TEST_CASE( extensions_in_virtual_operations_generated_after_recurrent
 
     configuration_data.set_min_recurrent_transfers_recurrence( 1 );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     issue_funds( "alice", HBD_asset( 7'000 ) );
@@ -10470,7 +10544,8 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_edit_overextended )
   {
     BOOST_TEST_MESSAGE( "recurrent_transfer edit that overextends duration" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
+    vest( "alice", HIVE_asset( 10'000 ) ); // extra RC for recurrent transfers
     generate_block();
 
     issue_funds( "alice", HBD_asset( 200'000 ) );
@@ -10513,7 +10588,7 @@ BOOST_AUTO_TEST_CASE( recurrent_transfer_full_edit_overextended )
   {
     BOOST_TEST_MESSAGE( "recurrent_transfer edit that overextends duration with change of recurrence" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
 
     issue_funds( "alice", HBD_asset( 200'000 ) );
@@ -10553,10 +10628,10 @@ BOOST_AUTO_TEST_CASE( account_witness_block_approve_authorities )
   {
     BOOST_TEST_MESSAGE( "Testing: witness_block_approve_operation" );
 
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
 
     private_key_type alice_witness_key = generate_private_key( "alice_witness" );
-    witness_create( "alice", alice_private_key, "foo.bar", alice_witness_key.get_public_key(), 0 );
+    witness_create( "alice", alice_private_key, "foo.bar", alice_witness_key.get_public_key(), HIVE_asset( 0 ) );
     witness_plugin->add_signing_key( alice_witness_key );
 
     generate_block();
@@ -10616,7 +10691,7 @@ BOOST_AUTO_TEST_CASE( private_key_memo_test )
   {
     BOOST_TEST_MESSAGE( "Testing checks for private key leaked into memo" );
 
-    ACTORS( (bob) )
+    ACTORS( DEFAULT_VESTING, (bob) );
     generate_block();
 
 #define ALICE_MASTER_PASSWORD "Alice has a cat"
@@ -10811,16 +10886,16 @@ struct timeshare_test_fixture : clean_database_fixture
     clean_database_fixture(shared_file_size_big, hardfork_number)
   {
     // declare 20 witnesses that we'll vote in.  these will remain constant throughout the test
-    ACTORS((voted1)(voted2)(voted3)(voted4)(voted5)(voted6)(voted7)(voted8)(voted9)(voted10)
-                   (voted11)(voted12)(voted13)(voted14)(voted15)(voted16)(voted17)(voted18)(voted19)(voted20))
+    ACTORS( DEFAULT_VESTING, (voted1)(voted2)(voted3)(voted4)(voted5)(voted6)(voted7)(voted8)(voted9)(voted10)
+                   (voted11)(voted12)(voted13)(voted14)(voted15)(voted16)(voted17)(voted18)(voted19)(voted20) );
     // declare 10 witnesses that will vie for the 21st slot
-    ACTORS((timeshare1)(timeshare2)(timeshare3)(timeshare4)(timeshare5)(timeshare6)(timeshare7)(timeshare8)(timeshare9)(timeshare10))
+    ACTORS( DEFAULT_VESTING, (timeshare1)(timeshare2)(timeshare3)(timeshare4)(timeshare5)(timeshare6)(timeshare7)(timeshare8)(timeshare9)(timeshare10) );
     for (unsigned i = 1; i <= 10; ++i)
       timeshare_witness_names.insert("timeshare" + std::to_string(i));
 
-    ACTOR(staticvoter) // one account that votes for all voted witnesses
-    ACTOR(timesharevoter1) // one account that votes for all timeshare witnesses
-    ACTORS((timesharevoter2)(timesharevoter3))
+    ACTOR( DEFAULT_VESTING, staticvoter ); // one account that votes for all voted witnesses
+    ACTOR( DEFAULT_VESTING, timesharevoter1 ); // one account that votes for all timeshare witnesses
+    ACTORS( DEFAULT_VESTING, (timesharevoter2)(timesharevoter3) );
     generate_block();
 
     vest( "staticvoter", HIVE_asset( 100'000'000 ) );
@@ -10828,7 +10903,17 @@ struct timeshare_test_fixture : clean_database_fixture
     vest( "timesharevoter2", HIVE_asset( 10'000'000 ) );
     vest( "timesharevoter3", HIVE_asset( 100 ) );
 
-    ACTORS((littlevoter1)(littlevoter2)(littlevoter3)(littlevoter4)(littlevoter5)(littlevoter6)(littlevoter7)(littlevoter8)(littlevoter9)(littlevoter10))
+    // littlevoter1 toggles its witness vote ~2100 times below. It must stay a tiny-weight voter (the test
+    // relies on its vote being too small to alter the schedule), so instead of extra vesting we give the
+    // littlevoters a large non-delegatable rc_adjustment floor by creating them under a high
+    // account_creation_fee - that is pure RC, it does not count as vote weight, and (unlike direct RC
+    // delegation) it works pre-HF26 too.
+    set_account_creation_fee( HIVE_asset( 1'500'000 ) );
+    generate_block();
+    ACTORS( DEFAULT_VESTING, (littlevoter1)(littlevoter2)(littlevoter3)(littlevoter4)(littlevoter5)(littlevoter6)(littlevoter7)(littlevoter8)(littlevoter9)(littlevoter10) );
+    generate_block();
+    set_account_creation_fee( HIVE_asset( 3'000 ) ); // restore mainnet-like fee
+    generate_block();
     for( unsigned i = 1; i <= 10; ++i )
       vest( "littlevoter" + std::to_string(i), HIVE_asset( 1 ) );
 
@@ -10838,7 +10923,7 @@ struct timeshare_test_fixture : clean_database_fixture
     {
       const private_key_type account_key = generate_private_key(witness_name);
       const private_key_type witness_key = generate_private_key(witness_name + "_witness");
-      witness_create(witness_name, account_key, witness_name + ".com", witness_key.get_public_key(), 1000);
+      witness_create(witness_name, account_key, witness_name + ".com", witness_key.get_public_key(), HIVE_asset( 1000 ) );
       witness_plugin->add_signing_key( witness_key );
       //const witness_object& sam_witness = db->get_witness("sam");
     };

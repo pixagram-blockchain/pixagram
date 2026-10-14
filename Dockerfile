@@ -3,15 +3,21 @@
 # Build stage uses ci-base-image from common-ci-configuration (centralized build toolchain)
 # To be started from cloned hive source directory.
 ARG CI_REGISTRY_IMAGE=registry.gitlab.syncad.com/hive/hive/
-ARG CI_IMAGE_TAG=ubuntu24.04-py3.14-1
+ARG CI_IMAGE_TAG=ubuntu26.04-1
 ARG BUILD_IMAGE_TAG
 ARG IMAGE_TAG_PREFIX
-# CI base image for build stage - must be at top level for FROM to see it
-# Using commit hash instead of tag to pin to a specific docker image for build repeatability.
-# Tags can be moved/overwritten, but commit hashes are immutable. May switch to tags in future.
-ARG CI_BASE_IMAGE=registry.gitlab.syncad.com/hive/common-ci-configuration/ci-base-image:58a2bdad8d40d0b7b06b0aac5f97c7d5a8b3e799
+# CI base image for build stage - must be at top level for FROM to see it.
+# Pinned to the published ci-base-image version tag that ships the aarch64 cross toolchain +
+# preinstalled aarch64 RocksDB (hive/common-ci-configuration!377).
+ARG CI_BASE_IMAGE=registry.gitlab.syncad.com/hive/common-ci-configuration/ci-base-image:pypa_2_28-pg18-5
 
-FROM phusion/baseimage:noble-1.0.1 AS runtime
+# Runtime base for the final `instance` image. Default: the pre-published, commit-tagged
+# minimal-runtime image (x86_64 fast path). Multiarch builds pass
+# INSTANCE_BASE_IMAGE=minimal-runtime to build the runtime inline per-arch from the
+# multiarch ubuntu:26.04 base, so no separately-published multiarch minimal-runtime is needed.
+ARG INSTANCE_BASE_IMAGE=${CI_REGISTRY_IMAGE}minimal-runtime:${CI_IMAGE_TAG}
+
+FROM phusion/baseimage:resolute-1.0.11 AS runtime
 
 ENV LANG=en_US.UTF-8
 
@@ -28,7 +34,7 @@ RUN ./scripts/setup_ubuntu.sh --runtime --hived-account="hived"
 USER hived
 WORKDIR /home/hived
 
-FROM ubuntu:24.04 AS minimal-runtime
+FROM ubuntu:26.04 AS minimal-runtime
 
 ENV LANG=en_US.UTF-8
 
@@ -51,8 +57,15 @@ USER hived
 WORKDIR /home/hived
 
 # Build stage uses centralized ci-base-image from common-ci-configuration
-# This image includes: build toolchain, sccache, Pythons 3.8 - 3.14, glibc 2.28, Docker CLI, hived user
-FROM ${CI_BASE_IMAGE} AS build
+# This image includes: build toolchain, sccache, Pythons 3.8 - 3.14, glibc 2.28, Docker CLI, hived user.
+# Pinned to the native build platform ($BUILDPLATFORM) so the heavy C++ compile is NEVER emulated;
+# aarch64 targets are cross-compiled (not emulated) using the toolchain baked into ci-base-image.
+FROM --platform=${BUILDPLATFORM} ${CI_BASE_IMAGE} AS build
+
+# Target architecture (set automatically by BuildKit: amd64 | arm64). amd64 builds
+# natively; arm64 cross-compiles via $CROSS_ROOT/Toolchain.cmake (+ preinstalled aarch64 vendor libs).
+ARG TARGETARCH
+ENV TARGETARCH=${TARGETARCH}
 
 ARG BUILD_HIVE_TESTNET=OFF
 ENV BUILD_HIVE_TESTNET=${BUILD_HIVE_TESTNET}
@@ -95,6 +108,15 @@ RUN --mount=type=cache,target=/home/hived/build,sharing=locked <<-EOF
   sudo mkdir -p "${INSTALLATION_DIR}"
   sudo chown hived:users "${INSTALLATION_DIR}"
 
+  # For aarch64 targets, cross-compile using the toolchain + preinstalled aarch64 vendor libs
+  # (RocksDB) baked into ci-base-image. The whole cross environment is set up by build.sh's
+  # --cross-root (it picks up the preinstalled RocksDB from $HIVE_AARCH64_VENDOR_DIR). amd64 builds
+  # natively (no extra args).
+  CROSS_ARGS=()
+  if [ "${TARGETARCH}" = "arm64" ]; then
+    CROSS_ARGS+=( --cross-root="${CROSS_ROOT}" )
+  fi
+
   # Reuses the cached build directory across rebuilds so ninja can do
   # incremental compilation. --clean-after-build intentionally dropped;
   # keeping the .o/.a files is the whole point of the cache mount.
@@ -102,6 +124,7 @@ RUN --mount=type=cache,target=/home/hived/build,sharing=locked <<-EOF
   --cmake-arg="-DBUILD_HIVE_TESTNET=${BUILD_HIVE_TESTNET}" \
   --cmake-arg="-DHIVE_CONVERTER_BUILD=${HIVE_CONVERTER_BUILD}" \
   --cmake-arg="-DHIVE_LINT=${HIVE_LINT}" \
+  "${CROSS_ARGS[@]}" \
   --flat-binary-directory="${INSTALLATION_DIR}"
 
   # Show sccache statistics to verify distributed caching is working
@@ -113,7 +136,7 @@ RUN --mount=type=cache,target=/home/hived/build,sharing=locked <<-EOF
   sudo chown -R hived:users "${INSTALLATION_DIR}/"*
 EOF
 
-FROM ${CI_REGISTRY_IMAGE}minimal-runtime:$CI_IMAGE_TAG AS instance
+FROM --platform=${TARGETPLATFORM} ${INSTANCE_BASE_IMAGE} AS instance
 
 ARG BUILD_TIME
 ARG GIT_COMMIT_SHA

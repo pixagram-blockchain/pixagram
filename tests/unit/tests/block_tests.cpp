@@ -49,17 +49,17 @@
 #include <hive/chain/detail/state/recurrent_transfer_object.hpp>
 
 #include <hive/chain/external_storage/placeholder_comment_archive.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -74,6 +74,7 @@
 #include <hive/chain/detail/state/withdraw_vesting_route_object_multiindex.hpp>
 
 #include <hive/plugins/account_history_rocksdb/account_history_rocksdb_plugin.hpp>
+#include <hive/plugins/account_history_rocksdb/account_history_rocksdb_objects_multiindex.hpp>
 #include <hive/plugins/witness/block_producer.hpp>
 
 #include <hive/utilities/tempdir.hpp>
@@ -134,7 +135,7 @@ void open_test_database( database& db, block_storage_i& block_storage,
   args.shared_mem_dir = dir;
   args.shared_file_size = TEST_SHARED_MEM_SIZE;
   args.database_cfg = hive::utilities::default_database_configuration();
-  configuration_data.set_initial_asset_supply( INITIAL_TEST_SUPPLY, HBD_INITIAL_TEST_SUPPLY );
+  configuration_data.set_initial_asset_supply( HIVE_INITIAL_TEST_SUPPLY, HBD_INITIAL_TEST_SUPPLY, HP_INITIAL_TEST_SUPPLY );
   db._log_hardforks = log_hardforks;
   bl_args.data_dir = dir;
   db.pre_open( args );
@@ -891,7 +892,7 @@ BOOST_FIXTURE_TEST_CASE( optional_tapos, clean_database_fixture )
   try
   {
     idump((db->get_account("initminer")));
-    ACTORS( (alice)(bob) );
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
 
     generate_block();
 
@@ -945,7 +946,7 @@ BOOST_FIXTURE_TEST_CASE( optional_tapos, clean_database_fixture )
 BOOST_FIXTURE_TEST_CASE( double_sign_check, clean_database_fixture )
 { try {
   generate_block();
-  ACTOR(bob);
+  ACTOR( DEFAULT_VESTING, bob );
   share_type amount = 1000;
 
   signed_transaction trx;
@@ -1029,7 +1030,7 @@ BOOST_FIXTURE_TEST_CASE( rsf_missed_blocks, clean_database_fixture )
 
     auto rsf = [&]() -> string
     {
-      fc::uint128 rsf = db->get_dynamic_global_properties().recent_slots_filled;
+      fc::uint128 rsf = db->get_dynamic_global_properties().get_recent_slots_filled();
       string result = "";
       result.reserve(128);
       for( int i=0; i<128; i++ )
@@ -1208,7 +1209,7 @@ BOOST_FIXTURE_TEST_CASE( hardfork_test, hived_fixture )
     {
       account_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), init_account_pub_key );
       fund( HIVE_INIT_MINER_NAME + fc::to_string( i ), HIVE_MIN_PRODUCER_REWARD );
-      witness_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), init_account_priv_key, "foo.bar", init_account_pub_key, HIVE_MIN_PRODUCER_REWARD.amount );
+      witness_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), init_account_priv_key, "foo.bar", init_account_pub_key, HIVE_MIN_PRODUCER_REWARD );
     }
 
     validate_database();
@@ -1300,7 +1301,7 @@ BOOST_FIXTURE_TEST_CASE( generate_block_size, clean_database_fixture )
     {
       db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        gpo.maximum_block_size = HIVE_MIN_BLOCK_SIZE_LIMIT;
+        gpo.set_maximum_block_size( HIVE_MIN_BLOCK_SIZE_LIMIT );
       });
     });
     generate_block();
@@ -1899,6 +1900,9 @@ struct init_supply_database_fixture : public hived_fixture
   {
     try
     {
+      // This test assumes the whole initial supply sits liquid on 'initminer', so seed no initial
+      // vesting here (otherwise the vested part would be missing from initminer's liquid balance).
+      configuration_data.set_initial_asset_supply( HIVE_INITIAL_TEST_SUPPLY, HBD_INITIAL_TEST_SUPPLY );
       postponed_init( {
         config_line_t( { "shared-file-size", { std::to_string( 1024 * 1024 * shared_file_size_small ) } } )
       } );
@@ -1929,7 +1933,7 @@ BOOST_FIXTURE_TEST_CASE( init_hive_hbd_supply, init_supply_database_fixture )
     const auto& dgpo = db->get_dynamic_global_properties();
     BOOST_CHECK_EQUAL( dgpo.get_current_supply().amount.value, HIVE_INIT_SUPPLY );
     BOOST_CHECK_EQUAL( dgpo.get_current_hbd_supply().amount.value, HIVE_HBD_INIT_SUPPLY );
-    BOOST_CHECK_EQUAL( dgpo.virtual_supply.amount.value, HIVE_INIT_SUPPLY + HIVE_HBD_INIT_SUPPLY ); //initial HIVE price is 1-1 with HBD
+    BOOST_CHECK_EQUAL( dgpo.get_virtual_supply().amount.value, HIVE_INIT_SUPPLY + HIVE_HBD_INIT_SUPPLY ); //initial HIVE price is 1-1 with HBD
 
     // 'null' account balances are cleared only starting at HF14 and supply checks, that were the assertion
     // raised as result of the, bug are performed since HF20
@@ -1948,7 +1952,7 @@ BOOST_FIXTURE_TEST_CASE( init_hive_hbd_supply, init_supply_database_fixture )
     // HIVE and HBD global balances (HBD goes to treasury)
     BOOST_CHECK_GT( dgpo.get_current_supply().amount.value, HIVE_INIT_SUPPLY - 100'000 );
     BOOST_CHECK_GT( dgpo.get_current_hbd_supply().amount.value, HIVE_HBD_INIT_SUPPLY - 100'000 );
-    BOOST_CHECK_GT( dgpo.virtual_supply.amount.value, HIVE_INIT_SUPPLY + HIVE_HBD_INIT_SUPPLY - 200'000 );
+    BOOST_CHECK_GT( dgpo.get_virtual_supply().amount.value, HIVE_INIT_SUPPLY + HIVE_HBD_INIT_SUPPLY - 200'000 );
 
     validate_database(); // fix for the bug included change in validate_invariants() called here
   }

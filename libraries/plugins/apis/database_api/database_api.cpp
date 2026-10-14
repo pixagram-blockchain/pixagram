@@ -1,10 +1,10 @@
 #include <hive/plugins/database_api/database_api_impl.hpp>
 
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/global_property_object.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/global_property_object.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/reward_fund_object_multiindex.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 
 #include <hive/utilities/git_revision.hpp>
 
@@ -162,7 +162,7 @@ DEFINE_API_IMPL( database_api_impl, get_reward_funds )
 
 DEFINE_API_IMPL( database_api_impl, get_current_price_feed )
 {
-  return _db.get_feed_history().current_median_history.to_price();
+  return _db.get_hbd_price().to_price();
 }
 
 DEFINE_API_IMPL( database_api_impl, get_feed_history )

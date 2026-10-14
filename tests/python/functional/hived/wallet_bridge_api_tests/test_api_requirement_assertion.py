@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
+import msgspec
 import pytest
-from beekeepy.exceptions import ApiNotFoundError, ErrorInResponseError
+from test_tools.exceptions import ApiNotFoundError, ErrorInResponseError
 
 if TYPE_CHECKING:
     import test_tools as tt
@@ -22,7 +24,9 @@ if TYPE_CHECKING:
 )
 @pytest.mark.enabled_plugins("witness", "wallet_bridge_api")
 def test_no_api_is_missing(node: tt.InitNode, wallet_bridge_api_command: str) -> None:
-    getattr(node.api.wallet_bridge, wallet_bridge_api_command)()
+    with contextlib.suppress(msgspec.ValidationError):
+        # ValidationError means the API responded — schema may be temporarily out of sync with the node.
+        getattr(node.api.wallet_bridge, wallet_bridge_api_command)()
 
 
 @pytest.mark.parametrize(

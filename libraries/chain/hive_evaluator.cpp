@@ -7,10 +7,10 @@
 #include <hive/chain/database.hpp>
 #include <hive/chain/database_virtual_operations.hpp>
 #include <hive/chain/custom_operation_interpreter.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
-#include <hive/chain/global_property_object_multiindex.hpp>
-#include <hive/chain/block_summary_object.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/global_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/evaluator_registry.hpp>
 
 #include <hive/protocol/hive_specialised_exceptions.hpp>
@@ -74,7 +74,7 @@ void copy_legacy_chain_properties( chain_properties& dest, const legacy_chain_pr
 // one. Normal accounts always have a positive threshold (account authority validation requires it).
 bool has_open_active_authority( const database& db, const account_name_type& account )
 {
-  return db.get< account_authority_object, by_account >( account ).active.weight_threshold == 0;
+  return db.get< account_authority_object, by_account >( account ).get_active().weight_threshold == 0;
 }
 
 bool last_enabled_witness( const database& db, const witness_object& witness )
@@ -491,17 +491,14 @@ void pow_apply( database& db, Operation o )
   auto itr = accounts_by_name.find( o.worker_account );
   if(itr == accounts_by_name.end())
   {
-    const auto& new_account = create_account( db, o.worker_account, o.work.worker, dgp.time, db.get_current_timestamp(),
+    const auto& new_account = create_account( db, o.worker_account, o.work.worker, dgp.get_head_block_time(), db.get_current_timestamp(),
       true /*mined*/, HIVE_asset( 0 ) );
     // ^ empty recovery account parameter means highest voted witness at time of recovery
 
-    db.create< account_authority_object >( [&]( account_authority_object& auth )
     {
-      auth.account = o.worker_account;
-      auth.owner = authority( 1, o.work.worker, 1 );
-      auth.active = auth.owner;
-      auth.posting = auth.owner;
-    } );
+      const authority pow_auth( 1, o.work.worker, 1 );
+      db.create< account_authority_object >( new_account, pow_auth, pow_auth, pow_auth );
+    }
 
     push_virtual_operation( db, account_created_operation( new_account.get_name(), o.worker_account, VEST_asset( 0 ), VEST_asset( 0 ) ) );
   }
@@ -509,9 +506,9 @@ void pow_apply( database& db, Operation o )
   const auto& worker_account = db.get_account( o.worker_account ); // verify it exists
 #ifndef HIVE_CONVERTER_BUILD // disable these checks, since there is a 2nd auth applied on all the accs in the alternate chain generated using hive blockchain converter
   const auto& worker_auth = db.get< account_authority_object, by_account >( o.worker_account );
-  HIVE_CHAIN_STATE_ASSERT( worker_auth.active.num_auths() == 1, o.worker_account, "Miners can only have one key authority. ${a}", ("a",worker_auth.active) );
-  HIVE_CHAIN_STATE_ASSERT( worker_auth.active.key_auths.size() == 1, o.worker_account, "Miners may only have one key authority." );
-  HIVE_CHAIN_STATE_ASSERT( worker_auth.active.key_auths.begin()->first == o.work.worker, o.worker_account, "Work must be performed by key that signed the work." );
+  HIVE_CHAIN_STATE_ASSERT( worker_auth.get_active().num_auths() == 1, o.worker_account, "Miners can only have one key authority. ${a}", ("a",worker_auth.get_active()) );
+  HIVE_CHAIN_STATE_ASSERT( worker_auth.get_active().key_auths.size() == 1, o.worker_account, "Miners may only have one key authority." );
+  HIVE_CHAIN_STATE_ASSERT( worker_auth.get_active().key_auths.begin()->first == o.work.worker, o.worker_account, "Work must be performed by key that signed the work." );
 #endif
   HIVE_CHAIN_STATE_ASSERT( o.block_id == db.head_block_id(), o.worker_account, "pow not for last block" );
   // there used to be limit preventing pow operation following worker account update in the same block (since HF13)
@@ -524,8 +521,7 @@ void pow_apply( database& db, Operation o )
 
   db.modify( dgp, [&]( dynamic_global_property_object& p )
   {
-    p.total_pow++; // make sure this doesn't break anything...
-    p.num_pow_witnesses++;
+    p.on_pow_witness();
   } );
 
 
@@ -536,7 +532,7 @@ void pow_apply( database& db, Operation o )
     db.modify(*cur_witness, [&]( witness_object& w )
     {
       copy_legacy_chain_properties( w.props, o.props );
-      w.pow_worker = dgp.total_pow;
+      w.pow_worker = dgp.get_total_pow();
       w.last_work = o.work.work;
     } );
   }
@@ -548,32 +544,33 @@ void pow_apply( database& db, Operation o )
       copy_legacy_chain_properties( w.props, o.props );
       w.created = db.head_block_time();
       w.signing_key = o.work.worker;
-      w.pow_worker = dgp.total_pow;
+      w.pow_worker = dgp.get_total_pow();
       w.last_work = o.work.work;
     } );
   }
   /// POW reward depends upon whether we are before or after MINER_VOTING kicks in
-  HIVE_asset pow_reward = db.get_pow_reward();
+  HIVE_asset pow_reward_amount = db.get_pow_reward();
   if( db.head_block_num() < HIVE_START_MINER_VOTING_BLOCK )
-    pow_reward.amount *= HIVE_MAX_WITNESSES;
-  db.adjust_supply( pow_reward, true );
+    pow_reward_amount.amount *= HIVE_MAX_WITNESSES;
+  temp_HIVE_balance pow_reward = db.issue_mining_reward( pow_reward_amount );
 
   /// pay the witness that includes this POW
-  const auto& inc_witness = db.get_account( dgp.current_witness );
+  const auto& inc_witness = db.get_account( dgp.get_current_witness() );
   asset actual_reward;
   if( db.head_block_num() < HIVE_START_MINER_VOTING_BLOCK )
   {
-    db.adjust_balance( inc_witness, pow_reward );
-    actual_reward = pow_reward.to_asset();
+    actual_reward = pow_reward.as_asset().to_asset();
+    db.adjust_balance( inc_witness, pow_reward, pow_reward.as_asset() );
   }
   else
   {
     actual_reward = db.create_vesting( inc_witness, pow_reward ).to_asset();
   }
-  push_virtual_operation( db, pow_reward_operation( dgp.current_witness, actual_reward ) );
+  push_virtual_operation( db, pow_reward_operation( dgp.get_current_witness(), actual_reward ) );
 }
 
-void pow_evaluator::do_apply( const pow_operation& o ) {
+void pow_evaluator::do_apply( const pow_operation& o )
+{
   HIVE_CHAIN_HARDFORK_ASSERT( !db().has_hardfork( HIVE_HARDFORK_0_13__256 ), "pow is deprecated. Use pow2 instead" );
   pow_apply( db(), o );
 }
@@ -619,8 +616,7 @@ void pow2_evaluator::do_apply( const pow2_operation& o )
 
   db.modify( dgp, [&]( dynamic_global_property_object& p )
   {
-    p.total_pow++;
-    p.num_pow_witnesses++;
+    p.on_pow_witness();
   });
 
   const auto& accounts_by_name = db.get_index<account_index>().indices().get<by_name>();
@@ -628,17 +624,14 @@ void pow2_evaluator::do_apply( const pow2_operation& o )
   if(itr == accounts_by_name.end())
   {
     HIVE_CHAIN_STATE_ASSERT( o.new_owner_key.valid(), worker_account, "New owner key is not valid." );
-    const auto& new_account = create_account( db, worker_account, *o.new_owner_key, dgp.time, _db.get_current_timestamp(),
+    const auto& new_account = create_account( db, worker_account, *o.new_owner_key, dgp.get_head_block_time(), _db.get_current_timestamp(),
       true /*mined*/, HIVE_asset( 0 ) );
     // ^ empty recovery account parameter means highest voted witness at time of recovery
 
-    db.create< account_authority_object >( [&]( account_authority_object& auth )
     {
-      auth.account = worker_account;
-      auth.owner = authority( 1, *o.new_owner_key, 1 );
-      auth.active = auth.owner;
-      auth.posting = auth.owner;
-    } );
+      const authority pow2_auth( 1, *o.new_owner_key, 1 );
+      db.create< account_authority_object >( new_account, pow2_auth, pow2_auth, pow2_auth );
+    }
 
     db.create<witness_object>( [&]( witness_object& w )
     {
@@ -646,7 +639,7 @@ void pow2_evaluator::do_apply( const pow2_operation& o )
       copy_legacy_chain_properties( w.props, o.props );
       w.created = db.head_block_time();
       w.signing_key = *o.new_owner_key;
-      w.pow_worker = dgp.total_pow;
+      w.pow_worker = dgp.get_total_pow();
     } );
 
     push_virtual_operation( _db, account_created_operation( new_account.get_name(), worker_account, VEST_asset( 0 ), VEST_asset( 0 ) ) );
@@ -660,19 +653,18 @@ void pow2_evaluator::do_apply( const pow2_operation& o )
     db.modify(*cur_witness, [&]( witness_object& w )
     {
       copy_legacy_chain_properties( w.props, o.props );
-      w.pow_worker = dgp.total_pow;
+      w.pow_worker = dgp.get_total_pow();
     } );
   }
 
   if( !db.has_hardfork( HIVE_HARDFORK_0_16__551) )
   {
     /// pay the witness that includes this POW
-    HIVE_asset inc_reward = db.get_pow_reward();
-    db.adjust_supply( inc_reward, true );
+    temp_HIVE_balance inc_reward = db.issue_mining_reward( db.get_pow_reward() );
 
-    const auto& inc_witness = db.get_account( dgp.current_witness );
+    const auto& inc_witness = db.get_account( dgp.get_current_witness() );
     VEST_asset actual_reward = db.create_vesting( inc_witness, inc_reward );
-    push_virtual_operation( db, pow_reward_operation( dgp.current_witness, actual_reward.to_asset() ) );
+    push_virtual_operation( db, pow_reward_operation( dgp.get_current_witness(), actual_reward.to_asset() ) );
   }
 }
 

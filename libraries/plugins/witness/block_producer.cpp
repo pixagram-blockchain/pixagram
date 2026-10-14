@@ -7,9 +7,9 @@
 #include <hive/chain/database.hpp>
 #include <hive/chain/database_exceptions.hpp>
 #include <hive/chain/db_with.hpp>
-#include <hive/chain/hardfork_property_object.hpp>
-#include <hive/chain/global_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/hardfork_property_object.hpp>
+#include <hive/chain/detail/state/global_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 
 #include <fc/macros.hpp>
 
@@ -119,7 +119,7 @@ void block_producer::apply_pending_transactions(const chain::account_name_type& 
   //2 bytes if we ever allow blocks big enough to accomodate over 16k transactions (15 or more bits needed for size)
   size_t total_block_size = fc::raw::pack_size(pending_block_header) + 4;
   const auto& gpo = _db.get_dynamic_global_properties();
-  uint64_t maximum_block_size = gpo.maximum_block_size;
+  uint64_t maximum_block_size = gpo.get_maximum_block_size();
 
   //
   // The following code throws away existing _pending_tx_session and
@@ -139,7 +139,7 @@ void block_producer::apply_pending_transactions(const chain::account_name_type& 
   /// modify current witness so transaction evaluators can know who included the transaction
   _db.modify(_db.get_dynamic_global_properties(), [&]( chain::dynamic_global_property_object& dgp )
   {
-    dgp.current_witness = witness_owner;
+    dgp.set_current_witness(witness_owner);
   } );
   // add above change to common pending tx session, otherwise it would be undone when first transaction failed
   _pending_tx_session->second.squash( true );
@@ -229,7 +229,7 @@ void block_producer::fill_block_with_transactions( const chain::account_name_typ
 
   size_t total_block_size = fc::raw::pack_size( pending_block_header ) + 4;
   const auto& gpo = _db.get_dynamic_global_properties();
-  uint64_t maximum_block_size = gpo.maximum_block_size;
+  uint64_t maximum_block_size = gpo.get_maximum_block_size();
 
   for( const std::shared_ptr<hive::chain::full_transaction_type>& full_transaction : _db._pending_tx )
   {

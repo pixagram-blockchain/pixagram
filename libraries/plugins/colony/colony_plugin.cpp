@@ -9,11 +9,11 @@
 #include <hive/chain/notifications.hpp>
 #include <hive/chain/database_exceptions.hpp>
 #include <hive/chain/index.hpp>
-#include <hive/chain/account_object.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/account_object.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 
 #include <hive/protocol/transaction_util.hpp>
 #include <hive/utilities/signal.hpp>
@@ -710,9 +710,9 @@ void colony_plugin_impl::start( uint32_t block_num )
       continue;
     }
 
-    auto get_active = [&]( const std::string& name ) { return authority( _db.get< account_authority_object, by_account >( name ).active ); };
-    auto get_owner = [&]( const std::string& name ) { return authority( _db.get< account_authority_object, by_account >( name ).owner ); };
-    auto get_posting = [&]( const std::string& name ) { return authority( _db.get< account_authority_object, by_account >( name ).posting ); };
+    auto get_active = [&]( const std::string& name ) { return _db.get< account_authority_object, by_account >( name ).get_active().to_authority(); };
+    auto get_owner = [&]( const std::string& name ) { return _db.get< account_authority_object, by_account >( name ).get_owner().to_authority(); };
+    auto get_posting = [&]( const std::string& name ) { return _db.get< account_authority_object, by_account >( name ).get_posting().to_authority(); };
     auto get_witness_key = [&]( const std::string& name ) { try { return _db.get_witness( name ).signing_key; } FC_CAPTURE_AND_RETHROW( ( name ) ) };
 
     bool hf28 = _db.has_hardfork( HIVE_HARDFORK_1_28_ALLOW_STRICT_AND_MIXED_AUTHORITIES );

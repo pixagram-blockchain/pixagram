@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from beekeepy.exceptions import ErrorInResponseError
+from test_tools.exceptions import ErrorInResponseError
 
 import test_tools as tt
 from hive_local_tools import run_for
@@ -109,4 +109,4 @@ def test_list_rc_direct_delegations_with_missing_argument(node: tt.InitNode, wal
 
 def create_account_and_delegate_its_rc(wallet: tt.Wallet, accounts: list) -> None:
     wallet.create_account(accounts[1], vests=tt.Asset.Test(50))
-    wallet.api.delegate_rc(accounts[0], [accounts[1]], 5)
+    wallet.api.delegate_rc(accounts[0], [accounts[1]], 100_000)

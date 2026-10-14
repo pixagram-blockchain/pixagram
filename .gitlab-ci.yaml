@@ -247,6 +247,73 @@ mirrornet_node_build:
         docker push ${IMAGE_NAME_PREFIX}${CI_COMMIT_TAG}
       fi
 
+# --- Multiarch (x86_64 + aarch64) production images ---------------------------------------
+# Build a multi-arch manifest: amd64 compiled natively + arm64 CROSS-compiled (never emulated)
+# using the toolchain + preinstalled aarch64 RocksDB baked into ci-base-image. The arm64 runtime
+# layer is built inline from the multiarch ubuntu:24.04 base (emulated apt only). A manifest
+# cannot be loaded into the local daemon, so it is pushed.
+#
+# Gated to develop, master, protected tags, or a manual BUILD_MULTIARCH=true trigger, so feature/MR
+# pipelines stay x86_64-only and fast. The single-arch prepare_hived_image / mirrornet_node_build
+# jobs above keep running every pipeline (they also export x86_64 binaries for the replay/test jobs).
+.prepare_hived_image_multiarch:
+  extends: .docker_image_builder_job
+  stage: build
+  needs:
+    - job: detect_changes
+      optional: true
+  variables:
+    # IMAGE_PATH: "" for mainnet, "/mirrornet" for mirrornet (set per job)
+    IMAGE_PATH: ""
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED == "true"'
+    - if: '$BUILD_MULTIARCH == "true"'
+      when: manual
+    - when: never
+  tags:
+    - bigjob
+  script:
+    - |
+      set -euo pipefail
+      echo "$HIVED_CI_IMGBUILDER_PASSWORD" | docker login -u "$HIVED_CI_IMGBUILDER_USER" registry.gitlab.syncad.com --password-stdin
+      # Register qemu/binfmt for the (cheap, emulated) arm64 runtime stage. The cross-compiled
+      # build stage runs natively on the amd64 builder and is NOT emulated.
+      docker run --rm --privileged tonistiigi/binfmt --install arm64,amd64 || true
+      # A docker-container buildx builder (required to produce & push a manifest list) is already
+      # created and selected by the .docker_image_builder_job before_script as "docker-container-builder",
+      # wired to the dind endpoint + registry BUILDKIT_CONFIG_ARG. Reuse it rather than creating a second
+      # builder here (a bare "docker buildx create --driver docker-container" lacks that endpoint/config
+      # and fails). build_instance.sh's buildx build runs on this active builder.
+      # Build + push the multi-arch manifest (tagged with the commit short SHA).
+      "$CI_PROJECT_DIR/scripts/ci-helpers/build_instance.sh" \
+        "$CI_COMMIT_SHORT_SHA" "$CI_PROJECT_DIR" registry.gitlab.syncad.com/hive/hive \
+        --network-type="$HIVE_NETWORK_TYPE" \
+        --platforms="linux/amd64,linux/arm64"
+      # Apply published tags onto the pushed multi-arch manifest (no pull needed).
+      SRC="registry.gitlab.syncad.com/hive/hive${IMAGE_PATH}:${CI_COMMIT_SHORT_SHA}"
+      apply_tag() { docker buildx imagetools create -t "registry.gitlab.syncad.com/hive/hive${IMAGE_PATH}:$1" "$SRC"; }
+      # ${CI_COMMIT_BRANCH:-}: this script runs under `set -u` and the variable is
+      # unset on tag pipelines, where the bare reference aborted the job before
+      # apply_tag "$CI_COMMIT_TAG" ran - every release tag pipeline (1.29.0-rc1,
+      # -rc2) failed here and never published the versioned image.
+      [[ "${CI_COMMIT_BRANCH:-}" == "develop" ]] && apply_tag latest || true
+      [[ "${CI_COMMIT_BRANCH:-}" == "master" ]] && apply_tag stable || true
+      if [[ -n "${CI_COMMIT_TAG:-}" && "$CI_COMMIT_REF_PROTECTED" == "true" ]]; then apply_tag "$CI_COMMIT_TAG"; fi
+
+prepare_hived_image_multiarch:
+  extends: .prepare_hived_image_multiarch
+  variables:
+    HIVE_NETWORK_TYPE: mainnet
+    IMAGE_PATH: ""
+
+mirrornet_node_build_multiarch:
+  extends: .prepare_hived_image_multiarch
+  variables:
+    HIVE_NETWORK_TYPE: mirrornet
+    IMAGE_PATH: "/mirrornet"
+
 extended_block_log_creation:
   extends: .extended_block_log_creation
   stage: build
@@ -415,7 +482,9 @@ chain_test:
 plugin_test_witness:
   extends: .unit_tests_base
   script:
-    - timeout 20m ./hived-testnet-binaries/plugin_test --run_test=witness_tests --log_format=JUNIT --log_sink=plugin_test_witness_results.xml --log_level=error > plugin_test_witness.log 2>&1
+    # -k: if plugin_test ignores/misses SIGTERM (e.g. stuck on a lock held by a wedged thread),
+    # send SIGKILL 1m later instead of running until GitLab's own 1h job timeout with no artifacts.
+    - timeout -k 1m 20m ./hived-testnet-binaries/plugin_test --run_test=witness_tests --log_format=JUNIT --log_sink=plugin_test_witness_results.xml --log_level=error > plugin_test_witness.log 2>&1
   artifacts:
     reports:
       junit: plugin_test_witness_results.xml
@@ -427,7 +496,9 @@ plugin_test_witness:
 plugin_test_api:
   extends: .unit_tests_base
   script:
-    - timeout 10m ./hived-testnet-binaries/plugin_test --run_test=!witness_tests --log_format=JUNIT --log_sink=plugin_test_api_results.xml --log_level=error > plugin_test_api.log 2>&1
+    # -k: same rationale as plugin_test_witness above - bound a wedged process to ~11m instead of
+    # the full 1h job timeout, and let the runner still reach the artifact-upload step.
+    - timeout -k 1m 10m ./hived-testnet-binaries/plugin_test --run_test=!witness_tests --log_format=JUNIT --log_sink=plugin_test_api_results.xml --log_level=error > plugin_test_api.log 2>&1
   artifacts:
     reports:
       junit: plugin_test_api_results.xml
@@ -661,7 +732,7 @@ quick_test_setup:
     - pip3 install junit-xml==${PYTHON_JUNIT_XML_VERSION} python-dateutil==${PYTHON_DATEUTIL_VERSION}
     - cd beem
     - python3 -m pip install .[tests]
-    - python3 setup.py install
+    - python3 -m pip install .
     # Reinstall pytest 8.3.5 for Python 3.14 compatibility (beem installs pytest 7.2.2)
     - pip3 install pytest==8.3.5
     - cd ..
@@ -931,6 +1002,7 @@ patterns_tests:
     FF_NETWORK_PER_BUILD: 1
     TEST_SUITE: "(condenser_api_patterns and (get_block or get_block_header) ) or block_api_patterns or (not get_transaction_hex and (get_transaction or get_account_history or enum_virtual_ops or get_ops_in_block))"
     HIVED_COMMIT: $HIVED_COMMIT # HIVED_COMMIT must be in this section to be passed to service
+    COMMON_CI_REF: "92aba08c85b62bccfe83ef5b9b4c6f82d8cb3d9d" # TEMPORARY pin: last-good common-ci commit before !378. Its cache-script rewrite (staging/swap + flock) stalls the shared mainnet_5m datadir restore, so the hived service never opens its ports (300s timeout). Revert to '$COMMON_CI_REF' once common-ci-configuration is fixed.
   needs:
     - job: prepare_hived_data
       artifacts: true  # Blocked until prepare_hived_data completes
@@ -987,6 +1059,7 @@ python_pattern_mainnet_tests:
     PYTEST_JUNIT_REPORT: $CI_PROJECT_DIR/tests/python/api_tests/python_patterns_tests/report.xml
     BINARY_CACHE_PATH: "hived-binaries"
     HIVED_COMMIT: $HIVED_COMMIT
+    COMMON_CI_REF: "92aba08c85b62bccfe83ef5b9b4c6f82d8cb3d9d" # TEMPORARY pin: last-good common-ci commit before !378. Its cache-script rewrite (staging/swap + flock) stalls the shared mainnet_5m datadir restore, so the hived service never opens its ports (300s timeout). Revert to '$COMMON_CI_REF' once common-ci-configuration is fixed.
   needs:
     - job: hiveio_api_package
       artifacts: true
@@ -1080,6 +1153,7 @@ message_format_mainnet_5m_tests:
     NODE_ADDRESS: "hived-instance:8091"
     NODE_TYPE: "mainnet_5m"
     HIVED_COMMIT: $HIVED_COMMIT
+    COMMON_CI_REF: "92aba08c85b62bccfe83ef5b9b4c6f82d8cb3d9d" # TEMPORARY pin: last-good common-ci commit before !378. Its cache-script rewrite (staging/swap + flock) stalls the shared mainnet_5m datadir restore, so the hived service never opens its ports (300s timeout). Revert to '$COMMON_CI_REF' once common-ci-configuration is fixed.
   before_script:
     - !reference [.wait-for-hived, script]
     - !reference [.message_format_tests, before_script]
@@ -1150,6 +1224,7 @@ witness_tests:
     PYTEST_TIMEOUT_MINUTES: 5
     PYTEST_JUNIT_REPORT: $CI_PROJECT_DIR/tests/python/functional/witness_tests/report.xml
     HIVED_COMMIT: $HIVED_COMMIT
+    COMMON_CI_REF: "92aba08c85b62bccfe83ef5b9b4c6f82d8cb3d9d" # TEMPORARY pin: last-good common-ci commit before !378. Its cache-script rewrite (staging/swap + flock) stalls the shared mainnet_5m datadir restore, so the hived service never opens its ports (300s timeout). Revert to '$COMMON_CI_REF' once common-ci-configuration is fixed.
   script:
     - !reference [.wait-for-hived, script]
     - cd tests/python/functional/witness_tests

@@ -1,8 +1,8 @@
 #include <hive/plugins/database_api/database_api_impl.hpp>
 
-#include <hive/chain/account_object.hpp>
-#include <hive/chain/witness_objects.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/account_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 
 namespace hive { namespace plugins { namespace database_api {
 
@@ -286,7 +286,7 @@ DEFINE_API_IMPL( database_api_impl, find_owner_histories )
   const auto& hist_idx = _db.get_index< chain::owner_authority_history_index, chain::by_account >();
   auto itr = hist_idx.lower_bound( args.owner );
 
-  while( itr != hist_idx.end() && itr->account == args.owner && result.owner_auths.size() <= DATABASE_API_SINGLE_QUERY_LIMIT )
+  while( itr != hist_idx.end() && itr->get_account() == args.owner && result.owner_auths.size() <= DATABASE_API_SINGLE_QUERY_LIMIT )
   {
     result.owner_auths.emplace_back( *itr, _db );
     ++itr;

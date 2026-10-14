@@ -3,11 +3,11 @@
 
 #include <hive/chain/database_exceptions.hpp>
 #include <hive/chain/notifications.hpp>
-#include <hive/chain/account_object.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/account_object.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/index.hpp>
 #include <hive/chain/util/impacted.hpp>
 #include <hive/chain/util/type_registrar_definition.hpp>
@@ -137,21 +137,21 @@ class witness_plugin_impl
     collect_potential_keys( &keys, account.get_name(), memo );
 
     // Check keys against public keys in authorites
-    for( auto& key_weight_pair : auth.owner.key_auths )
+    for( auto& key_weight_pair : auth.get_owner().key_auths )
     {
       for( auto& key : keys )
         HIVE_ASSERT( key_weight_pair.first != key,  plugin_exception,
           "Detected private owner key in memo field. You should change your owner keys." );
     }
 
-    for( auto& key_weight_pair : auth.active.key_auths )
+    for( auto& key_weight_pair : auth.get_active().key_auths )
     {
       for( auto& key : keys )
         HIVE_ASSERT( key_weight_pair.first != key,  plugin_exception,
           "Detected private active key in memo field. You should change your active keys." );
     }
 
-    for( auto& key_weight_pair : auth.posting.key_auths )
+    for( auto& key_weight_pair : auth.get_posting().key_auths )
     {
       for( auto& key : keys )
         HIVE_ASSERT( key_weight_pair.first != key,  plugin_exception,

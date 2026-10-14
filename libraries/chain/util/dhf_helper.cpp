@@ -2,48 +2,37 @@
 
 #include <hive/chain/util/dhf_helper.hpp>
 
+#include <hive/chain/database.hpp>
+#include <hive/chain/detail/state/account_object.hpp>
+
 namespace hive { namespace chain {
 
-void dhf_helper::remove_proposals( database& db, const flat_set<int64_t>& proposal_ids, const account_name_type& proposal_owner )
+bool dhf_helper::remove_proposal_votes( const account_object& voter, const proposal_vote_index::index<by_voter_proposal>::type& proposal_votes,
+  database& db, remove_guard& obj_perf )
 {
-  if( proposal_ids.empty() )
-    return;
-
-  auto& byPropIdIdx = db.get_index< proposal_index, by_proposal_id >();
-  auto& byVoterIdx = db.get_index< proposal_vote_index, by_proposal_voter >();
-
-  remove_guard obj_perf( db.get_remove_threshold() );
-
-  auto _iter_pid = proposal_ids.begin();
-  while( _iter_pid != proposal_ids.end() )
+  auto pVoteI = proposal_votes.lower_bound( boost::make_tuple( voter.get_name(), 0 ) );
+  while( pVoteI != proposal_votes.end() && pVoteI->voter == voter.get_name() )
   {
-    auto _pid = *_iter_pid;
-
-    ++_iter_pid;
-
-    auto foundPosI = byPropIdIdx.find( _pid );
-
-    if( foundPosI == byPropIdIdx.end() )
-    {
-      if( db.has_hardfork( HIVE_HARDFORK_1_28_DONT_TRY_REMOVE_NONEXISTENT_PROPOSAL ) ) // 540845f6870b9c1d5a1010b5a75b264f3a304713 tried to remove dead proposal
-        FC_ASSERT( false && "proposal doesn't exist", "Can't remove nonexistent proposal with id: ${pid}", ("pid", _pid) );
-      continue;
-    }
-
-    FC_ASSERT(foundPosI->creator == proposal_owner, "Only proposal owner can remove it...");
-
-    remove_proposal( *foundPosI, byVoterIdx, db, obj_perf );
-    if( obj_perf.done() )
-      break;
+    const auto& vote = *pVoteI;
+    ++pVoteI;
+    if( !obj_perf.remove( db, vote ) )
+      return false;
   }
+  return true;
+}
 
-  while( _iter_pid != proposal_ids.end() )
+bool dhf_helper::remove_proposal_votes( const proposal_object& proposal, const proposal_vote_index::index<by_proposal_voter>::type& proposal_votes,
+  database& db, remove_guard& obj_perf )
+{
+  auto pVoteI = proposal_votes.lower_bound( boost::make_tuple( proposal.proposal_id, account_name_type() ) );
+  while( pVoteI != proposal_votes.end() && pVoteI->proposal_id == proposal.proposal_id )
   {
-    auto foundPosI = byPropIdIdx.find( *_iter_pid );
-    if( foundPosI == byPropIdIdx.end() )
-      FC_ASSERT( false && "nonexistent proposal", "Can't remove nonexistent proposal with id: ${pid}", ("pid", *_iter_pid) );
-    ++_iter_pid;
+    const auto& vote = *pVoteI;
+    ++pVoteI;
+    if( !obj_perf.remove( db, vote ) )
+      return false;
   }
+  return true;
 }
 
 } } // hive::chain

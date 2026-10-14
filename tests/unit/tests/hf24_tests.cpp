@@ -23,17 +23,17 @@
 #include <hive/chain/detail/state/recurrent_transfer_object.hpp>
 
 #include <hive/chain/util/reward.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE( blocked_operations )
   {
     BOOST_TEST_MESSAGE( "Even after HF24 steem.dao is considered a treasury account" );
 
-    ACTORS( ( alice ) )
+    ACTORS( DEFAULT_VESTING, ( alice ) );
     generate_block();
     issue_funds( "alice", HIVE_asset( 10'000 ) );
     issue_funds( "alice", HBD_asset( 10'000 ) );
@@ -170,18 +170,18 @@ BOOST_AUTO_TEST_CASE( comment_beneficiary )
   {
     BOOST_TEST_MESSAGE( "After HF24 steem.dao as comment beneficiary gives directly to new treasury account" );
 
-    ACTORS( ( alice ) )
+    ACTORS( HIVE_asset( 20'000 ), ( alice ) ); // give more vests to clear HIVE_VOTE_DUST_THRESHOLD
     generate_block();
 
     db_plugin->debug_update( []( database& db )
     {
       db.modify( db.get_dynamic_global_properties(), []( dynamic_global_property_object& gpo )
       {
-        gpo.proposal_fund_percent = 0;
+        gpo.set_proposal_fund_percent( 0 );
       } );
     } );
-    issue_funds( "alice", HIVE_asset( 10'000 ) );
-    issue_funds( "alice", HBD_asset( 10'000 ) );
+    fund( "alice", HIVE_asset( 10'000 ) );
+    fund( "alice", HBD_asset( 10'000 ) );
     generate_block();
 
     signed_transaction tx;
@@ -224,9 +224,11 @@ BOOST_AUTO_TEST_CASE( comment_beneficiary )
     tx.clear();
 
     HBD_asset initial_treasury_balance = db->get_treasury().get_hbd_balance();
+    ilog( "initial treasury balance = ${b}", ( "b", initial_treasury_balance ) );
     generate_blocks( db->find_comment_cashout( *db->get_comment( "alice", string( "test" ) ) )->get_cashout_time() );
+    ilog( "treasury balance after cashout = ${b}", ( "b", db->get_treasury().get_hbd_balance() ) );
     BOOST_REQUIRE_EQUAL( get_hbd_balance( OBSOLETE_TREASURY_ACCOUNT ), HBD_asset( 0 ) );
-    BOOST_REQUIRE_EQUAL( db->get_treasury().get_hbd_balance(), HBD_asset( 1150 ) + initial_treasury_balance );
+    BOOST_REQUIRE_EQUAL( db->get_treasury().get_hbd_balance(), HBD_asset( 9011 ) + initial_treasury_balance );
 
     database_fixture::validate_database();
   }
@@ -245,25 +247,37 @@ BOOST_AUTO_TEST_CASE( consolidate_balance )
     db_plugin->debug_update( [&]( database& db )
     {
       auto& dgpo = db.get_dynamic_global_properties();
-      db.adjust_supply( HIVE_asset( 20'000 ) );
-      db.adjust_supply( HBD_asset( 10'000 ) );
+
+      temp_HIVE_balance hive_balance;
+      temp_HBD_balance hbd_balance;
+      db.modify( dgpo, [&]( dynamic_global_property_object& gpo )
+      {
+        gpo.set_proposal_fund_percent( 0 );
+        hive_balance = gpo.issue_HIVE( HIVE_asset( 20'000 ) );
+        hbd_balance = gpo.issue_HBD( HBD_asset( 10'000 ), db.get_hbd_price() );
+      } );
+
       vested_3 = HIVE_asset( 3'000 ) * dgpo.get_vesting_share_price();
       vested_7 = HIVE_asset( 7'000 ) * dgpo.get_vesting_share_price();
-      db.modify( dgpo, []( dynamic_global_property_object& gpo )
-      {
-        gpo.proposal_fund_percent = 0;
-      } );
       auto& old_treasury = db.get_account( OBSOLETE_TREASURY_ACCOUNT );
-      db.create_vesting( old_treasury, HIVE_asset( 7'000 ) );
-      db.create_vesting( old_treasury, HIVE_asset( 3'000 ), true );
+      {
+        temp_HIVE_balance to_vest;
+        to_vest.transfer_from( hive_balance, HIVE_asset( 7'000 ) );
+        db.create_vesting( old_treasury, to_vest );
+      }
+      {
+        temp_HIVE_balance to_vest;
+        to_vest.transfer_from( hive_balance, HIVE_asset( 3'000 ) );
+        db.create_vesting( old_treasury, to_vest, true );
+      }
       db.modify( old_treasury, [&]( account_object& t )
       {
-        t.balance = HIVE_asset( 5'000 );
-        t.savings_balance = HIVE_asset( 3'000 );
-        t.reward_hive_balance = HIVE_asset( 2'000 );
-        t.hbd_balance = HBD_asset( 5'000 );
-        t.savings_hbd_balance = HBD_asset( 3'000 );
-        t.reward_hbd_balance = HBD_asset( 2'000 );
+        t.access_hive_balance().transfer_from( hive_balance, HIVE_asset( 5'000 ) );
+        t.access_hive_savings().transfer_from( hive_balance, HIVE_asset( 3'000 ) );
+        t.access_hive_rewards().transfer_from( hive_balance, HIVE_asset( 2'000 ) );
+        t.access_hbd_balance().transfer_from( hbd_balance, HBD_asset( 5'000 ) );
+        t.access_hbd_savings().transfer_from( hbd_balance, HBD_asset( 3'000 ) );
+        t.access_hbd_rewards().transfer_from( hbd_balance, HBD_asset( 2'000 ) );
       } );
     } );
     database_fixture::validate_database();
@@ -313,19 +327,19 @@ BOOST_AUTO_TEST_CASE( treasury_debt_ratio )
 {
   try
   {
-    ACTORS((alice))
+    ACTORS( DEFAULT_VESTING, (alice) );
     BOOST_TEST_MESSAGE( "After HF24 funds in the treasury don't count towards the HBD debt ratio" );
     set_price_feed( HBD_price( 1000, 10000 ) );
     generate_block();
     auto& dgpo = db->get_dynamic_global_properties();
-    const auto before_hbd_print_rate = dgpo.hbd_print_rate;
+    const auto before_hbd_print_rate = dgpo.get_hbd_print_rate();
 
-    ISSUE_FUNDS("alice", HBD_asset( 1'000'000'000 ));
-    const auto during_hbd_print_rate = dgpo.hbd_print_rate;
+    ISSUE_FUNDS("alice", HBD_asset( 50'000'000'000 ));
+    const auto during_hbd_print_rate = dgpo.get_hbd_print_rate();
 
-    transfer( "alice", db->get_treasury_name(), asset( 1000000000, HBD_SYMBOL ), "", alice_private_key );
+    transfer( "alice", db->get_treasury_name(), asset( 50000000000, HBD_SYMBOL ), "", alice_private_key );
     generate_block();
-    const auto after_hbd_print_rate = dgpo.hbd_print_rate;
+    const auto after_hbd_print_rate = dgpo.get_hbd_print_rate();
 
     BOOST_REQUIRE_EQUAL( after_hbd_print_rate, before_hbd_print_rate );
     BOOST_REQUIRE_NE( after_hbd_print_rate, during_hbd_print_rate );

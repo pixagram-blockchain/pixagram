@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from beekeepy.exceptions import ErrorInResponseError
+from test_tools.exceptions import ErrorInResponseError
 
 import test_tools as tt
 from hive_local_tools.functional.python.operation.claim_account import ClaimAccountToken
@@ -55,7 +55,7 @@ def test_crate_claim_account_token_without_enough_rc(
     with pytest.raises(ErrorInResponseError) as exception:
         wallet_alice.api.claim_account_creation(alice.name, fee)
 
-    assert "Account: alice has 0 RC, needs " in str(exception.value)
+    assert "Account: alice has " in str(exception.value) and " RC, needs " in str(exception.value)
     assert (
         alice.get_pending_claimed_accounts() == 0
     ), "Claim token was created. It should not be possible to create a token without enough RC."

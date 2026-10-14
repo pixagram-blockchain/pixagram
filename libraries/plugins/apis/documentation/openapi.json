@@ -530,7 +530,7 @@
                     "bridge"
                 ],
                 "summary": "Account notifications. (Supported by Hivemind)",
-                "description": "Supported values for the `type` parameter:\n\n- `new_community`: A new community was created.\n- `set_role`: A mod or admin adds a role to an account.\n- `set_props`: Properties are set for a community.\n- `set_label`: A title, badge, or label has been set for an account.\n- `mute_post`: A post has been muted, with a reason.\n- `unmute_post`: A post has been unmuted, with a reason.\n- `pin_post`: A post has been pinned.\n- `unpin_post`: A post has been unpinned.\n- `flag_post`: A post has been flagged by a member, with a reason.\n- `error`: Provides feedback to developers for operations that cannot be interpreted.\n- `subscribe`: An account has subscribed to a community.\n- `reply`: A post has been replied to.\n- `reblog`: A post has been reblogged (shared again).\n- `follow`: An account has followed another account.\n- `mention`: An author mentions an account.\n- `vote`: A voter votes for an author.\n\n*Note:* The score value associated with each operation is based on the originating account rank.\n",
+                "description": "Supported values for the `type` parameter:\n\n- `new_community`: A new community was created.\n- `set_role`: A mod or admin adds a role to an account.\n- `set_props`: Properties are set for a community.\n- `set_label`: A title, badge, or label has been set for an account.\n- `mute_post`: A post has been muted, with a reason.\n- `unmute_post`: A post has been unmuted, with a reason.\n- `pin_post`: A post has been pinned.\n- `unpin_post`: A post has been unpinned.\n- `flag_post`: A post has been flagged by a member, with a reason.\n- `error`: Provides feedback to developers for operations that cannot be interpreted.\n- `subscribe`: An account has subscribed to a community.\n- `reply`: A post has been replied to.\n- `reblog`: A post has been reblogged (shared again).\n- `follow`: An account has followed another account.\n- `mention`: An author mentions an account.\n- `vote`: A voter votes for an author.\n\n*Note:* The score value associated with each operation is based on the originating account rank.\n\nNotifications are returned newest first. When there are no matching notifications, the result is null rather than an empty array.\n",
                 "operationId": "account_notifications",
                 "requestBody": {
                     "content": {
@@ -553,15 +553,15 @@
                                 "example": [
                                     {
                                         "date": "2025-08-04T03:32:51",
-                                        "id": 9024595,
-                                        "msg": "@beggars mentioned you and 1 others",
+                                        "id": "79307422396579840",
+                                        "msg": "@beggars mentioned you and 1 other",
                                         "score": 61,
                                         "type": "mention",
                                         "url": "@beggars/beeline-wallet-cli-mega-updates-plugin-system-themes-and-more"
                                     },
                                     {
                                         "date": "2025-08-02T12:07:48",
-                                        "id": 8905222,
+                                        "id": "79269330600067072",
                                         "msg": "@beggars mentioned you and 9 others",
                                         "score": 61,
                                         "type": "mention",
@@ -682,7 +682,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "reblogs": 134,
                                         "replies": [],
                                         "stats": {
@@ -730,7 +729,6 @@
                                 },
                                 "example": {
                                     "about": "",
-                                    "avatar_url": "",
                                     "context": {
                                         "role": "guest",
                                         "subscribed": false,
@@ -883,7 +881,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "re-hiveio-qoimw3",
-                                        "post_id": 101869017,
                                         "reblogs": 0,
                                         "replies": [],
                                         "stats": {
@@ -1055,7 +1052,6 @@
                                     "pending_payout_value": "0.000 HBD",
                                     "percent_hbd": 10000,
                                     "permlink": "re-hiveio-qoimw3",
-                                    "post_id": 101869017,
                                     "reblogs": 0,
                                     "replies": [],
                                     "stats": {
@@ -1244,7 +1240,7 @@
                     "bridge"
                 ],
                 "summary": "Get ranked posts. (Supported by Hivemind)",
-                "description": "Parameters:\n\n- `sort`: A string indicating the sorting method. Supported values:\n  - `trending`\n  - `hot`\n  - `created`\n  - `promoted`\n  - `payout`\n  - `payout_comments`\n  - `muted`\n\n- `tag`: A string representing any valid tag.\n\n- `observer`: A string representing any valid account or an empty string.\n",
+                "description": "Parameters:\n\n- `sort`: A string indicating the sorting method. Supported values:\n  - `trending`\n  - `hot`\n  - `created`\n  - `promoted`\n  - `payout`\n  - `payout_comments`\n  - `muted`\n\n- `start_author`, `start_permlink`: The last post of the previous page, for paging (optional).\n\n- `limit`: The maximum number of posts to retrieve. If omitted, defaults to 20.\n\n- `tag`: A string representing any valid tag (optional).\n\n- `observer`: A string representing any valid account or an empty string (optional).\n\n- `muted_reasons_filter`: An array of muted reason ids (see `bridge.list_muted_reasons_enum`); posts muted for any of them are excluded (optional).\n",
                 "operationId": "get_ranked_posts",
                 "requestBody": {
                     "content": {
@@ -1314,7 +1310,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "reblogs": 134,
                                         "replies": [],
                                         "stats": {
@@ -1521,7 +1516,6 @@
                                         "admins": [
                                             "jeffjagoe"
                                         ],
-                                        "avatar_url": "",
                                         "context": {},
                                         "created_at": "2021-01-27 22:30:54",
                                         "id": 1432837,
@@ -1548,7 +1542,7 @@
                     "bridge"
                 ],
                 "summary": "List community roles and labels for each account in the community. (Supported by Hivemind)",
-                "description": "Parameters:\n\n- `community`: A string representing the community category name.\n\n- `last`: A string representing the name of the subscriber for paging purposes (optional).\n\n- `limit`: An integer to limit the number of listed subscribers; default is 100. This parameter is optional.\n",
+                "description": "Parameters:\n\n- `community`: A string representing the community category name.\n\n- `last`: A string representing the name of the subscriber for paging purposes (optional).\n\n- `limit`: An integer to limit the number of listed roles (1-1000); default is 50. This parameter is optional.\n",
                 "operationId": "list_community_roles",
                 "requestBody": {
                     "content": {
@@ -1779,7 +1773,6 @@
                                     "pending_payout_value": "0.000 HBD",
                                     "percent_hbd": 10000,
                                     "permlink": "re-hiveio-qoimw3",
-                                    "post_id": 101869017,
                                     "reblogs": 0,
                                     "replies": [],
                                     "stats": {
@@ -1804,6 +1797,7 @@
                     "bridge"
                 ],
                 "summary": "Gets a post notifications. (Supported by Hivemind)",
+                "description": "Notifications are returned newest first. When there are no matching notifications, the result is null rather than an empty array.\n",
                 "operationId": "post_notifications",
                 "requestBody": {
                     "content": {
@@ -1826,7 +1820,7 @@
                                 "example": [
                                     {
                                         "date": "2025-09-03T13:34:51",
-                                        "id": 11041898,
+                                        "id": "80012902991396864",
                                         "msg": "@ace108 voted on your post ($0.19)",
                                         "score": 50,
                                         "type": "vote",
@@ -1834,7 +1828,7 @@
                                     },
                                     {
                                         "date": "2025-09-03T13:18:57",
-                                        "id": 11041165,
+                                        "id": "80012646903971840",
                                         "msg": "@alpha-omega voted on your post ($0.05)",
                                         "score": 25,
                                         "type": "vote",
@@ -2412,7 +2406,7 @@
                     "condenser_api"
                 ],
                 "summary": "Returns all votes for the given post. (Supported by Hivemind)",
-                "description": "Parameters:\n\n- `author`: A string representing the author of the content.\n\n- `permlink`: A string representing the permlink of the content.\n\nExamples:\n\n- `author = \"hiveio\"`, `permlink = \"firstpost\"` \u2014 queries votes for content with the slug @hiveio/firstpost.\n\n- `author = \"alice\"`, `permlink = \"a-post-by-alice\"` \u2014 queries votes for content with the slug @alice/a-post-by-alice.",
+                "description": "Parameters:\n\n- `author`: A string representing the author of the content.\n\n- `permlink`: A string representing the permlink of the content.\n\n- `observer`: An optional account name; votes cast by accounts muted by this account are left out.\n\nExamples:\n\n- `author = \"hiveio\"`, `permlink = \"firstpost\"` \u2014 queries votes for content with the slug @hiveio/firstpost.\n\n- `author = \"alice\"`, `permlink = \"a-post-by-alice\"` \u2014 queries votes for content with the slug @alice/a-post-by-alice.",
                 "operationId": "condenser_get_active_votes",
                 "requestBody": {
                     "content": {
@@ -2461,13 +2455,13 @@
                 "tags": [
                     "condenser_api"
                 ],
-                "summary": "Returns the list of active witnesses.",
+                "summary": "Returns active witnesses, optionally followed by the future schedule.",
                 "operationId": "condenser_get_active_witnesses",
                 "requestBody": {
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/empty_array"
+                                "$ref": "#/components/schemas/condenser_optional_include_future"
                             }
                         }
                     },
@@ -2675,7 +2669,6 @@
                                             "pending_payout_value": "0.000 HBD",
                                             "percent_hbd": 10000,
                                             "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                            "post_id": 141560746,
                                             "replies": [],
                                             "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                             "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -2882,7 +2875,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -3220,7 +3212,6 @@
                                     "created": "2020-03-17T23:30:54",
                                     "curator_payout_value": "0.000 HBD",
                                     "depth": 0,
-                                    "id": 96448339,
                                     "json_metadata": "{\"app\":\"steempeak/2020.03.6\",\"format\":\"markdown\",\"tags\":[\"communityfork\",\"hive\",\"steemcommunity\",\"steem\"],\"users\":[\"Gandalf\",\"hive\",\"djefferys\"],\"links\":[\"https://github.com/openhive-network/hive/releases\",\"https://hive.blog\",\"/@gandalf\",\"/@djefferys\",\"/trending/hiveisalive\",\"https://hive.io/\"],\"image\":[\"https://files.steempeak.com/file/steempeak/hiveio/4WaiXF2y-opengraph3x.png\"],\"description\":\"After weeks of hard teamwork, we're announcing the launch of the new Hive blockchain.\",\"countdown\":\"2020-03-20T14:00:00.000Z\"}",
                                     "last_payout": "2020-03-24T23:30:54",
                                     "last_update": "2020-03-20T02:51:15",
@@ -3323,7 +3314,6 @@
                                         "created": "2021-02-14T10:29:27",
                                         "curator_payout_value": "0.050 HBD",
                                         "depth": 1,
-                                        "id": 101868654,
                                         "json_metadata": "{\"app\":\"hiveblog/0.1\"}",
                                         "last_payout": "2021-02-21T10:29:27",
                                         "last_update": "2021-02-14T10:29:27",
@@ -3503,7 +3493,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -3596,7 +3585,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -3689,7 +3677,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -3782,7 +3769,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -3875,7 +3861,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -3968,7 +3953,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -4061,7 +4045,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -4138,8 +4121,6 @@
                                     "reverse_auction_seconds": 0,
                                     "time": "2025-09-02T10:34:30",
                                     "total_pow": 514415,
-                                    "total_reward_fund_hive": "0.000 HIVE",
-                                    "total_reward_shares2": "0",
                                     "total_vesting_fund_hive": "189150209.131 HIVE",
                                     "total_vesting_shares": "313853921114.393221 VESTS",
                                     "vesting_reward_percent": 1500,
@@ -4868,7 +4849,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -5064,7 +5044,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/condenser_get_discussions_by_comments"
+                                "$ref": "#/components/schemas/condenser_get_replies_by_last_update"
                             }
                         }
                     },
@@ -5132,7 +5112,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -5759,13 +5738,13 @@
                 "tags": [
                     "condenser_api"
                 ],
-                "summary": "Returns the current witness schedule.",
+                "summary": "Returns the current witness schedule, optionally including future fields.",
                 "operationId": "condenser_get_witness_schedule",
                 "requestBody": {
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/empty_array"
+                                "$ref": "#/components/schemas/condenser_optional_include_future"
                             }
                         }
                     },
@@ -7298,7 +7277,7 @@
                     "database_api"
                 ],
                 "summary": "Returns all votes for the given post. (Supported by Hivemind)",
-                "description": "Required (non-empty) parameters: author, permlink.\n\n- `author`: A string representing the author of the content. Examples:\n  - `\"hiveio\"` \u2014 queries votes for content authored by \"hiveio\".\n  - `\"alice\"` \u2014 queries votes for content authored by \"alice\".\n\n- `permlink`: A string representing the permalink of the content. Examples:\n  - `\"announcing-the-launch-of-hive-blockchain\"` \u2014 for the post @hiveio/announcing-the-launch-of-hive-blockchain.\n  - `\"a-post-by-alice\"` \u2014 for the post @alice/a-post-by-alice.\n",
+                "description": "Required (non-empty) parameters: author, permlink.\n\n- `author`: A string representing the author of the content. Examples:\n  - `\"hiveio\"` \u2014 queries votes for content authored by \"hiveio\".\n  - `\"alice\"` \u2014 queries votes for content authored by \"alice\".\n\n- `permlink`: A string representing the permalink of the content. Examples:\n  - `\"announcing-the-launch-of-hive-blockchain\"` \u2014 for the post @hiveio/announcing-the-launch-of-hive-blockchain.\n  - `\"a-post-by-alice\"` \u2014 for the post @alice/a-post-by-alice.\n\n- `observer`: An optional account name; votes cast by accounts muted by this account are left out.\n",
                 "operationId": "find_votes",
                 "requestBody": {
                     "content": {
@@ -7321,7 +7300,6 @@
                                 "example": {
                                     "votes": [
                                         {
-                                            "id": 0,
                                             "voter": "",
                                             "author": "",
                                             "permlink": "",
@@ -7504,6 +7482,16 @@
                 ],
                 "summary": "Returns the list of active witnesses.",
                 "operationId": "get_active_witnesses",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/get_active_witnesses"
+                            }
+                        }
+                    },
+                    "required": false
+                },
                 "responses": {
                     "200": {
                         "description": "Successful operation",
@@ -7535,7 +7523,8 @@
                                         "drakos",
                                         "someguy123",
                                         "good-karma"
-                                    ]
+                                    ],
+                                    "future_witnesses": []
                                 }
                             }
                         }
@@ -7976,12 +7965,6 @@
                                     "reverse_auction_seconds": 0,
                                     "time": "2025-05-06T13:23:24",
                                     "total_pow": 514415,
-                                    "total_reward_fund_hive": {
-                                        "amount": "0",
-                                        "nai": "@@000000021",
-                                        "precision": 3
-                                    },
-                                    "total_reward_shares2": "0",
                                     "total_vesting_fund_hive": {
                                         "amount": "183947751106",
                                         "nai": "@@000000021",
@@ -8403,8 +8386,18 @@
                 "tags": [
                     "database_api"
                 ],
-                "summary": "Returns the current witness schedule.",
+                "summary": "Returns the current witness schedule, optionally including future fields.",
                 "operationId": "get_witness_schedule",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/get_witness_schedule"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "responses": {
                     "200": {
                         "description": "Successful operation",
@@ -9351,7 +9344,7 @@
                     "database_api"
                 ],
                 "summary": "Returns all votes, starting with the specified voter and/or author and permlink. (Supported by Hivemind)",
-                "description": "Parameters:\n\n- `start`: An array whose structure depends on the `order` parameter.\n  - For `by_comment_voter`: `start` can contain three optional values: `[author, permlink, voter]`. If one is blank, then all three must be blank.\n  - For `by_voter_comment`: `start` can contain three optional values: `[voter, author, permlink]`. If one is blank, then all three must be blank.\n\n- `limit`: An integer up to 1000, specifying the maximum number of results to return.\n\n- `order`: A string indicating the sorting method. Possible values:\n  - `by_comment_voter` \u2014 order by comment voter.\n  - `by_voter_comment` \u2014 order by voter comment.\n\nExamples:\n\n- `start = [\"\", \"\", \"\"]`, `limit = 10`, `order = \"by_comment_voter\"` \u2014 queries the first 10 votes, sorted by comment voter.\n\n- `start = [\"\", \"\", \"\"]`, `limit = 10`, `order = \"by_voter_comment\"` \u2014 queries the first 10 votes, sorted by voter comment.\n\n- `start = [\"xeroc\", \"vanteem-config\", \"\"]`, `limit = 10`, `order = \"by_comment_voter\"` \u2014 queries next 10 votes starting from the post @xeroc/vanteem-config, sorted by comment voter.\n\n- `start = [\"alice\", \"xeroc\", \"vanteem-config\"]`, `limit = 10`, `order = \"by_voter_comment\"` \u2014 queries next 10 votes starting at Alice on the post @xeroc/vanteem-config, sorted by voter comment.\n",
+                "description": "Parameters:\n\n- `start`: An array whose structure depends on the `order` parameter.\n  - For `by_comment_voter`: `start` can contain three optional values: `[author, permlink, voter]`. If one is blank, then all three must be blank.\n  - For `by_voter_comment`: `start` can contain three optional values: `[voter, author, permlink]`. If one is blank, then all three must be blank.\n\n- `limit`: An integer up to 1000, specifying the maximum number of results to return; defaults to 1000. This parameter is optional.\n\n- `order`: A string indicating the sorting method. Possible values:\n  - `by_comment_voter` \u2014 order by comment voter.\n  - `by_voter_comment` \u2014 order by voter comment.\n\n- `observer`: An optional account name; votes cast by accounts muted by this account are left out.\n\nExamples:\n\n- `start = [\"\", \"\", \"\"]`, `limit = 10`, `order = \"by_comment_voter\"` \u2014 queries the first 10 votes, sorted by comment voter.\n\n- `start = [\"\", \"\", \"\"]`, `limit = 10`, `order = \"by_voter_comment\"` \u2014 queries the first 10 votes, sorted by voter comment.\n\n- `start = [\"xeroc\", \"vanteem-config\", \"\"]`, `limit = 10`, `order = \"by_comment_voter\"` \u2014 queries next 10 votes starting from the post @xeroc/vanteem-config, sorted by comment voter.\n\n- `start = [\"alice\", \"xeroc\", \"vanteem-config\"]`, `limit = 10`, `order = \"by_voter_comment\"` \u2014 queries next 10 votes starting at Alice on the post @xeroc/vanteem-config, sorted by voter comment.\n",
                 "operationId": "list_votes",
                 "requestBody": {
                     "content": {
@@ -9374,7 +9367,6 @@
                                 "example": {
                                     "votes": [
                                         {
-                                            "id": 9,
                                             "voter": "dantheman",
                                             "author": "hiveio",
                                             "permlink": "firstpost",
@@ -10268,7 +10260,6 @@
                                             "pending_payout_value": "0.000 HBD",
                                             "percent_hbd": 10000,
                                             "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                            "post_id": 141560746,
                                             "replies": [],
                                             "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                             "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -11975,7 +11966,6 @@
                                         "pending_payout_value": "0.034 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "what-is-beekeeping-all-about",
-                                        "post_id": 836800,
                                         "reblogs": 0,
                                         "replies": [],
                                         "stats": {
@@ -12074,7 +12064,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -12168,7 +12157,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -12261,7 +12249,6 @@
                                     "pending_payout_value": "0.000 HBD",
                                     "percent_hbd": 10000,
                                     "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                    "post_id": 141560746,
                                     "replies": [],
                                     "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                     "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -12353,7 +12340,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -12446,7 +12432,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -12539,7 +12524,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -12632,7 +12616,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -12725,7 +12708,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -12818,7 +12800,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -12911,7 +12892,6 @@
                                         "pending_payout_value": "0.000 HBD",
                                         "percent_hbd": 10000,
                                         "permlink": "hive-5-celebrating-our-5th-anniversary-as-hive",
-                                        "post_id": 141560746,
                                         "replies": [],
                                         "root_title": "Hive 5: Celebrating our 5th Anniversary as Hive",
                                         "title": "Hive 5: Celebrating our 5th Anniversary as Hive",
@@ -12952,7 +12932,9 @@
                                     "$ref": "#/components/schemas/find_transaction_response"
                                 },
                                 "example": {
-                                    "status": "unknown"
+                                    "status": "within_irreversible_block",
+                                    "block_num": 108228760,
+                                    "rc_cost": 146036130
                                 }
                             }
                         }
@@ -13610,22 +13592,38 @@
                         "example": "alice",
                         "description": "The name of the account to which the notification is sent."
                     },
+                    "min_score": {
+                        "type": "integer",
+                        "example": 25,
+                        "description": "Minimum score (0-100) of the returned notifications. If omitted, defaults to 25."
+                    },
+                    "last_id": {
+                        "$ref": "#/components/schemas/hive_int",
+                        "example": "79307422396579840",
+                        "description": "Id of the last notification of the previous page; only older notifications are returned."
+                    },
                     "limit": {
                         "type": "integer",
                         "example": 100,
-                        "description": "The maximum number of notifications to return."
+                        "description": "The maximum number of notifications to return (1-100). If omitted, defaults to 100."
                     }
                 },
                 "required": [
-                    "account",
-                    "limit"
+                    "account"
                 ]
             },
             "account_notifications_response": {
-                "type": "array",
-                "items": {
-                    "$ref": "#/components/schemas/notification"
-                }
+                "anyOf": [
+                    {
+                        "type": "null"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/notification"
+                        }
+                    }
+                ]
             },
             "account_recovery": {
                 "type": "object",
@@ -13851,11 +13849,6 @@
             "active_votes_database_api": {
                 "type": "object",
                 "properties": {
-                    "id": {
-                        "type": "integer",
-                        "example": 12345,
-                        "description": "The ID of the vote."
-                    },
                     "voter": {
                         "type": "string",
                         "example": "hiveio",
@@ -13899,7 +13892,6 @@
                     }
                 },
                 "required": [
-                    "id",
                     "voter",
                     "author",
                     "permlink",
@@ -14290,7 +14282,7 @@
                         "type": "string",
                         "example": "hiveio"
                     },
-                    "reblog_on": {
+                    "reblogged_on": {
                         "type": "string",
                         "format": "date-time",
                         "example": "1970-01-01T00:00:00",
@@ -14305,7 +14297,7 @@
                     "author",
                     "permlink",
                     "entry_id",
-                    "reblog_on",
+                    "reblogged_on",
                     "blog"
                 ]
             },
@@ -14510,10 +14502,7 @@
                         "$ref": "#/components/schemas/hive_int"
                     },
                     "beneficiaries": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/beneficiaries"
-                        }
+                        "$ref": "#/components/schemas/beneficiaries"
                     },
                     "body": {
                         "type": "string"
@@ -14539,9 +14528,6 @@
                         "$ref": "#/components/schemas/balance"
                     },
                     "depth": {
-                        "type": "integer"
-                    },
-                    "id": {
                         "type": "integer"
                     },
                     "json_metadata": {
@@ -14618,7 +14604,6 @@
                     "created",
                     "curator_payout_value",
                     "depth",
-                    "id",
                     "json_metadata",
                     "last_payout",
                     "last_update",
@@ -14676,12 +14661,8 @@
                         "type": "array",
                         "items": {
                             "type": "string"
-                        }
-                    },
-                    "avatar_url": {
-                        "type": "string",
-                        "format": "uri",
-                        "example": "https://example.com/avatar.jpg"
+                        },
+                        "description": "Names of the community admins; omitted when the community has no admins."
                     },
                     "context": {
                         "$ref": "#/components/schemas/context"
@@ -14734,8 +14715,6 @@
                 },
                 "required": [
                     "about",
-                    "admins",
-                    "avatar_url",
                     "context",
                     "created_at",
                     "id",
@@ -14756,10 +14735,6 @@
                     "about": {
                         "type": "string",
                         "description": "A brief description of the community."
-                    },
-                    "avatar_url": {
-                        "type": "string",
-                        "description": "The URL of the community's avatar image."
                     },
                     "context": {
                         "$ref": "#/components/schemas/context",
@@ -14831,7 +14806,6 @@
                 },
                 "required": [
                     "about",
-                    "avatar_url",
                     "context",
                     "created_at",
                     "description",
@@ -14982,8 +14956,9 @@
             },
             "condenser_get_active_votes": {
                 "type": "object",
+                "description": "Named parameter shape. Legacy condenser transport serializes these fields positionally as [author, permlink, observer].",
                 "properties": {
-                    "account": {
+                    "author": {
                         "type": "string",
                         "example": "hiveio"
                     },
@@ -14993,19 +14968,29 @@
                     },
                     "observer": {
                         "type": "string",
-                        "example": "bob"
+                        "example": "alice",
+                        "description": "Optional account name; votes cast by accounts muted by this account are left out."
                     }
                 },
                 "required": [
-                    "account",
+                    "author",
                     "permlink"
-                ]
+                ],
+                "additionalProperties": false
             },
             "condenser_get_active_votes_response": {
                 "type": "array",
                 "items": {
                     "$ref": "#/components/schemas/active_votes_default"
                 }
+            },
+            "condenser_optional_include_future": {
+                "type": "array",
+                "maxItems": 1,
+                "items": {
+                    "type": "boolean"
+                },
+                "description": "An optional positional boolean. When true, include future witness schedule data."
             },
             "condenser_get_active_witnesses_response": {
                 "type": "array",
@@ -15139,6 +15124,10 @@
                         "type": "integer",
                         "example": 100
                     },
+                    "filter_tags": {
+                        "type": "null",
+                        "description": "Not supported: hivemind rejects the request when it is set. Listed only because it precedes observer in the positional form of the arguments."
+                    },
                     "observer": {
                         "type": "string",
                         "example": "bob"
@@ -15215,7 +15204,7 @@
             "condenser_get_content": {
                 "type": "object",
                 "properties": {
-                    "account": {
+                    "author": {
                         "type": "string",
                         "example": "hiveio"
                     },
@@ -15229,7 +15218,7 @@
                     }
                 },
                 "required": [
-                    "account",
+                    "author",
                     "permlink"
                 ]
             },
@@ -15239,7 +15228,7 @@
             "condenser_get_content_replies": {
                 "type": "object",
                 "properties": {
-                    "account": {
+                    "author": {
                         "type": "string",
                         "example": "hiveio"
                     },
@@ -15253,7 +15242,7 @@
                     }
                 },
                 "required": [
-                    "account",
+                    "author",
                     "permlink"
                 ]
             },
@@ -15302,6 +15291,10 @@
                         "type": "integer",
                         "example": 0
                     },
+                    "filter_tags": {
+                        "type": "null",
+                        "description": "Not supported: hivemind rejects the request when it is set. Listed only because it precedes observer in the positional form of the arguments."
+                    },
                     "observer": {
                         "type": "string",
                         "example": "bob"
@@ -15314,7 +15307,7 @@
             "condenser_get_discussions_by_author_before_date": {
                 "type": "object",
                 "properties": {
-                    "account": {
+                    "author": {
                         "type": "string",
                         "example": "hiveio"
                     },
@@ -15341,10 +15334,42 @@
                     }
                 },
                 "required": [
-                    "account"
+                    "author"
                 ]
             },
             "condenser_get_discussions_by_comments": {
+                "type": "object",
+                "properties": {
+                    "start_author": {
+                        "type": "string",
+                        "example": "steem"
+                    },
+                    "start_permlink": {
+                        "type": "string",
+                        "example": "around-the-hive-reflections"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "example": 10
+                    },
+                    "truncate_body": {
+                        "type": "integer",
+                        "example": 0
+                    },
+                    "filter_tags": {
+                        "type": "null",
+                        "description": "Not supported: hivemind rejects the request when it is set. Listed only because it precedes observer in the positional form of the arguments."
+                    },
+                    "observer": {
+                        "type": "string",
+                        "example": "bob"
+                    }
+                },
+                "required": [
+                    "start_author"
+                ]
+            },
+            "condenser_get_replies_by_last_update": {
                 "type": "object",
                 "properties": {
                     "start_author": {
@@ -16675,10 +16700,6 @@
                         "$ref": "#/components/schemas/hive_int",
                         "description": "Total accumulated proof-of-work, which is usually zero or not applicable in pure proof-of-stake systems like HIVE unless PoW is used temporarily."
                     },
-                    "total_reward_shares2": {
-                        "$ref": "#/components/schemas/hive_int",
-                        "description": "String representing reward shares (possibly an internal accounting value)."
-                    },
                     "vesting_reward_percent": {
                         "type": "integer",
                         "description": "Percentage (basis points) of reward allocated to vesting."
@@ -16720,7 +16741,6 @@
                     "reverse_auction_seconds",
                     "time",
                     "total_pow",
-                    "total_reward_shares2",
                     "vesting_reward_percent",
                     "vote_power_reserve_rate"
                 ]
@@ -16757,10 +16777,6 @@
                                 "$ref": "#/components/schemas/balance",
                                 "description": "The amount of vesting shares slated to be awarded as part of pending rewards."
                             },
-                            "total_reward_fund_hive": {
-                                "$ref": "#/components/schemas/balance",
-                                "description": "The total reward fund HIVE."
-                            },
                             "total_vesting_fund_hive": {
                                 "$ref": "#/components/schemas/balance",
                                 "description": "Total HIVE allocated to vesting (vesting fund) \u2014 funds set aside for vesting."
@@ -16781,7 +16797,6 @@
                             "init_hbd_supply",
                             "pending_rewarded_vesting_hive",
                             "pending_rewarded_vesting_shares",
-                            "total_reward_fund_hive",
                             "total_vesting_fund_hive",
                             "total_vesting_shares",
                             "virtual_supply"
@@ -16821,10 +16836,6 @@
                                 "type": "string",
                                 "description": "The amount of vesting shares slated to be awarded as part of pending rewards."
                             },
-                            "total_reward_fund_hive": {
-                                "type": "string",
-                                "description": "The total reward fund HIVE."
-                            },
                             "total_vesting_fund_hive": {
                                 "type": "string",
                                 "description": "Total HIVE allocated to vesting (vesting fund) \u2014 funds set aside for vesting."
@@ -16845,7 +16856,6 @@
                             "init_hbd_supply",
                             "pending_rewarded_vesting_hive",
                             "pending_rewarded_vesting_shares",
-                            "total_reward_fund_hive",
                             "total_vesting_fund_hive",
                             "total_vesting_shares",
                             "virtual_supply"
@@ -17554,6 +17564,14 @@
                     "status": {
                         "type": "string",
                         "description": "The status of the transaction."
+                    },
+                    "block_num": {
+                        "type": "integer",
+                        "description": "Block containing the transaction, when the transaction has been included in a block."
+                    },
+                    "rc_cost": {
+                        "type": "integer",
+                        "description": "Resource-credit cost, when known for an included transaction."
                     }
                 },
                 "required": [
@@ -17820,9 +17838,13 @@
                             "description": "An array of strings representing the author and permlink of the comment to query.",
                             "minItems": 2,
                             "maxItems": 2
-                        }
+                        },
+                        "description": "At most 1000 author/permlink pairs."
                     }
-                }
+                },
+                "required": [
+                    "comments"
+                ]
             },
             "find_comments_response": {
                 "type": "object",
@@ -18158,6 +18180,11 @@
                         "type": "string",
                         "example": "announcing-the-launch-of-hive-blockchain",
                         "description": "The permlink of the post to query."
+                    },
+                    "observer": {
+                        "type": "string",
+                        "example": "alice",
+                        "description": "Optional account name; votes cast by accounts muted by this account are left out."
                     }
                 },
                 "required": [
@@ -18548,6 +18575,16 @@
                     "$ref": "#/components/schemas/post_bridge_api"
                 }
             },
+            "get_active_witnesses": {
+                "type": "object",
+                "properties": {
+                    "include_future": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Include the future witness schedule in future_witnesses."
+                    }
+                }
+            },
             "get_active_witnesses_response": {
                 "type": "object",
                 "properties": {
@@ -18589,8 +18626,7 @@
                     }
                 },
                 "required": [
-                    "name",
-                    "observer"
+                    "name"
                 ]
             },
             "get_community_response": {
@@ -19852,12 +19888,24 @@
                     "observer": {
                         "type": "string",
                         "description": "The observer's account name, used to track who is viewing the discussion."
+                    },
+                    "muted_reasons_filter": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4
+                        },
+                        "example": [
+                            0,
+                            3
+                        ],
+                        "description": "Excludes posts muted for any of the listed reasons (ids from bridge.list_muted_reasons_enum: 0 MUTED_COMMUNITY_MODERATION, 1 MUTED_COMMUNITY_TYPE, 2 MUTED_PARENT, 3 MUTED_REPUTATION, 4 MUTED_ROLE_COMMUNITY). If omitted or empty, no posts are excluded."
                     }
                 },
                 "required": [
                     "author",
-                    "permlink",
-                    "observer"
+                    "permlink"
                 ]
             },
             "get_discussion_response": {
@@ -20307,7 +20355,7 @@
                     }
                 },
                 "required": [
-                    "account"
+                    "accounts"
                 ]
             },
             "get_profiles_response": {
@@ -20347,6 +20395,21 @@
                         "example": "trending",
                         "description": "The sorting method for the posts (e.g., trending, hot, new)."
                     },
+                    "start_author": {
+                        "type": "string",
+                        "example": "",
+                        "description": "Author of the last post of the previous page, for paging; use together with start_permlink."
+                    },
+                    "start_permlink": {
+                        "type": "string",
+                        "example": "",
+                        "description": "Permlink of the last post of the previous page, for paging."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "example": 20,
+                        "description": "The maximum number of posts to retrieve. If omitted, defaults to 20."
+                    },
                     "tag": {
                         "type": "string",
                         "example": "hive",
@@ -20356,12 +20419,23 @@
                         "type": "string",
                         "example": "user123",
                         "description": "The user observing the posts."
+                    },
+                    "muted_reasons_filter": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4
+                        },
+                        "example": [
+                            0,
+                            3
+                        ],
+                        "description": "Excludes posts muted for any of the listed reasons (ids from bridge.list_muted_reasons_enum: 0 MUTED_COMMUNITY_MODERATION, 1 MUTED_COMMUNITY_TYPE, 2 MUTED_PARENT, 3 MUTED_REPUTATION, 4 MUTED_ROLE_COMMUNITY). If omitted or empty, no posts are excluded."
                     }
                 },
                 "required": [
-                    "sort",
-                    "tag",
-                    "observer"
+                    "sort"
                 ]
             },
             "get_ranked_posts_response": {
@@ -20596,7 +20670,8 @@
                     }
                 },
                 "required": [
-                    "account1"
+                    "account1",
+                    "account2"
                 ]
             },
             "get_relationship_between_accounts_response": {
@@ -20944,6 +21019,17 @@
                     "chain_id",
                     "node_type"
                 ]
+            },
+            "get_witness_schedule": {
+                "type": "object",
+                "properties": {
+                    "include_future": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Include future_shuffled_witnesses and any available future_changes."
+                    }
+                },
+                "additionalProperties": false
             },
             "get_witness_schedule_response": {
                 "$ref": "#/components/schemas/witness_schedule_default"
@@ -21311,6 +21397,11 @@
             "list_community_roles": {
                 "type": "object",
                 "properties": {
+                    "community": {
+                        "type": "string",
+                        "example": "hive-123456",
+                        "description": "community category name."
+                    },
                     "last": {
                         "type": "string",
                         "example": "",
@@ -21319,12 +21410,7 @@
                     "limit": {
                         "type": "integer",
                         "example": 100,
-                        "description": "Limit number of listed communities, default: 100"
-                    },
-                    "community": {
-                        "type": "string",
-                        "example": "hive-123456",
-                        "description": "community category name."
+                        "description": "The maximum number of roles to return (1-1000). If omitted, defaults to 50."
                     }
                 },
                 "required": [
@@ -21430,12 +21516,10 @@
                 "properties": {
                     "limit": {
                         "type": "integer",
-                        "example": 10
+                        "example": 10,
+                        "description": "The maximum number of communities to return (1-25). If omitted, defaults to 25."
                     }
-                },
-                "required": [
-                    "limit"
-                ]
+                }
             },
             "list_pop_communities_response": {
                 "type": "array",
@@ -21550,6 +21634,11 @@
             "list_subscribers": {
                 "type": "object",
                 "properties": {
+                    "community": {
+                        "type": "string",
+                        "example": "hive-123456",
+                        "description": "community category name."
+                    },
                     "last": {
                         "type": "string",
                         "example": "",
@@ -21558,12 +21647,7 @@
                     "limit": {
                         "type": "integer",
                         "example": 100,
-                        "description": "Limit number of listed subscribers, default: 100"
-                    },
-                    "community": {
-                        "type": "string",
-                        "example": "hive-123456",
-                        "description": "community category name."
+                        "description": "The maximum number of subscribers to return (1-100). If omitted, defaults to 100."
                     }
                 },
                 "required": [
@@ -21628,7 +21712,41 @@
                 ]
             },
             "list_votes": {
-                "$ref": "#/components/schemas/start_limit_order"
+                "type": "object",
+                "properties": {
+                    "start": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "maxItems": 3,
+                        "example": [
+                            "",
+                            "",
+                            ""
+                        ],
+                        "description": "Starting position: [author, permlink, voter] for by_comment_voter, [voter, author, permlink] for by_voter_comment."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "example": 10,
+                        "description": "The maximum number of votes to return (1-1000). If omitted, defaults to 1000."
+                    },
+                    "order": {
+                        "type": "string",
+                        "example": "by_comment_voter",
+                        "description": "Either by_comment_voter or by_voter_comment."
+                    },
+                    "observer": {
+                        "type": "string",
+                        "example": "alice",
+                        "description": "Optional account name; votes cast by accounts muted by this account are left out."
+                    }
+                },
+                "required": [
+                    "start",
+                    "order"
+                ]
             },
             "list_votes_response": {
                 "type": "object",
@@ -21821,18 +21939,27 @@
             "normalize_post": {
                 "type": "object",
                 "properties": {
-                    "author": {
-                        "type": "string",
-                        "description": "The author of the post to be normalized."
-                    },
-                    "permlink": {
-                        "type": "string",
-                        "description": "The permlink of the post to be normalized."
+                    "post": {
+                        "type": "object",
+                        "description": "The legacy post object to normalize.",
+                        "properties": {
+                            "author": {
+                                "type": "string",
+                                "description": "The author of the post to be normalized."
+                            },
+                            "permlink": {
+                                "type": "string",
+                                "description": "The permlink of the post to be normalized."
+                            }
+                        },
+                        "required": [
+                            "author",
+                            "permlink"
+                        ]
                     }
                 },
                 "required": [
-                    "author",
-                    "permlink"
+                    "post"
                 ]
             },
             "normalize_post_response": {
@@ -21847,8 +21974,9 @@
                         "description": "The date when the notification was created."
                     },
                     "id": {
-                        "type": "integer",
-                        "description": "The unique identifier for the notification."
+                        "type": "string",
+                        "example": "79307422396579840",
+                        "description": "The unique identifier for the notification. It is a 64-bit, time-ordered value serialized as a string, because JSON parsers may lose precision on integers of this size."
                     },
                     "msg": {
                         "type": "string",
@@ -22091,11 +22219,6 @@
             "post_bridge_api": {
                 "type": "object",
                 "properties": {
-                    "post_id": {
-                        "type": "integer",
-                        "example": 123456789,
-                        "description": "The unique identifier for the post."
-                    },
                     "author": {
                         "type": "string",
                         "example": "alice",
@@ -22181,10 +22304,7 @@
                         "description": "The URL of the post."
                     },
                     "beneficiaries": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/beneficiaries"
-                        },
+                        "$ref": "#/components/schemas/beneficiaries",
                         "description": "An array of beneficiary objects associated with the post."
                     },
                     "max_accepted_payout": {
@@ -22300,7 +22420,6 @@
                     }
                 },
                 "required": [
-                    "post_id",
                     "author",
                     "permlink",
                     "category",
@@ -22465,15 +22584,9 @@
                         "description": "The body content of the post."
                     },
                     "json_metadata": {
-                        "type": "object",
-                        "example": {
-                            "tags": [
-                                "hive",
-                                "blockchain"
-                            ],
-                            "app": "hive/0.1"
-                        },
-                        "description": "JSON metadata associated with the post, containing additional information like tags and application used."
+                        "type": "string",
+                        "example": "{\"tags\":[\"hive\",\"blockchain\"],\"app\":\"hive/0.1\"}",
+                        "description": "JSON metadata associated with the post, containing additional information like tags and application used, serialized as a JSON string."
                     },
                     "created": {
                         "type": "string",
@@ -22545,10 +22658,7 @@
                         "description": "The title of the root post."
                     },
                     "beneficiaries": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/beneficiaries"
-                        },
+                        "$ref": "#/components/schemas/beneficiaries",
                         "description": "An array of beneficiary objects associated with the post."
                     },
                     "max_accepted_payout": {
@@ -22615,19 +22725,6 @@
             "post_default": {
                 "allOf": [
                     {
-                        "type": "object",
-                        "properties": {
-                            "id": {
-                                "type": "integer",
-                                "example": 1,
-                                "description": "Unique identifier for the resource; appears only when post_id is absent."
-                            }
-                        },
-                        "required": [
-                            "id"
-                        ]
-                    },
-                    {
                         "$ref": "#/components/schemas/post_template"
                     },
                     {
@@ -22644,19 +22741,6 @@
             "post_condenser_api": {
                 "allOf": [
                     {
-                        "type": "object",
-                        "properties": {
-                            "post_id": {
-                                "type": "integer",
-                                "example": 1,
-                                "description": "Unique identifier for the resource; appears only when post_id is absent."
-                            }
-                        },
-                        "required": [
-                            "post_id"
-                        ]
-                    },
-                    {
                         "$ref": "#/components/schemas/post_template"
                     },
                     {
@@ -22664,6 +22748,19 @@
                     },
                     {
                         "$ref": "#/components/schemas/post_optional"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "net_rshares": {
+                                "$ref": "#/components/schemas/hive_int",
+                                "example": 1000,
+                                "description": "The net rshares (relative shares) of the post; 0 once the post is paid out."
+                            }
+                        },
+                        "required": [
+                            "net_rshares"
+                        ]
                     }
                 ]
             },
@@ -22678,22 +22775,22 @@
                     "permlink": {
                         "type": "string",
                         "example": "around-the-hive-reflections",
-                        "description": "The timestamp of the last read notification."
+                        "description": "The permlink of the post for which to retrieve notifications."
                     },
                     "min_score": {
                         "type": "integer",
                         "example": 0,
-                        "description": "Minimum score threshold for notifications."
+                        "description": "Minimum score (0-100) of the returned notifications. If omitted, defaults to 25."
                     },
                     "last_id": {
-                        "type": "integer",
-                        "example": 0,
-                        "description": "The ID of the last notification received."
+                        "$ref": "#/components/schemas/hive_int",
+                        "example": "80012902991396864",
+                        "description": "Id of the last notification of the previous page; only older notifications are returned."
                     },
                     "limit": {
                         "type": "integer",
                         "example": 10,
-                        "description": "The maximum number of notifications to retrieve."
+                        "description": "The maximum number of notifications to retrieve (1-100). If omitted, defaults to 100."
                     }
                 },
                 "required": [
@@ -22702,10 +22799,17 @@
                 ]
             },
             "post_notifications_response": {
-                "type": "array",
-                "items": {
-                    "$ref": "#/components/schemas/notification"
-                }
+                "anyOf": [
+                    {
+                        "type": "null"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/notification"
+                        }
+                    }
+                ]
             },
             "post_voting_power": {
                 "$ref": "#/components/schemas/balance"
@@ -24234,6 +24338,14 @@
                         "example": [],
                         "description": "An array of strings representing the required posting keys."
                     },
+                    "required_witness": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "example": [],
+                        "description": "Witness accounts whose signing authorities must be satisfied."
+                    },
                     "required_other": {
                         "type": "array",
                         "items": {
@@ -24705,6 +24817,20 @@
                             "witness1",
                             "witness2"
                         ]
+                    },
+                    "future_shuffled_witnesses": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Future shuffled witnesses. Present only when requested."
+                    },
+                    "future_changes": {
+                        "type": [
+                            "object",
+                            "null"
+                        ],
+                        "description": "Future witness schedule changes. Present only when requested and changes are available."
                     },
                     "current_virtual_time": {
                         "$ref": "#/components/schemas/hive_int",
