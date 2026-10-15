@@ -14,7 +14,7 @@
 #include <hive/chain/detail/state/decline_voting_rights_request_object.hpp>
 #include <hive/chain/detail/state/reward_fund_object.hpp>
 #include <hive/chain/detail/state/recurrent_transfer_object.hpp>
-#include <hive/chain/dhf_objects.hpp>
+#include <hive/chain/detail/state/dhf_objects.hpp>
 #include <hive/chain/util/delayed_voting.hpp>
 
 #include <hive/chain/detail/state/witness_objects_multiindex.hpp>
@@ -34,6 +34,7 @@
 #include <sstream>
 
 #include "database_fixture.hpp"
+#include <hive/plugins/account_history_rocksdb/account_history_rocksdb_objects_multiindex.hpp>
 
 //using namespace hive::chain::test;
 
@@ -140,6 +141,11 @@ void database_fixture::generate_block(uint32_t skip, const fc::ecc::private_key&
   db_plugin->debug_generate_blocks( key, 1, skip, miss_blocks, true );
 }
 
+void database_fixture::generate_block_from_pending()
+{
+  db_plugin->debug_generate_blocks( committee, 1, default_skip, 0, true, true );
+}
+
 uint32_t database_fixture::generate_blocks(const fc::ecc::private_key& debug_key, uint32_t count, uint32_t skip)
 {
   return db_plugin->debug_generate_blocks(debug_key, count, skip, 0, true);
@@ -198,11 +204,11 @@ fc::string database_fixture::get_current_time_iso_string() const
   return current_time.to_iso_string();
 }
 
-const account_object& database_fixture::account_create(
+void database_fixture::account_create(
   const string& name,
   const string& creator,
   const private_key_type& creator_key,
-  const share_type& fee,
+  const HIVE_asset& initial_vesting,
   const public_key_type& key,
   const public_key_type& post_key,
   const string& json_metadata
@@ -210,13 +216,15 @@ const account_object& database_fixture::account_create(
 {
   try
   {
-    auto actual_fee = std::min( fee, db->get_witness_schedule_object().median_props.account_creation_fee.amount );
-    auto fee_remainder = fee - actual_fee;
-
     account_create_operation op;
     op.new_account_name = name;
     op.creator = creator;
-    op.fee = asset( actual_fee, HIVE_SYMBOL );
+    // pay the exact fee required by the evaluator for the current hardfork: between HF19 and HF20
+    // the account creation cost is the median fee multiplied by HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER
+    HIVE_asset fee = db->get_witness_schedule_object().median_props.account_creation_fee;
+    if( db->has_hardfork( HIVE_HARDFORK_0_19__987 ) && !db->has_hardfork( HIVE_HARDFORK_0_20__1761 ) )
+      fee = HIVE_asset( fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER );
+    op.fee = fee.to_asset();
     op.owner = authority( 1, key, 1 );
     op.active = authority( 1, key, 1 );
     op.posting = authority( 1, post_key, 1 );
@@ -225,31 +233,26 @@ const account_object& database_fixture::account_create(
 
     push_transaction( op, creator_key );
 
-    if( fee_remainder > 0 )
-    {
-      vest( name, HIVE_asset( fee_remainder ) );
-    }
-
-    const account_object& acct = db->get_account( name );
-
-    return acct;
+    if( initial_vesting.amount > 0 )
+      vest( name, initial_vesting );
   }
   FC_CAPTURE_AND_RETHROW( (name)(creator) )
 }
 
-const account_object& database_fixture::account_create(
+void database_fixture::account_create(
   const string& name,
   const public_key_type& key,
-  const public_key_type& post_key
+  const public_key_type& post_key,
+  const HIVE_asset& initial_vesting
 )
 {
   try
   {
-    return account_create(
+    account_create(
       name,
       HIVE_INIT_MINER_NAME,
       init_account_priv_key,
-      std::max( db->get_witness_schedule_object().median_props.account_creation_fee.amount * HIVE_CREATE_ACCOUNT_WITH_HIVE_MODIFIER, share_type( 100 ) ),
+      initial_vesting,
       key,
       post_key,
       "" );
@@ -257,40 +260,20 @@ const account_object& database_fixture::account_create(
   FC_CAPTURE_AND_RETHROW( (name) );
 }
 
-const account_object& database_fixture::account_create_default_fee(
-  const string& name,
-  const public_key_type& key,
-  const public_key_type& post_key
-)
-{
-  try
-  {
-    return account_create(
-      name,
-      HIVE_INIT_MINER_NAME,
-      init_account_priv_key,
-      db->get_witness_schedule_object().median_props.account_creation_fee.amount,
-      key,
-      post_key,
-      "" );
-  }
-  FC_CAPTURE_AND_RETHROW( (name) );
-}
-
-const account_object& database_fixture::account_create(
+void database_fixture::account_create(
   const string& name,
   const public_key_type& key
 )
 {
-  return account_create( name, key, key );
+  account_create( name, key, key, DEFAULT_VESTING );
 }
 
-const witness_object& database_fixture::witness_create(
+void database_fixture::witness_create(
   const string& owner,
   const private_key_type& owner_key,
   const string& url,
   const public_key_type& signing_key,
-  const share_type& fee )
+  const HIVE_asset& fee )
 {
   try
   {
@@ -298,11 +281,9 @@ const witness_object& database_fixture::witness_create(
     op.owner = owner;
     op.url = url;
     op.block_signing_key = signing_key;
-    op.fee = asset( fee, HIVE_SYMBOL );
+    op.fee = fee.to_asset();
 
     push_transaction( op, owner_key );
-
-    return db->get_witness( owner );
   }
   FC_CAPTURE_AND_RETHROW( (owner)(url) )
 }
@@ -387,14 +368,15 @@ void database_fixture::issue_funds( const string& account_name, const HIVE_asset
 { try {
   db_plugin->debug_update( [=]( database& db)
   {
-    db.modify( db.get_account( account_name ), [&]( account_object& a )
-    {
-      a.balance += amount;
-    } );
-
+    temp_HIVE_balance issued;
     db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
     {
-      gpo.current_supply += amount;
+      issued = gpo.issue_HIVE( amount );
+    } );
+
+    db.modify( db.get_account( account_name ), [&]( account_object& a )
+    {
+      a.access_hive_balance().transfer_from( issued );
     } );
 
     if( update_print_rate )
@@ -418,16 +400,16 @@ void database_fixture::issue_funds( const string& account_name, const HBD_asset&
       } );
     }
 
-    db.modify( db.get_account( account_name ), [&]( account_object& a )
-    {
-      a.hbd_balance += amount;
-      a.hbd_seconds_last_update = db.head_block_time();
-    } );
-
+    temp_HBD_balance issued;
     db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
     {
-      gpo.current_hbd_supply += amount;
-      gpo.virtual_supply = gpo.current_supply + gpo.current_hbd_supply * median_feed.current_median_history;
+      issued = gpo.issue_HBD( amount, median_feed.current_median_history, true );
+    } );
+
+    db.modify( db.get_account( account_name ), [&]( account_object& a )
+    {
+      a.access_hbd_balance().transfer_from( issued );
+      a.hbd_seconds_last_update = db.head_block_time();
     } );
 
     if( update_print_rate )
@@ -483,12 +465,32 @@ void database_fixture::recurrent_transfer( const string& from, const string& to,
   push_transaction( op, key );
 }
 
-void database_fixture::push_transaction( const operation& op, const fc::ecc::private_key& key )
+full_transaction_ptr database_fixture::build_transaction( const operation& op, const fc::ecc::private_key& key )
 {
   signed_transaction tx;
   tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
   tx.operations.push_back( op );
-  push_transaction_ex( tx, key );
+  auto pack = hive::protocol::serialization_mode_controller::get_current_pack();
+  if( key == fc::ecc::private_key() )
+    return build_transaction( tx, std::vector<fc::ecc::private_key>(), pack );
+  else
+    return build_transaction( tx, std::vector<fc::ecc::private_key>{ key }, pack );
+}
+
+full_transaction_ptr database_fixture::build_transaction( const signed_transaction& tx, const std::vector<fc::ecc::private_key>& keys,
+  hive::protocol::pack_type pack )
+{
+  full_transaction_ptr _tx = hive::chain::full_transaction_type::create_from_signed_transaction( tx, pack, false );
+  _tx->sign_transaction( keys, db->get_chain_id(), pack );
+  return _tx;
+}
+
+full_transaction_ptr database_fixture::push_transaction( const operation& op, const fc::ecc::private_key& key )
+{
+  signed_transaction tx;
+  tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
+  tx.operations.push_back( op );
+  return push_transaction_ex( tx, key );
 }
 
 full_transaction_ptr database_fixture::push_transaction_ex( const signed_transaction& tx, const fc::ecc::private_key& key,
@@ -503,8 +505,7 @@ full_transaction_ptr database_fixture::push_transaction_ex( const signed_transac
 full_transaction_ptr database_fixture::push_transaction_ex( const signed_transaction& tx, const std::vector<fc::ecc::private_key>& keys,
   uint32_t skip_flags, hive::protocol::pack_type pack_type )
 {
-  full_transaction_ptr _tx = hive::chain::full_transaction_type::create_from_signed_transaction( tx, pack_type, false );
-  _tx->sign_transaction( keys, db->get_chain_id(), pack_type );
+  full_transaction_ptr _tx = build_transaction( tx, keys, pack_type );
   get_chain_plugin().push_transaction( _tx, skip_flags );
   return _tx;
 }
@@ -584,7 +585,7 @@ void database_fixture::set_price_feed( const HBD_price& new_price, bool stop_at_
 #ifdef IS_TEST_NET
     !db->skip_price_feed_limit_check ||
 #endif
-    db->get(feed_history_id_type()).current_median_history == new_price
+    db->get_hbd_price() == new_price
   ); // the check fails if you call set_price_feed more than once with different price
 }
 
@@ -621,6 +622,37 @@ void database_fixture::set_witness_props( const flat_map< string, vector< char >
       return;
   }
   FC_ASSERT( false, "Couldn't apply properties in ${n} blocks", ("n", 2*HIVE_MAX_WITNESSES+1) );
+}
+
+void database_fixture::set_account_creation_fee( const HIVE_asset& fee )
+{
+  BOOST_REQUIRE_GE( fee, HIVE_asset( HIVE_MIN_ACCOUNT_CREATION_FEE ) );
+  db_plugin->debug_update( [fee]( database& db )
+  {
+    db.modify( db.get_witness_schedule_object(), [&]( witness_schedule_object& w )
+    {
+      w.median_props.account_creation_fee = fee;
+    } );
+    //set it on the future schedule too (if it already exists), otherwise the still pending (old)
+    //future schedule gets activated a round later and reverts the current median back to its previous value
+    const auto* future_wso = db.find< witness_schedule_object >( witness_schedule_object::id_type( 1 ) );
+    if( future_wso != nullptr )
+    {
+      db.modify( *future_wso, [&]( witness_schedule_object& w )
+      {
+        w.median_props.account_creation_fee = fee;
+      } );
+    }
+    //set it on every witness as well, otherwise the next median recomputation reverts the change
+    const auto& widx = db.get_index< witness_index, by_name >();
+    for( const auto& witness : widx )
+    {
+      db.modify( witness, [&]( witness_object& w )
+      {
+        w.props.account_creation_fee = fee;
+      } );
+    }
+  } );
 }
 
 void database_fixture::limit_order_create( const string& owner, const asset& amount_to_sell, const asset& min_to_receive, bool fill_or_kill,
@@ -934,7 +966,7 @@ uint64_t database_fixture::get_nr_blocks_until_proposal_maintenance_block()
 {
   auto block_time = db->head_block_time();
 
-  auto next_maintenance_time = db->get_dynamic_global_properties().next_maintenance_time;
+  auto next_maintenance_time = db->get_dynamic_global_properties().get_next_maintenance_time();
   auto ret = ( next_maintenance_time - block_time ).to_seconds() / HIVE_BLOCK_INTERVAL;
 
   FC_ASSERT( next_maintenance_time >= block_time );
@@ -946,7 +978,7 @@ uint64_t database_fixture::get_nr_blocks_until_daily_proposal_maintenance_block(
 {
   auto block_time = db->head_block_time();
 
-  auto next_maintenance_time = db->get_dynamic_global_properties().next_daily_maintenance_time;
+  auto next_maintenance_time = db->get_dynamic_global_properties().get_next_daily_maintenance_time();
   auto ret = ( next_maintenance_time - block_time ).to_seconds() / HIVE_BLOCK_INTERVAL;
 
   FC_ASSERT( next_maintenance_time >= block_time );
@@ -1318,15 +1350,15 @@ void _push_transaction( hive::plugins::chain::chain_plugin& cp, const signed_tra
 
 namespace performance
 {
-  initial_data::initial_data( database_fixture* db, const std::string& _account ): account( _account )
+  initial_data::initial_data( database_fixture* db, const std::string& _account, const HIVE_asset& initial_vesting ): account( _account )
   {
     active_key = db->generate_private_key( account );
     post_key = db->generate_private_key( account + "_post" );
 
-    db->account_create( account, active_key.get_public_key(), post_key.get_public_key() );
+    db->account_create( account, active_key.get_public_key(), post_key.get_public_key(), initial_vesting );
   }
 
-  std::vector< initial_data > generate_accounts( database_fixture* db, int32_t number_accounts )
+  std::vector< initial_data > generate_accounts( database_fixture* db, int32_t number_accounts, const HIVE_asset& initial_vesting )
   {
     const std::string basic_name = "tester";
 
@@ -1335,7 +1367,7 @@ namespace performance
     for( int32_t i = 0; i< number_accounts; ++i  )
     {
       std::string name = basic_name + std::to_string( i );
-      res.push_back( initial_data( db, name ) );
+      res.push_back( initial_data( db, name, initial_vesting ) );
 
       if( ( i + 1 ) % 100 == 0 )
         db->generate_block();

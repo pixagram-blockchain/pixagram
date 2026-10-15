@@ -20,15 +20,15 @@
 #include <hive/chain/util/reward.hpp>
 #include <hive/chain/util/uint256.hpp>
 #include <hive/chain/notifications.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
 #include <hive/chain/detail/state/reward_fund_object_multiindex.hpp>
 #include <hive/chain/detail/state/savings_withdraw_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 
 #include <fc/git_revision.hpp>
 
@@ -542,7 +542,7 @@ namespace detail
 
     const auto& to_complete_idx = _db.get_index< savings_withdraw_index, by_to_complete >();
     auto itr = to_complete_idx.lower_bound( account );
-    while( itr != to_complete_idx.end() && itr->to == account )
+    while( itr != to_complete_idx.end() && itr->get_to() == account )
     {
       result.emplace_back( database_api::api_savings_withdraw_object( *itr, _db ) );
       ++itr;
@@ -733,14 +733,14 @@ namespace detail
     const auto& idx = _db.get_index< limit_order_index, by_account >();
     auto itr = idx.lower_bound( owner );
 
-    while( itr != idx.end() && itr->seller == owner )
+    while( itr != idx.end() && itr->get_seller() == owner )
     {
       result.push_back( *itr );
 
-      if( itr->sell_price.base.symbol == HIVE_SYMBOL )
-        result.back().real_price = ASSET_TO_REAL( itr->sell_price.quote ) / ASSET_TO_REAL( itr->sell_price.base );
+      if( itr->get_sell_price().base.symbol == HIVE_SYMBOL )
+        result.back().real_price = ASSET_TO_REAL( itr->get_sell_price().quote ) / ASSET_TO_REAL( itr->get_sell_price().base );
       else
-        result.back().real_price =  ASSET_TO_REAL( itr->sell_price.base ) / ASSET_TO_REAL( itr->sell_price.quote );
+        result.back().real_price =  ASSET_TO_REAL( itr->get_sell_price().base ) / ASSET_TO_REAL( itr->get_sell_price().quote );
       ++itr;
     }
 

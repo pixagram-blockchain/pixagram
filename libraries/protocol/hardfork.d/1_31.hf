@@ -1,0 +1,37 @@
+#ifndef HIVE_HARDFORK_1_31
+#define HIVE_HARDFORK_1_31 31
+
+// Upstream Hive's hardfork 29, carried as Pixagram hardfork 31.
+//
+// Pixagram already used the numbers 29 and 30 for its own hardforks (both active on mainnet,
+// at blocks 402205 and 949330). Upstream Hive 1.28.8 ships a different hardfork 29 whose
+// features are listed below. Gating them on HIVE_HARDFORK_1_29 here would switch them on
+// retroactively from block 402205 and break replay, so they are renumbered to 31. Upstream
+// code that referred to HIVE_HARDFORK_1_29_<feature> refers to HIVE_HARDFORK_1_31_<feature>.
+//
+// Mainnet keeps HIVE_NUM_HARDFORKS at 30 until this hardfork is scheduled, so none of these
+// features can activate there. Testnet and mirrornet builds include it for testing.
+//
+// Far-future default so HF31 never auto-activates on testnets that don't explicitly
+// schedule it. 4102444800 = 2100-01-01T00:00:00Z
+#define HIVE_HARDFORK_1_31_DEFAULT_TIME 4102444800L
+
+#ifdef USE_ALTERNATE_CHAIN_ID
+#define HIVE_HARDFORK_1_31_TIME (hive::protocol::testnet_blockchain_configuration::configuration_data.get_hf_time(HIVE_HARDFORK_1_31, HIVE_HARDFORK_1_31_DEFAULT_TIME))
+#else
+#define HIVE_HARDFORK_1_31_TIME HIVE_HARDFORK_1_31_DEFAULT_TIME
+#endif
+
+#define HIVE_HARDFORK_1_31_VERSION hive::protocol::hardfork_version( 1, 31 )
+
+// allow modification of existing recurrent transfer with executions=1 (upstream issue #786)
+#define HIVE_HARDFORK_1_31_ALLOW_MODIFY_LAST_RECURRENT_TRANSFER (HIVE_HARDFORK_1_31)
+// authority size limit can no longer be circumvented with use of account recovery
+#define HIVE_HARDFORK_1_31_FIX_ENFORCEMENT_OF_AUTHORITY_SIZE_ON_RECOVERY_REQUEST (HIVE_HARDFORK_1_31)
+// it is no longer possible to use nonexisting asset to post limit order
+#define HIVE_HARDFORK_1_31_FIX_LIMIT_ORDER_ASSETS (HIVE_HARDFORK_1_31)
+// RC is part of consensus
+#define HIVE_HARDFORK_1_31_RC_IS_CONSENSUS (HIVE_HARDFORK_1_31)
+// validate all proposal ids while processing proposal removal
+#define HIVE_HARDFORK_1_31_VALIDATE_ALL_PROPOSAL_IDS (HIVE_HARDFORK_1_31)
+#endif

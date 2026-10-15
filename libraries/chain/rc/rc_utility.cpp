@@ -1,22 +1,33 @@
 #include <hive/chain/rc/rc_utility.hpp>
-#include <hive/chain/rc/rc_objects.hpp>
+#include <hive/chain/rc/rc_objects_multiindex.hpp>
 #include <hive/chain/rc/rc_curve.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
 #include <hive/chain/database.hpp>
 #include <hive/chain/full_transaction.hpp>
 #include <hive/chain/database_exceptions.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/generic_custom_operation_interpreter.hpp>
 #include <hive/chain/util/remove_guard.hpp>
 
 #include <appbase/application.hpp>
 
+#include <fc/io/json.hpp>
 #include <fc/reflect/variant.hpp>
 #include <fc/uint128.hpp>
+
+#include <fstream>
 
 namespace hive { namespace chain {
 
 using fc::uint128_t;
+
+namespace {
+  std::ofstream& get_rc_stats_jsonl_stream()
+  {
+    static std::ofstream stream( "rc_stats.jsonl", std::ios::out | std::ios::app );
+    return stream;
+  }
+}
 
 resource_credits::report_type resource_credits::auto_report_type = resource_credits::report_type::REGULAR;
 resource_credits::report_output resource_credits::auto_report_output = resource_credits::report_output::ILOG;
@@ -43,14 +54,14 @@ void delegate_rc_evaluator::do_apply( const delegate_rc_operation& op )
     FC_ASSERT( op.max_rc >= min_delegation, "Cannot delegate less than ${min_delegation} rc", (min_delegation) );
   }
 
-  auto now = gpo.time;
+  auto now = gpo.get_head_block_time();
   const account_object& from_account = _db.get_account( op.from );
   _db.rc().regenerate_rc_mana( from_account, now );
   FC_ASSERT( !_db.is_in_control() || !_db.rc().has_expired_delegation( from_account ), "Cannot delegate RC while processing of previous delegation has not finished." );
     // above is not strictly needed - we can handle new delegations during delayed undelegating just fine, however we want to discourage users
     // from using the scheme to temporarily "pump" amount of RC, also if it is not intentional they might be confused about fresh delegations
     // disappearing right after being formed (which might happen if we allow fresh delegations while previous were not yet cleared)
-  int64_t delta_total = 0; // total amount of rc gained/delegated over the accounts
+  share_type delta_total = 0; // total amount of rc gained/delegated over the accounts
 
   for (const account_name_type& to:op.delegatees)
   {
@@ -60,7 +71,7 @@ void delegate_rc_evaluator::do_apply( const delegate_rc_operation& op )
     const rc_direct_delegation_object* delegation = _db.find<rc_direct_delegation_object, by_from_to>(
       boost::make_tuple( from_account.get_id(), to_account.get_id() ) );
 
-    int64_t delta = op.max_rc;
+    share_type delta = op.max_rc;
     if( delegation == nullptr ) // delegation is being created
     {
       FC_ASSERT( op.max_rc != 0, "Cannot delegate 0 if you are creating new rc delegation" );
@@ -100,14 +111,14 @@ void delegate_rc_evaluator::do_apply( const delegate_rc_operation& op )
     // Do not give mana back when deleting/reducing rc delegation (note that regular delegations behave differently)
     if( delta_total > 0 )
     {
-      acc.rc_manabar.current_mana -= delta_total;
+      acc.rc_manabar.current_mana -= delta_total.value;
       // since delta_total is not greater than from_delegable_rc which is not greater than current_mana, we know it can't dive into negative
     }
     acc.delegated_rc += delta_total;
     acc.last_max_rc = acc.get_maximum_rc();
   } );
 
-  _db.rc().handle_custom_op_usage( op, gpo.time ); //we have to handle it here because later we'd have to reinterpret json into concrete custom op
+  _db.rc().handle_custom_op_usage( op, gpo.get_head_block_time() ); //we have to handle it here because later we'd have to reinterpret json into concrete custom op
 }
 
 void resource_credits::set_auto_report( const std::string& _option_type, const std::string& _option_output )
@@ -134,6 +145,8 @@ void resource_credits::set_auto_report( const std::string& _option_type, const s
     ro = report_output::ILOG;
   else if( _option_output == "DLOG" )
     ro = report_output::DLOG;
+  else if( _option_output == "JSONL" )
+    ro = report_output::JSONL;
   else
     FC_THROW_EXCEPTION( fc::parse_error_exception, "Unknown RC stats report output" );
 
@@ -330,13 +343,17 @@ void resource_credits::regenerate_rc_mana( const account_object& account, const 
   {
     if( mbparams.max_mana != account.last_max_rc )
     {
-#ifdef USE_ALTERNATE_CHAIN_ID
       // this situation indicates a bug in RC code, most likely some operation that affects RC was not
       // properly handled by setting new value for last_max_rc after RC changed
-      HIVE_ASSERT( false, plugin_exception,
-        "Account ${a} max RC changed from ${old} to ${new} without triggering an op, noticed on block ${b}",
-        ( "a", account.get_name() )( "old", account.last_max_rc )( "new", mbparams.max_mana )( "b", db.head_block_num() ) );
+      FC_TODO( "Make it an unconditional assertion after HF29" ); // <- needs to be checked with replay
+#ifdef USE_ALTERNATE_CHAIN_ID
+      FC_ASSERT( mbparams.max_mana == account.last_max_rc,
+        "Account ${a} max RC changed from ${old} to ${new} without triggering an op",
+        ( "a", account.get_name() )( "old", account.last_max_rc )( "new", mbparams.max_mana ) );
 #else
+      FC_ASSERT( mbparams.max_mana == account.last_max_rc || !db.has_hardfork( HIVE_HARDFORK_1_31_RC_IS_CONSENSUS ),
+        "Account ${a} max RC changed from ${old} to ${new} without triggering an op",
+        ( "a", account.get_name() )( "old", account.last_max_rc )( "new", mbparams.max_mana ) );
       wlog( "NOTIFYALERT! Account ${a} max RC changed from ${old} to ${new} without triggering an op, noticed on block ${b}",
         ( "a", account.get_name() )( "old", account.last_max_rc )( "new", mbparams.max_mana )( "b", db.head_block_num() ) );
 #endif
@@ -350,12 +367,12 @@ void resource_credits::regenerate_rc_mana( const account_object& account, const 
 }
 
 void resource_credits::update_account_after_rc_delegation( const account_object& account,
-  const fc::time_point_sec now, int64_t delta, bool regenerate_mana ) const
+  const fc::time_point_sec now, share_type delta, bool regenerate_mana ) const
 {
   db.modify< account_object >( account, [&]( account_object& acc )
   {
-    auto max_rc = acc.get_maximum_rc().value;
-    util::manabar_params manabar_params( max_rc, HIVE_RC_REGEN_TIME );
+    auto max_rc = acc.get_maximum_rc();
+    util::manabar_params manabar_params( max_rc.value, HIVE_RC_REGEN_TIME );
     if( regenerate_mana )
     {
       acc.rc_manabar.regenerate_mana< true >( manabar_params, now );
@@ -366,11 +383,14 @@ void resource_credits::update_account_after_rc_delegation( const account_object&
       if( regenerate_condition_rc )
       {
         //most likely cause: there is no regenerate_rc_mana() call before operation changing vests
-        wlog( "NOTIFYALERT! Account ${a} not regenerated prior to RC change, noticed on block ${b}",
-          ( "a", acc.get_name() )( "b", db.head_block_num() ) );
+        FC_TODO( "Make it an unconditional assertion after HF29" ); // <- needs to be checked with replay
 #ifdef USE_ALTERNATE_CHAIN_ID
-        FC_ASSERT( not regenerate_condition_rc,
-          "Account ${a} not regenerated prior to RC change, noticed on block ${b}",
+        FC_ASSERT( not regenerate_condition_rc, "Account ${a} not regenerated prior to RC change",
+          ( "a", acc.get_name() ) );
+#else
+        FC_ASSERT( not regenerate_condition_rc || !db.has_hardfork( HIVE_HARDFORK_1_31_RC_IS_CONSENSUS ),
+          "Account ${a} not regenerated prior to RC change", ( "a", acc.get_name() ) );
+        wlog( "NOTIFYALERT! Account ${a} not regenerated prior to RC change, noticed on block ${b}",
           ( "a", acc.get_name() )( "b", db.head_block_num() ) );
 #endif
       }
@@ -378,7 +398,7 @@ void resource_credits::update_account_after_rc_delegation( const account_object&
     //rc delegation changes are immediately reflected in current_mana in both directions;
     //if negative delta was not taking away delegated mana it would be easy to pump RC;
     //note that it is different when actual VESTs are involved
-    acc.rc_manabar.current_mana = std::max( acc.rc_manabar.current_mana + delta, int64_t( 0 ) );
+    acc.rc_manabar.current_mana = std::max( share_type(acc.rc_manabar.current_mana) + delta, share_type( 0 ) ).value;
     acc.last_max_rc = max_rc + delta;
     acc.received_rc += delta;
   } );
@@ -391,11 +411,14 @@ void resource_credits::update_account_after_vest_change( const account_object& a
   if( regenerate_condition )
   {
     //most likely cause: there is no regenerate_rc_mana() call before operation changing vests
-    wlog( "NOTIFYALERT! Account ${a} not regenerated prior to VEST change, noticed on block ${b}",
-      ( "a", account.get_name() )( "b", db.head_block_num() ) );
+    FC_TODO( "Make it an unconditional assertion after HF29" ); // <- needs to be checked with replay
 #ifdef USE_ALTERNATE_CHAIN_ID
-    FC_ASSERT( not regenerate_condition,
-      "Account ${a} not regenerated prior to VEST change, noticed on block ${b}",
+    FC_ASSERT( not regenerate_condition, "Account ${a} not regenerated prior to VEST change",
+      ( "a", account.get_name() ) );
+#else
+    FC_ASSERT( !db.has_hardfork( HIVE_HARDFORK_1_31_RC_IS_CONSENSUS ),
+      "Account ${a} not regenerated prior to VEST change", ( "a", account.get_name() ) );
+    wlog( "NOTIFYALERT! Account ${a} not regenerated prior to VEST change, noticed on block ${b}",
       ( "a", account.get_name() )( "b", db.head_block_num() ) );
 #endif
   }
@@ -480,8 +503,9 @@ bool resource_credits::use_account_rcs( int64_t rc )
   const account_name_type& account_name = tx_info.payer;
   if( account_name == account_name_type() )
   {
-    if( db.is_in_control() )
-      HIVE_ASSERT( false, plugin_exception, "Tried to execute transaction with no resource user", );
+    FC_TODO( "Make it an unconditional assertion after HF29" ); // <- needs to be checked with replay
+    FC_ASSERT( !db.is_in_control() && !db.has_hardfork( HIVE_HARDFORK_1_31_RC_IS_CONSENSUS ),
+      "Tried to execute transaction with no resource user" );
     return false;
   }
 
@@ -500,12 +524,12 @@ bool resource_credits::use_account_rcs( int64_t rc )
   {
     db.modify( account, [&]( account_object& acc )
     {
-      acc.rc_manabar.regenerate_mana< true >( mbparams, dgpo.time.sec_since_epoch() );
+      acc.rc_manabar.regenerate_mana< true >( mbparams, dgpo.get_head_block_time().sec_since_epoch() );
       tx_info.rc = acc.rc_manabar.current_mana; // update after regeneration
       int64_t surcharge = 0;
       if( db.is_validating_one_tx() || db.is_reapplying_one_tx() )
       {
-        uint64_t blocks_in_mempool = db._pending_tx_size / dgpo.maximum_block_size;
+        uint64_t blocks_in_mempool = db._pending_tx_size / dgpo.get_maximum_block_size();
         if( blocks_in_mempool > flood_level )
         {
           // check if transaction might be privileged - top witness transaction containing only
@@ -538,47 +562,42 @@ bool resource_credits::use_account_rcs( int64_t rc )
       }
       bool has_mana = acc.rc_manabar.has_mana( rc + surcharge );
 
-#ifdef USE_ALTERNATE_CHAIN_ID
-      if( configuration_data.allow_not_enough_rc == false )
-#endif
+      FC_TODO( "Leave only hardfork condition after it triggers" ); //we might want to activate consensus retroactively (HF27 perhaps?) - test it once HF29 triggers
+        //we should also replace all NOTIFYALERT warnings in RC with assertions, since they can't ever happen
+      if( db.is_in_control() || db.is_reapplying_one_tx() || db.has_hardfork( HIVE_HARDFORK_1_31_RC_IS_CONSENSUS ) )
       {
-        FC_TODO( "Add || db.has_hardfork( X ) to make RC part of consensus since X" );
-          //we should also replace all NOTIFYALERT warnings in RC with assertions, since they can't ever happen
-        if( db.is_in_control() || db.is_reapplying_one_tx() )
+        if( surcharge && acc.rc_manabar.has_mana( rc ) )
         {
-          if( surcharge && acc.rc_manabar.has_mana( rc ) )
-          {
-            HIVE_ASSERT( has_mana, not_enough_rc_exception,
-              "Account: ${account_name} has ${rc_current} RC, needs ${rc} RC with ${surcharge} flood prevention surcharge. "
-              "Please wait to transact, power up HIVE or ask your witnesses to increase block size to deal with increased traffic.",
-              ( account_name )( "rc_current", tx_info.rc )( rc )( surcharge )
-            );
-          }
           HIVE_ASSERT( has_mana, not_enough_rc_exception,
-            "Account: ${account_name} has ${rc_current} RC, needs ${rc} RC. Please wait to transact or power up HIVE.",
-            ( account_name )( "rc_current", tx_info.rc )( rc )
+            "Account: ${account_name} has ${rc_current} RC, needs ${rc} RC with ${surcharge} flood prevention surcharge. "
+            "Please wait to transact, power up HIVE or ask your witnesses to increase block size to deal with increased traffic.",
+            ( account_name )( "rc_current", tx_info.rc )( rc )( surcharge )
           );
         }
-        else
+        HIVE_ASSERT( has_mana, not_enough_rc_exception,
+          "Account: ${account_name} has ${rc_current} RC, needs ${rc} RC. Please wait to transact or power up HIVE.",
+          ( account_name )( "rc_current", tx_info.rc )( rc )
+        );
+      }
+      else
+      {
+        if( !has_mana && db.is_processing_block() && db.has_hardfork( HIVE_HARDFORK_1_26 ) )
         {
-          if( !has_mana && db.is_processing_block() && db.has_hardfork( HIVE_HARDFORK_1_26 ) )
-          {
-            //when we didn't have is_processing_block as part of condition the messages below would also
-            //be produced when pending transactions were reapplied after new block arrived even though
-            //they are not part of any block yet;
-            //if we put that part of condition as alternative for db.is_in_control() above it would mean
-            //the transactions that were validated before but started to lack RC after new block arrived,
-            //would be dropped from mempool (note the difference: when user lacks RC while sending transaction
-            //he can notice and react to it; however when his transaction is rejected after validation due
-            //to changes in RC, it seems better to retry tx execution like we currently do)
-            ilog( "Accepting transaction by ${account}, has ${rc_current} RC, needs ${rc_needed} RC, block ${b}, witness ${w}.",
-              ( "account", account_name )
-              ( "rc_needed", rc )
-              ( "rc_current", tx_info.rc )
-              ( "b", dgpo.head_block_number )
-              ( "w", dgpo.current_witness )
-            );
-          }
+          //when we didn't have is_processing_block as part of condition the messages below would also
+          //be produced when pending transactions were reapplied after new block arrived even though
+          //they are not part of any block yet;
+          //if we put that part of condition as alternative for db.is_in_control() above it would mean
+          //the transactions that were validated before but started to lack RC after new block arrived,
+          //would be dropped from mempool (note the difference: when user lacks RC while sending transaction
+          //he can notice and react to it; however when his transaction is rejected after validation due
+          //to changes in RC, it seems better to retry tx execution like we currently do)
+          ilog( "Accepting transaction by ${account}, has ${rc_current} RC, needs ${rc_needed} RC, block ${b}, witness ${w}.",
+            ( "account", account_name )
+            ( "rc_needed", rc )
+            ( "rc_current", tx_info.rc )
+            ( "b", dgpo.get_head_block_number() )
+            ( "w", dgpo.get_current_witness() )
+          );
         }
       }
 
@@ -683,6 +702,10 @@ void resource_credits::handle_auto_report( uint32_t block_num, int64_t global_re
     return;
 
   const auto& new_stats_obj = db.get< rc_stats_object >( RC_PENDING_STATS_ID );
+  db.modify( new_stats_obj, [&]( rc_stats_object& new_stats )
+  {
+    new_stats.finalize_stats();
+  } );
   if( auto_report_type != report_type::NONE && new_stats_obj.get_starting_block() )
   {
     fc::variant_object report = get_report( auto_report_type, new_stats_obj );
@@ -698,6 +721,13 @@ void resource_credits::handle_auto_report( uint32_t block_num, int64_t global_re
     case report_output::ILOG:
       ilog( "RC stats:${report}", ( report ) );
       break;
+    case report_output::JSONL:
+      {
+        auto& stream = get_rc_stats_jsonl_stream();
+        stream << fc::json::to_string( fc::variant( report ) ) << '\n';
+        stream.flush();
+      }
+      break;
     default:
       dlog( "RC stats:${report}", ( report ) );
       break;
@@ -707,10 +737,11 @@ void resource_credits::handle_auto_report( uint32_t block_num, int64_t global_re
   const auto& old_stats_obj = db.get< rc_stats_object, by_id >( RC_ARCHIVE_STATS_ID );
   db.modify( old_stats_obj, [&]( rc_stats_object& old_stats )
   {
-    db.modify( new_stats_obj, [&]( rc_stats_object& new_stats )
-    {
-      new_stats.archive_and_reset_stats( old_stats, rc_pool, block_num, global_regen );
-    } );
+    old_stats.archive_stats( new_stats_obj );
+  } );
+  db.modify( new_stats_obj, [&]( rc_stats_object& new_stats )
+  {
+    new_stats.reset_stats( rc_pool, block_num, global_regen );
   } );
 }
 
@@ -737,9 +768,9 @@ void resource_credits::finalize_block() const
     return;
 
   const auto& dgpo = db.get_dynamic_global_properties();
-  auto now = dgpo.time;
-  auto block_num = dgpo.head_block_number;
-  int64_t regen = ( dgpo.total_vesting_shares.amount.value / ( HIVE_RC_REGEN_TIME / HIVE_BLOCK_INTERVAL ) );
+  auto now = dgpo.get_head_block_time();
+  auto block_num = dgpo.get_head_block_number();
+  int64_t regen = ( dgpo.get_total_vesting_shares().amount.value / ( HIVE_RC_REGEN_TIME / HIVE_BLOCK_INTERVAL ) );
 
   const auto& params_obj = db.get< rc_resource_param_object, by_id >( rc_resource_param_id_type() );
 
@@ -769,7 +800,7 @@ void resource_credits::finalize_block() const
 
       if( i == resource_new_accounts )
       {
-        int64_t new_consensus_pool = dgpo.available_account_subsidies;
+        int64_t new_consensus_pool = dgpo.get_available_account_subsidies();
         if( new_consensus_pool != new_pool )
         {
           ilog( "resource_new_accounts adjustment on block ${b}: ${a}",

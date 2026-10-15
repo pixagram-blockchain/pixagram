@@ -19,6 +19,7 @@ namespace hive { namespace protocol {
 
 namespace hive { namespace chain {
   struct block_notification;
+  struct full_transaction_type;
 } }
 
 namespace hive { namespace plugins { namespace debug_node {
@@ -97,12 +98,19 @@ class debug_node_plugin : public plugin< debug_node_plugin >
       const hive::protocol::VEST_price& new_price,
       fc::optional<protocol::transaction_id_type> transaction_id = fc::optional<protocol::transaction_id_type>() );
 
+    /**
+     * Insert a transaction directly into the database pending list without evaluating it.
+     * Bypasses all checks and evaluation normally done before transaction is added to pending.
+     */
+    void debug_push_pending_transaction( const std::shared_ptr<hive::chain::full_transaction_type>& tx );
+
     uint32_t debug_generate_blocks(
       fc::optional<fc::ecc::private_key> debug_key,
       uint32_t count,
       uint32_t skip,
       uint32_t miss_blocks,
-      bool immediate_generation
+      bool immediate_generation,
+      bool skip_tx_reapplication = false // uses transactions from pending "as is" without reapplication
       );
     uint32_t debug_generate_blocks_until(
       fc::optional<fc::ecc::private_key> debug_key,

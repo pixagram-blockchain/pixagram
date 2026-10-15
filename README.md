@@ -68,11 +68,19 @@ docker pull hiveio/hive:1.28.0
 
 Please note that the `latest` tag is not supported; you must explicitly specify the version tag to avoid issues with new versions that require replay.
 
-A script is available to simplify the use of a `docker run` command by emulating direct `hived` usage: [run_hived_img.sh](scripts/run_hived_img.sh). This script is the recommended method for launching the hived Docker container.
+The recommended way to run the image is the Docker Compose deployment in [docker/exchange](docker/exchange): a `hived` service with account history, an optional `cli_wallet` daemon, a health check, and a data volume that bootstraps itself on the first start from a published state snapshot or a block log. It is configured entirely through `compose.yml`, `.env` and `config.ini`; see [docker/exchange/README.md](docker/exchange/README.md).
 
-General usage: `run_hived_img.sh <docker_img> [OPTION[=VALUE]]... [<hived_option>]...`
+The image can also be started by hand. [run_hived_img.sh](scripts/run_hived_img.sh) wraps `docker run` while emulating direct `hived` usage: `run_hived_img.sh <docker_img> [OPTION[=VALUE]]... [<hived_option>]...`; read [more about using run_hived_img.sh](doc/run_hived_img.md) to explore its usage in various scenarios.
 
-Read [more about using run_hived_img.sh](doc/run_hived_img.md) to explore its usage in various scenarios.
+Environment variables understood by the image's entrypoint:
+
+- `BLOCK_LOG_URL`: URL of a monolithic `block_log` to download on the first start when the data directory holds no block log yet (its `.artifacts` sidecar is fetched from `BLOCK_LOG_ARTIFACTS_URL`, default `BLOCK_LOG_URL.artifacts`).
+- `SNAPSHOT_URL`: URL of a `.tgz` state snapshot (as produced by `--dump-snapshot`) to download and load on the first start instead of replaying from genesis. Without a block log it implies `block-log-split=0` (no block log is kept); with `BLOCK_LOG_URL` the block log is kept and replayed forward from the snapshot.
+- `HIVED_AUTO_REPLAY`: set to `1` to have the entrypoint add `--replay-blockchain` whenever a block log is present and no replay mode was requested, so a downloaded or copied-in block log is replayed without further action. Off by default, so a mismatch between the state and the block log stops hived with an error instead of starting a replay. The exchange compose deployment turns it on.
+- `HIVED_UID`: run hived as this UID, for bind-mounted directories owned by a user other than 1000.
+- `P2P_ENDPOINT`, `WS_ENDPOINT`, `HTTP_ENDPOINT`: listening endpoints inside the container.
+
+`/home/hived/scripts/hived_healthcheck.sh` is a health check for the container: it exits 0 once hived answers JSON-RPC and its head block is at most `HIVED_HEALTHCHECK_MAX_BLOCK_AGE` seconds old (default 120).
 
 ## CLI Wallet
 

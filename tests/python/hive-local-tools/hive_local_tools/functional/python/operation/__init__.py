@@ -474,7 +474,7 @@ def get_vesting_price(node: tt.InitNode) -> int:
     """
     Current exchange rate - `1` Hive to Vest conversion price.
     """
-    dgpo = node.api.wallet_bridge.get_dynamic_global_properties()
+    dgpo = node.api.database.get_dynamic_global_properties()
     total_vesting_shares = dgpo.total_vesting_shares.amount
     total_vesting_fund_hive = dgpo.total_vesting_fund_hive.amount
 

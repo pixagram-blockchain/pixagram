@@ -8,7 +8,7 @@
 #include <hive/protocol/hive_operations.hpp>
 #include <hive/protocol/transaction_util.hpp>
 
-#include <hive/chain/account_object.hpp>
+#include <hive/chain/detail/state/account_object.hpp>
 #include <hive/chain/detail/state/convert_request_object.hpp>
 #include <hive/chain/detail/state/collateralized_convert_request_object.hpp>
 #include <hive/chain/detail/state/escrow_object.hpp>
@@ -20,18 +20,18 @@
 #include <hive/chain/detail/state/decline_voting_rights_request_object.hpp>
 #include <hive/chain/detail/state/reward_fund_object.hpp>
 #include <hive/chain/detail/state/recurrent_transfer_object.hpp>
-#include <hive/chain/transaction_object.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/transaction_object.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -79,7 +79,7 @@ public:
     {
       const auto* authorities = db.find< account_authority_object, by_account >( name );
       FC_ASSERT( authorities != nullptr, "Account ${name} not found", ( name ) );
-      approving_account_lut.emplace( name, account_authorities{ authorities->active, authorities->owner, authorities->posting } );
+      approving_account_lut.emplace( name, account_authorities{ authorities->get_active().to_authority(), authorities->get_owner().to_authority(), authorities->get_posting().to_authority() } );
     }
   }
 

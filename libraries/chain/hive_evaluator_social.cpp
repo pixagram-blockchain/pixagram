@@ -7,11 +7,12 @@
 #include <hive/chain/database.hpp>
 #include <hive/chain/database_virtual_operations.hpp>
 #include <hive/chain/detail/state/reward_fund_object.hpp>
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
 #include <hive/chain/evaluator_registry.hpp>
 
 #include <hive/chain/util/reward.hpp>
+#include <hive/chain/util/uint256.hpp>
 #include <hive/chain/util/manabar.hpp>
 
 #include <fc/uint128.hpp>
@@ -352,7 +353,7 @@ void pre_hf20_vote_evaluator( const vote_operation& o, database& _db )
   const dynamic_global_property_object& dgpo = _db.get_dynamic_global_properties();
 
   // The second multiplication is rounded up as of HF14#259
-  int64_t max_vote_denom = dgpo.vote_power_reserve_rate * HIVE_VOTING_MANA_REGENERATION_SECONDS;
+  int64_t max_vote_denom = dgpo.get_vote_power_reserve_rate() * HIVE_VOTING_MANA_REGENERATION_SECONDS;
   HIVE_CHAIN_UNREACHABLE_CODE_ASSERT( max_vote_denom > 0 && "Pre HF20", "Maximum vote denominator must be positive." );
 
   if( !_db.has_hardfork( HIVE_HARDFORK_0_14__259 ) )
@@ -411,14 +412,15 @@ void pre_hf20_vote_evaluator( const vote_operation& o, database& _db )
     const comment_cashout_ex_object* root_cashout_ex = _db.find_comment_cashout_ex( root );
     HIVE_CHAIN_STATE_ASSERT( root_cashout && root_cashout_ex, o.author, "Root comment cashout objects must exist." );
 
+    auto old_root_abs_rshares = root_cashout_ex->get_children_abs_rshares();
+
+    _db.modify( *root_cashout_ex, [&]( comment_cashout_ex_object& c_ex )
+    {
+      c_ex.accumulate_children_abs_rshares( abs_rshares );
+    } );
+
     _db.modify( *root_cashout, [&]( comment_cashout_object& c )
     {
-      auto old_root_abs_rshares = root_cashout_ex->get_children_abs_rshares();
-      _db.modify( *root_cashout_ex, [&]( comment_cashout_ex_object& c_ex )
-      {
-        c_ex.accumulate_children_abs_rshares( abs_rshares );
-      } );
-
       if( _db.has_hardfork( HIVE_HARDFORK_0_12__177 ) && root_cashout_ex->was_paid() )
       {
         c.set_cashout_time( root_cashout_ex->get_last_payout() + HIVE_SECOND_CASHOUT_WINDOW );
@@ -442,15 +444,15 @@ void pre_hf20_vote_evaluator( const vote_operation& o, database& _db )
         }
         c.set_cashout_time( fc::time_point_sec( std::min( uint32_t( fc::uint128_to_uint64(avg_cashout_sec) ), root_cashout_ex->get_max_cashout_time().sec_since_epoch() ) ) );
       }
-
-      if( root_cashout_ex->get_max_cashout_time() == fc::time_point_sec::maximum() )
-      {
-        _db.modify( *root_cashout_ex, [&]( comment_cashout_ex_object& c_ex )
-        {
-          c_ex.set_max_cashout_time( _now + fc::seconds( HIVE_MAX_CASHOUT_WINDOW_SECONDS ) );
-        } );
-      }
     } );
+
+    if( root_cashout_ex->get_max_cashout_time() == fc::time_point_sec::maximum() )
+    {
+      _db.modify( *root_cashout_ex, [&]( comment_cashout_ex_object& c_ex )
+      {
+        c_ex.set_max_cashout_time( _now + fc::seconds( HIVE_MAX_CASHOUT_WINDOW_SECONDS ) );
+      } );
+    }
   }
 
   uint64_t vote_weight = 0;
@@ -524,9 +526,9 @@ void pre_hf20_vote_evaluator( const vote_operation& o, database& _db )
           {
             const auto& reward_fund = _db.get_reward_fund();
             auto curve = !_db.has_hardfork( HIVE_HARDFORK_0_19__1052 ) && comment_cashout->get_creation_time() > HIVE_HF_19_SQRT_PRE_CALC
-                      ? curve_id::square_root : reward_fund.curation_reward_curve;
-            uint64_t old_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( old_vote_rshares, curve, reward_fund.content_constant ));
-            uint64_t new_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( comment_cashout->get_vote_rshares(), curve, reward_fund.content_constant ));
+                      ? curve_id::square_root : reward_fund.get_curation_reward_curve();
+            uint64_t old_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( old_vote_rshares, curve, reward_fund.get_content_constant() ));
+            uint64_t new_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( comment_cashout->get_vote_rshares(), curve, reward_fund.get_content_constant() ));
             vote_weight = new_weight - old_weight;
           }
           else if ( _db.has_hardfork( HIVE_HARDFORK_0_1 ) )
@@ -549,10 +551,10 @@ void pre_hf20_vote_evaluator( const vote_operation& o, database& _db )
         {
           /// discount weight by time
           uint128_t w(max_vote_weight);
-          uint64_t delta_t = std::min( uint64_t((_now - comment_cashout->get_creation_time()).to_seconds()), dgpo.reverse_auction_seconds );
+          uint64_t delta_t = std::min( uint64_t((_now - comment_cashout->get_creation_time()).to_seconds()), dgpo.get_reverse_auction_seconds() );
 
           w *= delta_t;
-          w /= dgpo.reverse_auction_seconds;
+          w /= dgpo.get_reverse_auction_seconds();
           vote_weight = fc::uint128_to_uint64(w);
         }
       }
@@ -664,17 +666,17 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
   {
     used_mana = ( uint128_t( voter.get_effective_vesting_shares().get_amount() ) * abs_weight * 60 * 60 * 24 ) / HIVE_100_PERCENT;
   }
-  else if( dgpo.downvote_pool_percent && o.weight < 0 )
+  else if( dgpo.get_downvote_pool_percent() && o.weight < 0 )
   {
     if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
     {
-      used_mana = ( std::max( ( ( uint128_t( voter.downvote_manabar.current_mana ) * HIVE_100_PERCENT ) / dgpo.downvote_pool_percent ),
+      used_mana = ( std::max( ( ( uint128_t( voter.downvote_manabar.current_mana ) * HIVE_100_PERCENT ) / dgpo.get_downvote_pool_percent() ),
                       uint128_t( voter.voting_manabar.current_mana ) )
             * abs_weight * 60 * 60 * 24 ) / HIVE_100_PERCENT;
     }
     else
     {
-      used_mana = ( std::max( ( uint128_t( voter.downvote_manabar.current_mana * HIVE_100_PERCENT ) / dgpo.downvote_pool_percent ),
+      used_mana = ( std::max( ( uint128_t( voter.downvote_manabar.current_mana * HIVE_100_PERCENT ) / dgpo.get_downvote_pool_percent() ),
                       uint128_t( voter.voting_manabar.current_mana ) )
             * abs_weight * 60 * 60 * 24 ) / HIVE_100_PERCENT;
     }
@@ -684,11 +686,11 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
     used_mana = ( uint128_t( voter.voting_manabar.current_mana ) * abs_weight * 60 * 60 * 24 ) / HIVE_100_PERCENT;
   }
 
-  int64_t max_vote_denom = dgpo.vote_power_reserve_rate * HIVE_VOTING_MANA_REGENERATION_SECONDS;
+  int64_t max_vote_denom = dgpo.get_vote_power_reserve_rate() * HIVE_VOTING_MANA_REGENERATION_SECONDS;
   HIVE_CHAIN_UNREACHABLE_CODE_ASSERT( max_vote_denom > 0, "Maximum vote denominator must be positive." );
 
   used_mana = ( used_mana + max_vote_denom - 1 ) / max_vote_denom;
-  if( dgpo.downvote_pool_percent && o.weight < 0 )
+  if( dgpo.get_downvote_pool_percent() && o.weight < 0 )
   {
     // note that downvote requires more mana than necessary, which prevents accounts with no stake from downvoting;
     // while the effect might be unintentional, it was like that for long time and there is enough drama with
@@ -719,7 +721,7 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
 
   _db.modify( voter, [&]( account_object& a )
   {
-    if( dgpo.downvote_pool_percent && o.weight < 0 )
+    if( dgpo.get_downvote_pool_percent() && o.weight < 0 )
     {
       if( fc::uint128_to_int64(used_mana) > a.downvote_manabar.current_mana )
       {
@@ -788,9 +790,9 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
         {
           // cv.weight = W(R_1) - W(R_0)
           const auto& reward_fund = _db.get_reward_fund();
-          auto curve = reward_fund.curation_reward_curve;
-          uint64_t old_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( old_vote_rshares, curve, reward_fund.content_constant ));
-          uint64_t new_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( c.get_vote_rshares(), curve, reward_fund.content_constant ));
+          auto curve = reward_fund.get_curation_reward_curve();
+          uint64_t old_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( old_vote_rshares, curve, reward_fund.get_content_constant() ));
+          uint64_t new_weight = fc::uint128_to_uint64(util::evaluate_reward_curve( c.get_vote_rshares(), curve, reward_fund.get_content_constant() ));
 
           if( old_weight < new_weight ) // old_weight > new_weight should never happen, but == is ok
           {
@@ -799,25 +801,25 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
             vote_weight = new_weight - old_weight;
 
             //In HF25 `dgpo.reverse_auction_seconds` is set to zero. It's replaced by `dgpo.early_voting_seconds` and `dgpo.mid_voting_seconds`.
-            if( _seconds < dgpo.reverse_auction_seconds )
+            if( _seconds < dgpo.get_reverse_auction_seconds() )
             {
               max_vote_weight = vote_weight;
 
               /// discount weight by time
               uint128_t w( max_vote_weight );
-              uint64_t delta_t = std::min( _seconds, uint64_t( dgpo.reverse_auction_seconds ) );
+              uint64_t delta_t = std::min( _seconds, uint64_t( dgpo.get_reverse_auction_seconds() ) );
 
               w *= delta_t;
-              w /= dgpo.reverse_auction_seconds;
+              w /= dgpo.get_reverse_auction_seconds();
               vote_weight = fc::uint128_to_uint64(w);
             }
-            else if( _seconds >= dgpo.early_voting_seconds && dgpo.early_voting_seconds )
+            else if( _seconds >= dgpo.get_early_voting_seconds() && dgpo.get_early_voting_seconds() )
             {
               //Following values are chosen empirically
               const uint32_t phase_1_factor = 2;
               const uint32_t phase_2_factor = 8;
 
-              if( _seconds < ( dgpo.early_voting_seconds + dgpo.mid_voting_seconds ) )
+              if( _seconds < ( dgpo.get_early_voting_seconds() + dgpo.get_mid_voting_seconds() ) )
                 vote_weight /= phase_1_factor;
               else
                 vote_weight /= phase_2_factor;

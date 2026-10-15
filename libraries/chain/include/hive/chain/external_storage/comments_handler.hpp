@@ -6,7 +6,7 @@
 #include <hive/chain/external_storage/comments_handler_ptr.hpp>
 
 #include <hive/chain/hive_object_types.hpp>
-#include <hive/chain/comment_object.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
 
 #include <hive/utilities/benchmark_dumper.hpp>
 
@@ -25,7 +25,7 @@ class comments_handler : public external_storage_snapshot
 
     virtual void open() = 0;
     virtual void close() = 0;
-    virtual void flush() = 0;
+    virtual void flush( bool force_storage_flush ) = 0;
     virtual void wipe() = 0;
 
     virtual void on_end_of_syncing() = 0;

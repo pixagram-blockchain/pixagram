@@ -13,8 +13,10 @@
 #include <set>
 
 #if defined(USE_ALTERNATE_CHAIN_ID)
-  #define HIVE_NUM_HARDFORKS 30
+  #define HIVE_NUM_HARDFORKS 31
 #else
-  /// Mainnet binary supports HF30; activated 2026-10-07 12:00:00 UTC at block 949330
+  /// Mainnet binary supports HF30; activated 2026-10-07 12:00:00 UTC at block 949330.
+  /// HF31 (upstream Hive's HF29 features, see 1_31.hf) is compiled in but cannot activate
+  /// until this is raised to 31.
   #define HIVE_NUM_HARDFORKS 30
 #endif

@@ -39,6 +39,9 @@ using hive::protocol::block_id_type;
 
 namespace detail {
 
+/// how often unresolved seed node hostnames are retried while the node runs
+constexpr uint32_t HIVE_P2P_SEED_RESOLVE_RETRY_SECONDS = 60;
+
 class p2p_plugin_impl : public graphene::net::node_delegate
 {
 public:
@@ -67,7 +70,6 @@ public:
   }
 
   bool is_included_block(const block_id_type& block_id);
-  virtual hive::protocol::chain_id_type get_old_chain_id() const override;
   virtual hive::protocol::chain_id_type get_new_chain_id() const override;
   virtual hive::protocol::chain_id_type get_chain_id() const override;
 
@@ -85,6 +87,7 @@ public:
   virtual fc::time_point_sec get_block_time(const graphene::net::item_hash_t& ) override;
   virtual fc::time_point_sec get_blockchain_now() override;
   virtual graphene::net::item_hash_t get_head_block_id() const override;
+  virtual uint32_t get_last_irreversible_block_num() const override;
   virtual uint32_t estimate_last_known_fork_from_git_revision_timestamp( uint32_t ) const override;
   virtual void error_encountered( const std::string& message, const fc::oexception& error ) override;
   virtual std::deque<block_id_type>::const_iterator find_first_item_not_in_blockchain(const std::deque<block_id_type>& item_hashes_received) override;
@@ -93,6 +96,11 @@ public:
 
   fc::optional<fc::ip::endpoint> endpoint;
   vector<fc::ip::endpoint> seeds;
+  /// seed node strings that did not resolve during initialization (e.g. no DNS yet); retried
+  /// periodically on the p2p thread once the network is up, see retry_unresolved_seeds_loop()
+  vector<string> unresolved_seeds;
+  fc::future<void> retry_unresolved_seeds_task;
+  void retry_unresolved_seeds_loop();
   string user_agent;
   fc::mutable_variant_object config;
   uint32_t max_connections = 0;
@@ -249,11 +257,6 @@ std::shared_ptr<chain::full_block_type> p2p_plugin_impl::get_full_block(const bl
   return chain.block_reader().fetch_block_by_id(id);
 } FC_CAPTURE_AND_RETHROW((id)) }
 
-hive::protocol::chain_id_type p2p_plugin_impl::get_old_chain_id() const
-{
-  return chain.db().get_old_chain_id();
-}
-
 hive::protocol::chain_id_type p2p_plugin_impl::get_new_chain_id() const
 {
   return chain.db().get_new_chain_id();
@@ -266,8 +269,18 @@ hive::protocol::chain_id_type p2p_plugin_impl::get_chain_id() const
 
 std::vector< graphene::net::item_hash_t > p2p_plugin_impl::get_blockchain_synopsis( const graphene::net::item_hash_t& reference_point, uint32_t number_of_blocks_after_reference_point )
 { try {
-  return chain.block_reader().get_blockchain_synopsis(reference_point, number_of_blocks_after_reference_point);
-} FC_LOG_AND_RETHROW() }
+  try
+  {
+    return chain.block_reader().get_blockchain_synopsis(reference_point, number_of_blocks_after_reference_point);
+  }
+  catch (const hive::chain::internal_peer_is_on_an_unreachable_fork&)
+  {
+    // translate to the exception type the network layer's synopsis-construction path handles:
+    // it disconnects the peer with a clear "you are on a fork I'm unable to switch to" reason
+    // instead of letting a generic exception escape its handling
+    FC_THROW_EXCEPTION(graphene::net::block_older_than_undo_history, "Unable to construct a blockchain synopsis for this peer; it is on a fork we cannot reconcile with");
+  }
+} FC_CAPTURE_AND_RETHROW((reference_point)(number_of_blocks_after_reference_point)) }
 
 void p2p_plugin_impl::sync_status( uint32_t item_type, uint32_t item_count )
 {
@@ -299,6 +312,62 @@ graphene::net::item_hash_t p2p_plugin_impl::get_head_block_id() const
 { try {
   return chain.block_reader().head_block_id();
 } FC_CAPTURE_AND_RETHROW() }
+
+uint32_t p2p_plugin_impl::get_last_irreversible_block_num() const
+{ try {
+  return chain.db().get_last_irreversible_block_num();
+} FC_CAPTURE_AND_RETHROW() }
+
+// Runs on the p2p thread as a long-lived task while any seed string from the configuration is
+// still unresolved.  Every HIVE_P2P_SEED_RESOLVE_RETRY_SECONDS it retries them; each one that
+// resolves is handed to the node like a seed given at startup and dropped from the list.  A
+// permanently dead seed costs one DNS lookup per interval (fc's resolver yields rather than
+// blocking the thread).  The sleep is a cancellable fc::usleep, like the node's own loops, so
+// plugin_pre_shutdown can cancel the task immediately rather than waiting out the interval.
+void p2p_plugin_impl::retry_unresolved_seeds_loop()
+{
+  while( !unresolved_seeds.empty() && !theApp.is_interrupt_request() )
+  {
+    fc::usleep( fc::seconds(HIVE_P2P_SEED_RESOLVE_RETRY_SECONDS) );
+    if( !node || theApp.is_interrupt_request() )
+      return;
+
+    for( auto iter = unresolved_seeds.begin(); iter != unresolved_seeds.end(); )
+    {
+      std::vector<fc::ip::endpoint> endpoints;
+      try
+      {
+        endpoints = fc::resolve_string_to_ip_endpoints( *iter );
+      }
+      catch( const fc::canceled_exception& )
+      {
+        throw;
+      }
+      catch( const fc::exception& e )
+      {
+        dlog("seed node ${endpoint} still does not resolve: ${e}", ("endpoint", *iter)("e", e.to_detail_string()));
+        ++iter;
+        continue;
+      }
+
+      ilog("seed node ${endpoint} now resolves to ${count} address(es)", ("endpoint", *iter)("count", endpoints.size()));
+      for( const auto& seed : endpoints )
+      {
+        try
+        {
+          ilog("P2P adding seed node ${s}", ("s", seed));
+          seeds.push_back( seed );
+          node->add_node( seed );
+        }
+        catch( graphene::net::already_connected_to_requested_peer& )
+        {
+          wlog( "Already connected to seed node ${s}", ("s", seed) );
+        }
+      }
+      iter = unresolved_seeds.erase( iter );
+    }
+  }
+}
 
 uint32_t p2p_plugin_impl::estimate_last_known_fork_from_git_revision_timestamp(uint32_t) const
 {
@@ -406,8 +475,12 @@ void p2p_plugin::plugin_initialize(const boost::program_options::variables_map& 
       }
       catch (const fc::exception &e)
       {
-        wlog("caught exception ${e} while adding seed node ${endpoint}",
-             ("e", e.to_detail_string())("endpoint", endpoint_string));
+        // typically a DNS failure (no network yet, or a stale seed).  Keep the string and keep
+        // trying after startup: a node started before its network was up used to stay peerless
+        // forever, because this was the only place seeds were ever resolved
+        wlog("caught exception ${e} while adding seed node ${endpoint}; will retry resolving it every ${secs} seconds once the P2P network is up",
+             ("e", e.to_detail_string())("endpoint", endpoint_string)("secs", detail::HIVE_P2P_SEED_RESOLVE_RETRY_SECONDS));
+        my->unresolved_seeds.push_back(endpoint_string);
       }
     }
   }
@@ -463,6 +536,13 @@ void p2p_plugin::plugin_finalize_startup()
       {
         wlog( "Already connected to seed node ${s}. Is it specified twice in config?", ("s", seed) );
       }
+    }
+
+    if( !my->unresolved_seeds.empty() )
+    {
+      ilog("${count} seed node(s) did not resolve during initialization, retrying every ${secs} seconds: ${seeds}",
+           ("count", my->unresolved_seeds.size())("secs", detail::HIVE_P2P_SEED_RESOLVE_RETRY_SECONDS)("seeds", my->unresolved_seeds));
+      my->retry_unresolved_seeds_task = fc::async( [this]() { my->retry_unresolved_seeds_loop(); }, "retry_unresolved_seeds" );
     }
 
     if( my->max_connections )
@@ -531,6 +611,24 @@ void p2p_plugin::plugin_pre_shutdown() {
   }
 
   ilog("P2P Plugin: terminating p2p tasks");
+  if( my->retry_unresolved_seeds_task.valid() )
+  {
+    // cancel from the p2p thread, the way node_impl::close() cancels the node's own loops
+    my->p2p_thread.async( [this]()
+    {
+      try
+      {
+        my->retry_unresolved_seeds_task.cancel_and_wait("p2p_plugin::plugin_pre_shutdown()");
+      }
+      catch (const fc::canceled_exception&)
+      {
+      }
+      catch (const fc::exception& e)
+      {
+        wlog("Exception thrown while terminating retry_unresolved_seeds task, ignoring: ${e}", (e));
+      }
+    }, "cancel_retry_unresolved_seeds" ).wait();
+  }
   if( my->node )
   {
     my->node->close();

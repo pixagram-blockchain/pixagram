@@ -29,3 +29,4 @@ def node(request):
 @pytest.fixture()
 def wallet(node):
     return tt.Wallet(attach_to=node)
+

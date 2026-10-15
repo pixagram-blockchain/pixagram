@@ -43,7 +43,7 @@ struct rc_resource_params
 class resource_credits
 {
   public:
-    enum class report_output { DLOG, ILOG, NOTIFY, BOTH };
+    enum class report_output { DLOG, ILOG, NOTIFY, BOTH, JSONL };
     enum class report_type
     {
       NONE, //no report
@@ -110,7 +110,7 @@ class resource_credits
     void update_account_after_rc_delegation(
       const account_object& account,
       const fc::time_point_sec now,
-      int64_t delta,
+      share_type delta,
       bool regenerate_mana = false ) const;
     // updates RC related data on account after change in vesting
     void update_account_after_vest_change(
@@ -156,7 +156,7 @@ class resource_credits
 
     /** Calculates resources used (on top of potential discount and extra costs of custom ops),
       * their cost and consumes RC from transaction payer.
-      * Throws exception when payer does not have enough mana (only when is_in_control() for now).
+      * Throws not_enough_rc_exception when payer does not have enough mana (softfork check before HF29).
       */
     void finalize_transaction( const full_transaction_type& full_tx );
     // adjusts pools, rotates buckets and RC stats

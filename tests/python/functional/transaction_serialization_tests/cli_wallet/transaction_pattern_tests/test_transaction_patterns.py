@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 import test_tools as tt
-from beekeepy.exceptions import ErrorInResponseError
+from test_tools.exceptions import ErrorInResponseError
 from hive_local_tools.functional.python.transaction_serialization.cli_wallet.transaction_pattern import (
     VerifyPatternFunctionT,
     verify_generated_transaction_with_binary_pattern,
@@ -40,7 +40,7 @@ METHODS_WITH_CORRECT_ARGUMENTS: list[tuple[str, ...]] = [
     ),
     ("create_order", ("alice", 1000, tt.Asset.Test(1), tt.Asset.Tbd(1), False, 1000, False)),
     ("decline_voting_rights", ("initminer", True, False)),
-    ("delegate_rc", ("alice", ["bob"], 10, False)),
+    ("delegate_rc", ("alice", ["bob"], 100_000, False)),
     ("delegate_vesting_shares", ("alice", "bob", tt.Asset.Vest(1), False)),
     ("delegate_vesting_shares_and_transfer", ("alice", "bob", tt.Asset.Vest(1), tt.Asset.Tbd(6), "memo", False)),
     (

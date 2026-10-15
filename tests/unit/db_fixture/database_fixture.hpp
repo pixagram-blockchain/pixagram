@@ -2,6 +2,7 @@
 
 #include <appbase/application.hpp>
 #include <hive/chain/database.hpp>
+#include <hive/chain/util/balance.hpp>
 #include <hive/chain/util/delayed_voting.hpp>
 #include <fc/io/json.hpp>
 #include <fc/smart_ref_impl.hpp>
@@ -23,8 +24,9 @@
 #include <array>
 #include <iostream>
 
-#define INITIAL_TEST_SUPPLY     HIVE_asset(9'900'000'000ll)
-#define HBD_INITIAL_TEST_SUPPLY HBD_asset(100'000'000ll)
+#define HIVE_INITIAL_TEST_SUPPLY HIVE_asset( 500'000'000'000ll )
+#define HBD_INITIAL_TEST_SUPPLY  HBD_asset( 10'000'000'000ll )
+#define HP_INITIAL_TEST_SUPPLY   HIVE_asset( 200'000'000'000ll )
 
 extern uint32_t HIVE_TESTING_GENESIS_TIMESTAMP;
 
@@ -34,46 +36,11 @@ extern uint32_t HIVE_TESTING_GENESIS_TIMESTAMP;
 #define GENERATE_BLOCK \
   hive::chain::test::_generate_block
 
-// See below
-#define REQUIRE_OP_VALIDATION_SUCCESS( op, field, value ) \
-{ \
-  const auto temp = op.field; \
-  op.field = value; \
-  op.validate(); \
-  op.field = temp; \
-}
-#define REQUIRE_OP_EVALUATION_SUCCESS( op, field, value ) \
-{ \
-  const auto temp = op.field; \
-  op.field = value; \
-  trx.operations.back() = op; \
-  op.field = temp; \
-  push_transaction( trx, fc::ecc::private_key(), ~0 ); \
-}
-
-/*#define HIVE_REQUIRE_THROW( expr, exc_type )            \
-{                                                         \
-  std::string req_throw_info = fc::json::to_string(      \
-    fc::mutable_variant_object()                        \
-    ("source_file", __FILE__)                           \
-    ("source_lineno", __LINE__)                         \
-    ("expr", #expr)                                     \
-    ("exc_type", #exc_type)                             \
-    );                                                  \
-  if( fc::enable_record_assert_trip )                    \
-    std::cout << "HIVE_REQUIRE_THROW begin "            \
-      << req_throw_info << std::endl;                  \
-  BOOST_REQUIRE_THROW( expr, exc_type );                 \
-  if( fc::enable_record_assert_trip )                    \
-    std::cout << "HIVE_REQUIRE_THROW end "              \
-      << req_throw_info << std::endl;                  \
-}*/
-
 #define HIVE_REQUIRE_THROW( expr, exc_type )           \
-  BOOST_REQUIRE_THROW( expr, exc_type );
+  BOOST_REQUIRE_THROW( expr, exc_type )
 
 #define HIVE_CHECK_THROW( expr, exc_type )             \
-{                                                      \
+do {                                                   \
   std::string req_throw_info = fc::json::to_string(    \
     fc::mutable_variant_object()                       \
     ("source_file", __FILE__)                          \
@@ -88,7 +55,7 @@ extern uint32_t HIVE_TESTING_GENESIS_TIMESTAMP;
   if( fc::enable_record_assert_trip )                  \
     std::cout << "HIVE_CHECK_THROW end "               \
       << req_throw_info << std::endl;                  \
-}
+} while(false)
 
 #define HIVE_REQUIRE_EXCEPTION( expr, assert_test, ex_type )      \
 do {                                                              \
@@ -102,98 +69,47 @@ do {                                                              \
 #define HIVE_REQUIRE_ASSERT( expr, assert_test ) HIVE_REQUIRE_EXCEPTION( expr, assert_test, fc::assert_exception )
 #define HIVE_REQUIRE_CHAINBASE_ASSERT( expr, assert_msg ) HIVE_REQUIRE_EXCEPTION( expr, assert_msg, fc::exception )
 
-#define REQUIRE_OP_VALIDATION_FAILURE_2( op, field, value, exc_type ) \
-{ \
-  const auto temp = op.field; \
-  op.field = value; \
-  HIVE_REQUIRE_THROW( op.validate(), exc_type ); \
-  op.field = temp; \
-}
-#define REQUIRE_OP_VALIDATION_FAILURE( op, field, value ) \
-  REQUIRE_OP_VALIDATION_FAILURE_2( op, field, value, fc::exception )
-
-#define REQUIRE_THROW_WITH_VALUE_2(op, field, value, exc_type) \
-{ \
-  auto bak = op.field; \
-  op.field = value; \
-  trx.operations.back() = op; \
-  op.field = bak; \
-  HIVE_REQUIRE_THROW(push_transaction(trx, ~0), exc_type); \
-}
-
-#define REQUIRE_THROW_WITH_VALUE( op, field, value ) \
-  REQUIRE_THROW_WITH_VALUE_2( op, field, value, fc::exception )
-
-///This simply resets v back to its default-constructed value. Requires v to have a working assignment operator and
-/// default constructor.
-#define RESET(v) v = decltype(v)()
-///This allows me to build consecutive test cases. It's pretty ugly, but it works well enough for unit tests.
-/// i.e. This allows a test on update_account to begin with the database at the end state of create_account.
-#define INVOKE(test) ((struct test*)this)->test_method(); trx.clear()
+// Default amount of VESTS (expressed in HIVE) implicitly granted to accounts created via ACTOR(S)
+// macros. Most tests are not sensitive to the exact value; tests that are should pass an explicit
+// amount (or NO_VESTING) and verify the chosen value does not change their results.
+#define DEFAULT_VESTING HIVE_asset( 100 )
+// Use when the created account should receive no initial vesting at all.
+#define NO_VESTING HIVE_asset( 0 )
 
 #define PREP_ACTOR(name) \
   fc::ecc::private_key name ## _private_key = generate_private_key(BOOST_PP_STRINGIZE(name));   \
   fc::ecc::private_key name ## _post_key = generate_private_key(std::string( BOOST_PP_STRINGIZE(name) ) + "_post" ); \
-  public_key_type name ## _public_key = name ## _private_key.get_public_key();
+  public_key_type name ## _public_key = name ## _private_key.get_public_key()
 
-#define ACTOR(name) \
-  PREP_ACTOR(name) \
-  const auto& name = account_create(BOOST_PP_STRINGIZE(name), name ## _public_key, name ## _post_key.get_public_key()); \
-  account_id_type name ## _id = name.get_id(); (void)name ## _id;
+#define ACTOR(initial_vesting, name) \
+  PREP_ACTOR(name); \
+  account_create(BOOST_PP_STRINGIZE(name), name ## _public_key, name ## _post_key.get_public_key(), initial_vesting); \
+  account_id_type name ## _id = get_account_id(BOOST_PP_STRINGIZE(name)); (void)name ## _id
 
-#define ACTORS_IMPL(r, data, elem) ACTOR(elem)
-#define ACTORS(names) BOOST_PP_SEQ_FOR_EACH(ACTORS_IMPL, ~, names) \
-  validate_database();
-
-
-// Generate accounts with the account creation fee instead of vesting 100 hive
-#define ACTOR_DEFAULT_FEE(name) \
-  PREP_ACTOR(name) \
-  const auto& name = account_create_default_fee(BOOST_PP_STRINGIZE(name), name ## _public_key, name ## _post_key.get_public_key()); \
-  account_id_type name ## _id = name.get_id(); (void)name ## _id;
-
-#define ACTORS_DEFAULT_FEE_IMPL(r, data, elem) ACTOR_DEFAULT_FEE(elem)
-#define ACTORS_DEFAULT_FEE(names) BOOST_PP_SEQ_FOR_EACH(ACTORS_DEFAULT_FEE_IMPL, ~, names) \
-  validate_database();
+#define ACTORS_IMPL(r, data, elem) ACTOR(data, elem);
+#define ACTORS(initial_vesting, names) BOOST_PP_SEQ_FOR_EACH(ACTORS_IMPL, initial_vesting, names) \
+  validate_database()
 
 #define PREP_ACTOR_EXT(object, name) \
   fc::ecc::private_key name ## _private_key = object.generate_private_key(BOOST_PP_STRINGIZE(name));   \
   fc::ecc::private_key name ## _post_key = object.generate_private_key(std::string( BOOST_PP_STRINGIZE(name) ) + "_post" ); \
-  public_key_type name ## _public_key = name ## _private_key.get_public_key();
+  public_key_type name ## _public_key = name ## _private_key.get_public_key()
 
-#define ACTOR_EXT(object, name) \
-  PREP_ACTOR_EXT(object, name) \
-  const auto& name = object.account_create(BOOST_PP_STRINGIZE(name), name ## _public_key, name ## _post_key.get_public_key()); \
-  account_id_type name ## _id = name.get_id(); (void)name ## _id;
+#define ACTOR_EXT(object, initial_vesting, name) \
+  PREP_ACTOR_EXT(object, name); \
+  object.account_create(BOOST_PP_STRINGIZE(name), name ## _public_key, name ## _post_key.get_public_key(), initial_vesting); \
+  account_id_type name ## _id = object.get_account_id(BOOST_PP_STRINGIZE(name)); (void)name ## _id
 
-#define ACTORS_EXT_IMPL(r, data, elem) ACTOR_EXT(data, elem)
-#define ACTORS_EXT(object, names) BOOST_PP_SEQ_FOR_EACH(ACTORS_EXT_IMPL, object, names) \
-  object.validate_database();
+#define ACTORS_EXT_IMPL(r, data, elem) ACTOR_EXT(BOOST_PP_TUPLE_ELEM(2, 0, data), BOOST_PP_TUPLE_ELEM(2, 1, data), elem);
+#define ACTORS_EXT(object, initial_vesting, names) BOOST_PP_SEQ_FOR_EACH(ACTORS_EXT_IMPL, (object, initial_vesting), names) \
+  object.validate_database()
 
 #define ASSET( s ) \
   hive::protocol::legacy_asset::from_string( s ).to_asset()
 
 #define ISSUE_FUNDS( account_name, _asset ) \
   issue_funds( account_name, _asset ); \
-  generate_block();
-
-#define OP2TX(OP,TX) \
-TX.operations.push_back( OP ); \
-TX.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
-
-#define PUSH_OP(OP,KEY) \
-{ \
-  signed_transaction tx; \
-  OP2TX(OP,tx) \
-  push_transaction( tx, KEY ); \
-}
-
-#define FAIL_WITH_OP(OP,KEY,EXCEPTION) \
-{ \
-  signed_transaction tx; \
-  OP2TX(OP,tx) \
-  HIVE_REQUIRE_THROW( push_transaction( tx, KEY ), EXCEPTION ); \
-}
+  generate_block()
 
 namespace hive { namespace chain {
 
@@ -256,6 +172,12 @@ struct database_fixture {
                       const fc::ecc::private_key& key = committee,
                       int miss_blocks = 0);
 
+  /**
+    * Generates block "in queen mode" - putting pending transactions into block without checking.
+    * Best used with db_plugin->debug_push_pending_transaction
+    */
+  void generate_block_from_pending();
+
   uint32_t generate_blocks( const fc::ecc::private_key& key, uint32_t count, uint32_t skip );
 
   uint32_t generate_blocks_until( const fc::ecc::private_key& key, const fc::time_point_sec& head_block_time,
@@ -285,39 +207,34 @@ struct database_fixture {
 
   fc::string get_current_time_iso_string() const;
 
-  const account_object& account_create(
+  void account_create(
     const string& name,
     const string& creator,
     const private_key_type& creator_key,
-    const share_type& fee,
+    const HIVE_asset& initial_vesting,
     const public_key_type& key,
     const public_key_type& post_key,
     const string& json_metadata
   );
 
-  const account_object& account_create(
+  void account_create(
     const string& name,
     const public_key_type& key,
-    const public_key_type& post_key
+    const public_key_type& post_key,
+    const HIVE_asset& initial_vesting
   );
 
-  const account_object& account_create_default_fee(
-    const string& name,
-    const public_key_type& key,
-    const public_key_type& post_key
-  );
-
-  const account_object& account_create(
+  void account_create(
     const string& name,
     const public_key_type& key
   );
 
-  const witness_object& witness_create(
+  void witness_create(
     const string& owner,
     const private_key_type& owner_key,
     const string& url,
     const public_key_type& signing_key,
-    const share_type& fee
+    const HIVE_asset& fee
   );
 
   void account_update( const string& account, const fc::ecc::public_key& memo_key, const string& metadata,
@@ -327,7 +244,11 @@ struct database_fixture {
                         optional<public_key_type> memo_key, const string& metadata, const string& posting_metadata,
                         const fc::ecc::private_key& key );
 
-  void push_transaction( const operation& op, const fc::ecc::private_key& key );
+  full_transaction_ptr build_transaction( const operation& op, const fc::ecc::private_key& key );
+  full_transaction_ptr build_transaction( const signed_transaction& tx, const std::vector<fc::ecc::private_key>& keys,
+    hive::protocol::pack_type pack = hive::protocol::serialization_mode_controller::get_current_pack() );
+
+  full_transaction_ptr push_transaction( const operation& op, const fc::ecc::private_key& key );
   full_transaction_ptr push_transaction( const signed_transaction& tx, const fc::ecc::private_key& key = fc::ecc::private_key() ) { return push_transaction_ex( tx, key ); }
   full_transaction_ptr push_transaction( const signed_transaction& tx, const std::vector<fc::ecc::private_key>& keys ) { return push_transaction_ex( tx, keys ); }
   full_transaction_ptr push_transaction_ex( const signed_transaction& tx, const fc::ecc::private_key& key = fc::ecc::private_key(),
@@ -352,6 +273,8 @@ struct database_fixture {
   void proxy( const string& _account, const string& _proxy, const fc::ecc::private_key& _key );
   void set_price_feed( const HBD_price& new_price, bool stop_at_update_block = false ); //sets on initminer(s)
   void set_witness_props( const flat_map< string, vector< char > >& new_props, bool wait_for_activation = true ); //sets on initminer(s)
+  //forces the account creation fee on the schedule median and on every witness (so it survives median recomputation)
+  void set_account_creation_fee( const HIVE_asset& fee );
   void witness_feed_publish( const string& publisher, const HBD_price& exchange_rate, const private_key_type& key );
   share_type get_votes( const string& witness_name );
   void witness_vote( account_name_type voter, account_name_type witness, const fc::ecc::private_key& key, bool approve = true );
@@ -521,10 +444,10 @@ namespace performance
     fc::ecc::private_key active_key;
     fc::ecc::private_key post_key;
 
-    initial_data( database_fixture* db, const std::string& _account );
+    initial_data( database_fixture* db, const std::string& _account, const HIVE_asset& initial_vesting = DEFAULT_VESTING );
   };
 
-  std::vector< initial_data > generate_accounts( database_fixture* db, int32_t number_accounts );
+  std::vector< initial_data > generate_accounts( database_fixture* db, int32_t number_accounts, const HIVE_asset& initial_vesting = DEFAULT_VESTING );
 }
 
 } }
@@ -559,7 +482,33 @@ inline std::ostream& operator<<( std::ostream& os, const fixed_string_impl<Stora
   return os << std::string( s );
 }
 
-} }
+} } // hive::protocol
+
+namespace hive { namespace chain {
+
+inline std::ostream& operator<<( std::ostream& os, const balance& b )
+{
+  return os << hive::chain::database_fixture::asset_to_string( b.as_asset() );
+}
+
+inline std::ostream& operator<<( std::ostream& os, const temp_balance& b )
+{
+  return os << hive::chain::database_fixture::asset_to_string( b.as_asset() );
+}
+
+template< uint32_t _SYMBOL >
+inline std::ostream& operator<<( std::ostream& os, const tiny_balance<_SYMBOL>& b )
+{
+  return os << hive::chain::database_fixture::asset_to_string( b.as_asset().to_asset() );
+}
+
+template< uint32_t _SYMBOL >
+inline std::ostream& operator<<( std::ostream& os, const temp_tiny_balance<_SYMBOL>& b )
+{
+  return os << hive::chain::database_fixture::asset_to_string( b.as_asset().to_asset() );
+}
+
+} } // hive::chain
 
 namespace fc
 {

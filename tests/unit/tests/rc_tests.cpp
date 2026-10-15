@@ -1,20 +1,20 @@
 #ifdef IS_TEST_NET
 #include <boost/test/unit_test.hpp>
 
-#include <hive/chain/rc/rc_objects.hpp>
+#include <hive/chain/rc/rc_objects_multiindex.hpp>
 #include <hive/chain/database_exceptions.hpp>
 #include <hive/protocol/hive_custom_operations.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -64,15 +64,13 @@ void clear_mana( debug_node::debug_node_plugin* db_plugin, const account_object&
   } );
 }
 
-BOOST_FIXTURE_TEST_SUITE( rc_tests, genesis_database_fixture )
+BOOST_FIXTURE_TEST_SUITE( rc_tests, clean_database_fixture )
 
 BOOST_AUTO_TEST_CASE( rc_usage_buckets )
 {
   try
   {
     BOOST_TEST_MESSAGE( "Testing rc usage bucket tracking" );
-
-    inject_hardfork( HIVE_BLOCKCHAIN_VERSION.minor_v() );
 
     fc::int_array< std::string, HIVE_RC_NUM_RESOURCE_TYPES > rc_names;
     for( int i = 0; i < HIVE_RC_NUM_RESOURCE_TYPES; ++i )
@@ -143,7 +141,13 @@ BOOST_AUTO_TEST_CASE( rc_usage_buckets )
     for( const auto& bucket : bucketIdx )
       check_eq( bucket.get_usage(), {} );
 
-    ACTORS( (alice)(bob)(sam) )
+    // This test deliberately spams operations to drive the RC resource weights around (that is what it
+    // measures), so the base per-operation RC cost keeps climbing as the test progresses - by the end a
+    // single transfer/custom_json costs many trillions of RC. The accounts therefore need a large stake to
+    // afford the most expensive operations. The extra vesting is negligible next to the ~200M HP genesis
+    // supply and does not affect the measured RC costs (those depend on resource usage, not on the payer's
+    // balance).
+    ACTORS( HIVE_asset( 100'000'000 ), (alice)(bob)(sam) );
     fund( "alice", HIVE_asset( 1'000 ) );
     fund( "bob", HIVE_asset( 1'000 ) );
     fund( "sam", HIVE_asset( 1'000 ) );
@@ -347,13 +351,10 @@ BOOST_AUTO_TEST_CASE( rc_single_recover_account )
   {
     BOOST_TEST_MESSAGE( "Testing rc resource cost of single recover_account_operation" );
 
-    inject_hardfork( HIVE_BLOCKCHAIN_VERSION.minor_v() );
-    configuration_data.allow_not_enough_rc = false;
-
-    ACTORS( (agent)(victim)(thief) )
+    ACTORS( DEFAULT_VESTING, (agent)(victim)(thief) );
     generate_block(); 
     vest( "agent", HIVE_asset( 1'000'000 ) );
-    issue_funds( "victim", HIVE_asset( 1'000 ) );
+    fund( "victim", HIVE_asset( 1'000 ) );
 
     const auto& agent_rc = db->get_account( "agent" );
     const auto& victim_rc = db->get_account( "victim" );
@@ -395,6 +396,9 @@ BOOST_AUTO_TEST_CASE( rc_single_recover_account )
     BOOST_REQUIRE_EQUAL( 0, victim_rc.rc_manabar.current_mana );
     BOOST_REQUIRE_EQUAL( pre_tx_thief_mana, thief_rc.rc_manabar.current_mana );
     generate_blocks( db->head_block_time() + HIVE_OWNER_AUTH_RECOVERY_PERIOD );
+
+    //regenerate mana before further test (note that for testnet HIVE_OWNER_AUTH_RECOVERY_PERIOD is only 60s, not 30d, so above period barely recovered any mana on account cleared of all mana)
+    generate_blocks( db->head_block_time() + HIVE_RC_REGEN_TIME );
 
     BOOST_TEST_MESSAGE( "victim wants to try to rob rc from recovery agent or network" );
     //this part tests against former and similar solutions that would be exploitable
@@ -464,10 +468,7 @@ BOOST_AUTO_TEST_CASE( rc_many_recover_accounts )
   {
     BOOST_TEST_MESSAGE( "Testing rc resource cost of many recover_account_operations" );
 
-    inject_hardfork( HIVE_BLOCKCHAIN_VERSION.minor_v() );
-    configuration_data.allow_not_enough_rc = false;
-
-    ACTORS( (agent)(victim1)(victim2)(victim3)(thief1)(thief2)(thief3) )
+    ACTORS( DEFAULT_VESTING, (agent)(victim1)(victim2)(victim3)(thief1)(thief2)(thief3) );
     generate_block();
     vest( "agent", HIVE_asset( 1'000'000 ) );
     issue_funds( "victim1", HIVE_asset( 1'000 ) );
@@ -617,9 +618,6 @@ BOOST_AUTO_TEST_CASE( rc_multisig_recover_account )
   {
     BOOST_TEST_MESSAGE( "Testing rc resource cost of recover_account_operation with complex authority" );
 
-    inject_hardfork( HIVE_BLOCKCHAIN_VERSION.minor_v() );
-    configuration_data.allow_not_enough_rc = false;
-
     static_assert( HIVE_MAX_SIG_CHECK_DEPTH >= 2 );
     static_assert( HIVE_MAX_SIG_CHECK_ACCOUNTS >= 3 * HIVE_MAX_AUTHORITY_MEMBERSHIP );
 
@@ -628,11 +626,11 @@ BOOST_AUTO_TEST_CASE( rc_multisig_recover_account )
     set_witness_props( props ); //simple tx with maxed authority uses over 300kB
     const auto fee = db->get_witness_schedule_object().median_props.account_creation_fee;
 
-    ACTORS( (agent)(thief) )
+    ACTORS( DEFAULT_VESTING, (agent)(thief) );
     generate_block();
     vest( "agent", HIVE_asset( 1'000'000 ) );
     vest( "thief", HIVE_asset( 1'000'000 ) );
-    issue_funds( "agent", HIVE_asset( 1'000'000 ) );
+    fund( "agent", HIVE_asset( 1'000'000 ) );
 
     BOOST_TEST_MESSAGE( "create signer accounts and victim account (with agent as recovery)" );
 
@@ -742,7 +740,7 @@ BOOST_AUTO_TEST_CASE( rc_multisig_recover_account )
     create.posting = create.owner;
     push_transaction( create, agent_private_key );
 
-    vest( "victim", HIVE_asset( 1'000'000 ) );
+    vest( "victim", HIVE_asset( 5'000'000 ) );
     generate_block();
     const auto& victim_rc = db->get_account( "victim" );
 
@@ -809,20 +807,16 @@ BOOST_AUTO_TEST_CASE( rc_tx_order_bug )
   {
     BOOST_TEST_MESSAGE( "Testing different transaction order in pending transactions vs actual block" );
 
-    inject_hardfork( HIVE_BLOCKCHAIN_VERSION.minor_v() );
-    configuration_data.allow_not_enough_rc = false;
-
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
-    vest( "bob", HIVE_asset( 35'000'000 ) ); //<- change that amount to tune RC cost
-    issue_funds( "alice", HIVE_asset( 1'000'000 ) );
+    vest( "alice", HIVE_asset( 30'000 ) ); // give alice extra vests to speed up her rc mana regeneration
+    fund( "alice", HIVE_asset( 1'000'000 ) );
 
     const auto& alice_rc = db->get_account( "alice" );
 
     BOOST_TEST_MESSAGE( "Clear RC on alice and wait a bit so she has enough for one operation but not two" );
     clear_mana( db_plugin, alice_rc );
-    generate_block();
-    generate_block();
+    generate_blocks( db->head_block_time() + 180 );
 
     signed_transaction tx1, tx2;
     tx1.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
@@ -891,8 +885,7 @@ BOOST_AUTO_TEST_CASE( rc_tx_order_bug )
 
       //previously transaction was waiting in pending until alice gained enough RC or transaction expired; since now
       //it was dropped, we can send it again after couple blocks, because it won't be treated as duplicate
-      generate_block();
-      generate_block();
+      generate_blocks( db->head_block_time() + 180 );
       push_transaction( tx2, alice_private_key );
 
       //check that t2 did not expire while RC was regenerating and got accepted when send second time
@@ -911,10 +904,7 @@ BOOST_AUTO_TEST_CASE( rc_pending_data_reset )
   {
     BOOST_TEST_MESSAGE( "Testing if block info (formely rc_pending_data) resets properly" );
 
-    inject_hardfork( HIVE_BLOCKCHAIN_VERSION.minor_v() );
-    configuration_data.allow_not_enough_rc = false;
-
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     generate_block();
     fund( "alice", HIVE_asset( 1'000'000 ) );
     generate_block();
@@ -1042,16 +1032,14 @@ BOOST_AUTO_TEST_CASE( rc_differential_usage_operations )
   {
     BOOST_TEST_MESSAGE( "Testing differential RC usage for selected operations" );
 
-    inject_hardfork( HIVE_BLOCKCHAIN_VERSION.minor_v() );
-    configuration_data.allow_not_enough_rc = false;
-
     generate_block();
 
-    ACTORS( (alice)(bob)(sam) )
+    ACTORS( HIVE_asset( 50'000 ), (alice)(bob)(sam) );
     generate_block();
     fund( "alice", HIVE_asset( 1'000'000 ) );
-    vest( "alice", HIVE_asset( 10'000 ) );
-    vest( "bob", HIVE_asset( 10'000 ) );
+    // keep the minimum RC delegation at 0 (account_creation_fee/3 rounds down to 0) so the small test
+    // delegations below are accepted; the measured resource usage does not depend on the creation fee
+    set_account_creation_fee( HIVE_asset( 1 ) );
     generate_block();
 
     auto alice_owner_key = generate_private_key( "alice_owner" );
@@ -1341,20 +1329,20 @@ BOOST_AUTO_TEST_CASE( rc_differential_usage_negative )
   {
     BOOST_TEST_MESSAGE( "Testing differential RC usage with potentially negative value" );
 
-    inject_hardfork( HIVE_BLOCKCHAIN_VERSION.minor_v() );
-    configuration_data.allow_not_enough_rc = false;
-
+    // keep the minimum RC delegation at 0 (account_creation_fee/3 rounds down to 0) so the small test
+    // delegations below are accepted; the measured resource usage does not depend on the creation fee
+    set_account_creation_fee( HIVE_asset( 1 ) );
     generate_block();
 
-    PREP_ACTOR( alice )
+    PREP_ACTOR( alice );
       //alice will initially use HIVE_MAX_AUTHORITY_MEMBERSHIP of keys with the same full authority;
-    PREP_ACTOR( barry )
+    PREP_ACTOR( barry );
       //similar to alice, but will be used in discount test at the end (less keys - to tune the usage)
-    PREP_ACTOR( carol )
+    PREP_ACTOR( carol );
       //carol will use two keys (if usage changes, it might end up being not enough to outweight other
       //state usage of transaction, but for now it is enough to put her in negative when she changes
       //that to single key);
-    PREP_ACTOR( diana )
+    PREP_ACTOR( diana );
       //diana uses single key from the start
       //this way only one signature will still be needed, making transactions for alice, carol and diana
       //weight the same, while alice's authority definition will be way heavier and carol a bit heavier
@@ -1510,13 +1498,7 @@ BOOST_AUTO_TEST_CASE( rc_differential_usage_many_ops )
   {
     BOOST_TEST_MESSAGE( "Testing differential RC usage with multiple operations" );
 
-    inject_hardfork( HIVE_BLOCKCHAIN_VERSION.minor_v() );
-    configuration_data.allow_not_enough_rc = false;
-
-    ACTORS( (alice)(carol) )
-    generate_block();
-    vest( "alice", HIVE_asset( 10'000 ) );
-    vest( "carol", HIVE_asset( 10'000 ) );
+    ACTORS( HIVE_asset( 10'000 ), (alice)(carol) );
     generate_block();
     //see explanation at the end of rc_pending_data_reset test
     //note that we don't actually have access to data on transaction but whole block, so it is
@@ -1572,10 +1554,8 @@ BOOST_AUTO_TEST_CASE( rc_exception_during_modify )
   try
   {
     BOOST_TEST_MESSAGE( "Testing exception throw during rc_account modify" );
-    inject_hardfork( HIVE_BLOCKCHAIN_VERSION.minor_v() );
-    configuration_data.allow_not_enough_rc = false;
 
-    ACTORS((dave))
+    ACTORS( DEFAULT_VESTING, (dave) );
     generate_block();
     vest( "dave", HIVE_asset( 70'000'000 ) ); //<- change that amount to tune RC cost
     issue_funds( "dave", HIVE_asset( 1'000'000 ) );

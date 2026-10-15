@@ -3,12 +3,12 @@
 #include <boost/test/unit_test.hpp>
 
 #include <hive/chain/database.hpp>
-#include <hive/chain/comment_object.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
 #include <hive/chain/witness_schedule.hpp>
-#include <hive/chain/witness_objects.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/reward_fund_object.hpp>
 #include <hive/chain/detail/state/reward_fund_object_multiindex.hpp>
 
@@ -40,7 +40,7 @@ struct hf29_database_fixture : public hardfork_database_fixture
 
   void set_recent_claims( const fc::uint128_t& value )
   {
-    db->modify( post_reward_fund(), [&]( reward_fund_object& rfo ) { rfo.recent_claims = value; } );
+    db->modify( post_reward_fund(), [&]( reward_fund_object& rfo ) { rfo.access_recent_claims() = value; } );
   }
 
   /// Overwrites every witness's stored hardfork vote - what stale state looks like. Goes through
@@ -81,6 +81,8 @@ struct hf29_test_schedule
   {
     configuration_data.set_hardfork_schedule( HIVE_GENESIS_TIME,
       { { HIVE_HARDFORK_1_28, 0 }, { HIVE_HARDFORK_1_29, 2400 } } );
+    // The cashout checks need Pixagram's real issuance, which follows from the genesis supply.
+    configuration_data.set_pixa_genesis_allocations( true );
   }
 
   ~hf29_test_schedule() { configuration_data = saved_configuration; }
@@ -180,15 +182,15 @@ BOOST_AUTO_TEST_CASE( recent_claims_reset_from_mainnet_seed )
   BOOST_REQUIRE( !db->has_hardfork( HIVE_HARDFORK_1_29 ) );
 
   set_recent_claims( HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS );
-  BOOST_REQUIRE( post_reward_fund().recent_claims > PIXA_HF29_RECENT_CLAIMS );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() > PIXA_HF29_RECENT_CLAIMS );
   const auto balance_before = post_reward_fund().get_reward_balance();
 
   db->set_hardfork( HIVE_HARDFORK_1_29 );
 
   BOOST_REQUIRE( db->has_hardfork( HIVE_HARDFORK_1_29 ) );
-  BOOST_REQUIRE( post_reward_fund().recent_claims == PIXA_HF29_RECENT_CLAIMS );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() == PIXA_HF29_RECENT_CLAIMS );
   BOOST_REQUIRE_EQUAL( post_reward_fund().get_reward_balance(), balance_before );
-  BOOST_REQUIRE_EQUAL( post_reward_fund().last_update, db->head_block_time() );
+  BOOST_REQUIRE_EQUAL( post_reward_fund().get_last_update(), db->head_block_time() );
 
   const auto& hfp = db->get_hardfork_property_object();
   BOOST_REQUIRE( hfp.current_hardfork_version == HIVE_HARDFORK_1_29_VERSION );
@@ -197,8 +199,8 @@ BOOST_AUTO_TEST_CASE( recent_claims_reset_from_mainnet_seed )
 
   generate_block();
   BOOST_REQUIRE( db->has_hardfork( HIVE_HARDFORK_1_29 ) );
-  BOOST_REQUIRE( post_reward_fund().recent_claims < PIXA_HF29_RECENT_CLAIMS );
-  BOOST_REQUIRE( post_reward_fund().recent_claims > 0 );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() < PIXA_HF29_RECENT_CLAIMS );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() > 0 );
   validate_database();
 } FC_LOG_AND_RETHROW() }
 
@@ -213,12 +215,12 @@ BOOST_AUTO_TEST_CASE( recent_claims_reset_never_raises )
   db->set_hardfork( HIVE_HARDFORK_1_29 );
 
   BOOST_REQUIRE( db->has_hardfork( HIVE_HARDFORK_1_29 ) );
-  BOOST_REQUIRE( post_reward_fund().recent_claims == below_target );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() == below_target );
   BOOST_REQUIRE_EQUAL( post_reward_fund().get_reward_balance(), balance_before );
-  BOOST_REQUIRE_EQUAL( post_reward_fund().last_update, db->head_block_time() );
+  BOOST_REQUIRE_EQUAL( post_reward_fund().get_last_update(), db->head_block_time() );
   generate_block();
   BOOST_REQUIRE( db->has_hardfork( HIVE_HARDFORK_1_29 ) );
-  BOOST_REQUIRE( post_reward_fund().recent_claims <= below_target );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() <= below_target );
 } FC_LOG_AND_RETHROW() }
 
 BOOST_AUTO_TEST_CASE( recent_claims_reset_leaves_empty_fund_alone )
@@ -231,12 +233,12 @@ BOOST_AUTO_TEST_CASE( recent_claims_reset_leaves_empty_fund_alone )
   db->set_hardfork( HIVE_HARDFORK_1_29 );
 
   BOOST_REQUIRE( db->has_hardfork( HIVE_HARDFORK_1_29 ) );
-  BOOST_REQUIRE( post_reward_fund().recent_claims == 0 );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() == 0 );
   BOOST_REQUIRE_EQUAL( post_reward_fund().get_reward_balance(), balance_before );
-  BOOST_REQUIRE_EQUAL( post_reward_fund().last_update, db->head_block_time() );
+  BOOST_REQUIRE_EQUAL( post_reward_fund().get_last_update(), db->head_block_time() );
   generate_block();
   BOOST_REQUIRE( db->has_hardfork( HIVE_HARDFORK_1_29 ) );
-  BOOST_REQUIRE( post_reward_fund().recent_claims == 0 );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() == 0 );
 } FC_LOG_AND_RETHROW() }
 
 BOOST_AUTO_TEST_CASE( stored_quorum_follows_the_schedule_after_hf29 )
@@ -335,12 +337,12 @@ BOOST_AUTO_TEST_CASE( activation_at_voted_time_and_no_quorum_ratchet )
   db_plugin->debug_update( []( database& db )
   {
     db.modify( db.get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ),
-      [&]( reward_fund_object& rf ) { rf.recent_claims = HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS; } );
+      [&]( reward_fund_object& rf ) { rf.access_recent_claims() = HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS; } );
   } );
   generate_at( activation_time() );
   BOOST_REQUIRE( db->has_hardfork( HIVE_HARDFORK_1_29 ) );
-  BOOST_REQUIRE( post_reward_fund().recent_claims == PIXA_HF29_RECENT_CLAIMS );
-  BOOST_REQUIRE_EQUAL( post_reward_fund().last_update, activation_time() );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() == PIXA_HF29_RECENT_CLAIMS );
+  BOOST_REQUIRE_EQUAL( post_reward_fund().get_last_update(), activation_time() );
   BOOST_REQUIRE_EQUAL( db->get_hardfork_property_object().processed_hardforks.size(), size_t( 30 ) );
   require_schedule( 8, 7 );
 
@@ -354,7 +356,7 @@ BOOST_AUTO_TEST_CASE( activation_at_voted_time_and_no_quorum_ratchet )
   // The migration runs once, not as a permanent upper bound on recent_claims.
   set_recent_claims( PIXA_HF29_RECENT_CLAIMS * 2 );
   generate_block();
-  BOOST_REQUIRE( post_reward_fund().recent_claims > PIXA_HF29_RECENT_CLAIMS );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() > PIXA_HF29_RECENT_CLAIMS );
   BOOST_REQUIRE_EQUAL( db->get_hardfork_property_object().processed_hardforks.size(), size_t( 30 ) );
 
   for( uint32_t i = 8; i < HIVE_MAX_WITNESSES; ++i )
@@ -362,7 +364,8 @@ BOOST_AUTO_TEST_CASE( activation_at_voted_time_and_no_quorum_ratchet )
     const auto name = HIVE_INIT_MINER_NAME + fc::to_string( i );
     account_create( name, init_account_pub_key );
     fund( name, HIVE_MIN_PRODUCER_REWARD );
-    witness_create( name, init_account_priv_key, "foo.bar", init_account_pub_key, HIVE_MIN_PRODUCER_REWARD.amount );
+    vest( name, HIVE_asset( 50'000 ) ); // RC for the witness_update
+    witness_create( name, init_account_priv_key, "foo.bar", init_account_pub_key, HIVE_MIN_PRODUCER_REWARD );
   }
   generate_blocks( 3 * HIVE_MAX_WITNESSES );
   require_schedule( HIVE_MAX_WITNESSES, HIVE_HARDFORK_REQUIRED_WITNESSES );
@@ -386,7 +389,7 @@ BOOST_AUTO_TEST_CASE( late_quorum_still_activates )
 
 BOOST_AUTO_TEST_CASE( cashouts_before_at_and_after_activation )
 { try {
-  ACTORS( (alice)(bob)(carol) )
+  ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
   // Genuine votes above Pixagram's rshare dust threshold, within the fixture's supply.
   for( const auto& name : { "alice", "bob", "carol" } )
     vest( name, HIVE_asset( 3'000'000'000 ) );
@@ -430,12 +433,12 @@ BOOST_AUTO_TEST_CASE( cashouts_before_at_and_after_activation )
   db_plugin->debug_update( []( database& db )
   {
     db.modify( db.get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ),
-      [&]( reward_fund_object& rf ) { rf.recent_claims = HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS; } );
+      [&]( reward_fund_object& rf ) { rf.access_recent_claims() = HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS; } );
   } );
   generate_block();
   generate_at( before_time );
   BOOST_REQUIRE( !db->has_hardfork( HIVE_HARDFORK_1_29 ) );
-  BOOST_REQUIRE( post_reward_fund().recent_claims > PIXA_HF29_RECENT_CLAIMS );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() > PIXA_HF29_RECENT_CLAIMS );
   BOOST_REQUIRE( db->find_comment_cashout( *db->get_comment( "alice", std::string( "hf29-boundary" ) ) ) == nullptr );
   BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hbd_rewards(), HBD_asset( 0 ) );
   BOOST_REQUIRE_EQUAL( db->get_account( "alice" ).get_hive_rewards(), HIVE_asset( 0 ) );
@@ -443,7 +446,7 @@ BOOST_AUTO_TEST_CASE( cashouts_before_at_and_after_activation )
 
   generate_at( at_time );
   BOOST_REQUIRE( db->has_hardfork( HIVE_HARDFORK_1_29 ) );
-  BOOST_REQUIRE( post_reward_fund().recent_claims == PIXA_HF29_RECENT_CLAIMS );
+  BOOST_REQUIRE( post_reward_fund().get_recent_claims() == PIXA_HF29_RECENT_CLAIMS );
   BOOST_REQUIRE( db->find_comment_cashout( *db->get_comment( "bob", std::string( "hf29-boundary" ) ) ) == nullptr );
   // Cashouts precede process_hardforks within this same block: this post is still dust.
   BOOST_REQUIRE_EQUAL( db->get_account( "bob" ).get_hbd_rewards(), HBD_asset( 0 ) );

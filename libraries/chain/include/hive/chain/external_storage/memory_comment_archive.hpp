@@ -1,7 +1,7 @@
 #pragma once
 
 #include <hive/chain/external_storage/comments_handler.hpp>
-#include <hive/chain/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
 
 #include <chainbase/allocator_helpers.hpp>
 
@@ -91,7 +91,7 @@ class memory_comment_archive final : public comments_handler
 
     virtual void open() override;
     virtual void close() override;
-    virtual void flush() override;
+    virtual void flush( bool force_storage_flush ) override;
     virtual void wipe() override;
 
     void on_end_of_syncing() override{ /*nothing to do here*/};

@@ -1,7 +1,7 @@
 #ifdef IS_TEST_NET
 #include <boost/test/unit_test.hpp>
 
-#include <hive/chain/account_object.hpp>
+#include <hive/chain/detail/state/account_object.hpp>
 
 #include <hive/plugins/state_snapshot/state_snapshot_plugin.hpp>
 
@@ -38,7 +38,7 @@ BOOST_AUTO_TEST_CASE( additional_allocation_after_snapshot_load )
       {
         account_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), init_account_pub_key );
         fund( HIVE_INIT_MINER_NAME + fc::to_string( i ), HIVE_MIN_PRODUCER_REWARD );
-        witness_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), init_account_priv_key, "foo.bar", init_account_pub_key, HIVE_MIN_PRODUCER_REWARD.amount );
+        witness_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), init_account_priv_key, "foo.bar", init_account_pub_key, HIVE_MIN_PRODUCER_REWARD );
       }
       validate_database();
       set_price_feed( HBD_price( 1000, 1000 ) );
@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE( additional_allocation_after_snapshot_load )
       const auto& index = db()->get_index<account_index>();
       const size_t initial_allocations = index.get_item_additional_allocation();
 
-      ACTOR_DEFAULT_FEE( alice )
+      ACTOR( NO_VESTING, alice );
       generate_block();
       ISSUE_FUNDS( "alice", HIVE_asset( 100'000'000 ) );
       BOOST_REQUIRE( compare_delayed_vote_count("alice", {}) );

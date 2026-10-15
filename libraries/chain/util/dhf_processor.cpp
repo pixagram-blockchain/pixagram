@@ -1,7 +1,7 @@
 #include <hive/chain/util/dhf_processor.hpp>
 #include <hive/chain/database_virtual_operations.hpp>
 #include <hive/chain/notifications.hpp>
-#include <hive/chain/global_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object.hpp>
 
 namespace hive { namespace chain {
@@ -27,7 +27,7 @@ const std::string dhf_processor::calculating_name = "dhf_processor_calculate";
 
 bool dhf_processor::is_maintenance_period( const time_point_sec& head_time ) const
 {
-  auto due_time = db.get_dynamic_global_properties().next_maintenance_time;
+  auto due_time = db.get_dynamic_global_properties().get_next_maintenance_time();
   return due_time <= head_time;
 }
 
@@ -36,7 +36,7 @@ bool dhf_processor::is_daily_maintenance_period( const time_point_sec& head_time
   /// No DHF conversion until HF24 !
   if( !db.has_hardfork( HIVE_HARDFORK_1_24 ) )
     return false;
-  auto due_time = db.get_dynamic_global_properties().next_daily_maintenance_time;
+  auto due_time = db.get_dynamic_global_properties().get_next_daily_maintenance_time();
   return due_time <= head_time;
 }
 
@@ -148,7 +148,7 @@ HBD_asset dhf_processor::calculate_maintenance_budget( const time_point_sec& hea
   HBD_asset treasury_fund = get_treasury_fund();
 
   //Calculate budget for given maintenance period
-  uint32_t passed_time_seconds = ( head_time - db.get_dynamic_global_properties().last_budget_time ).to_seconds();
+  uint32_t passed_time_seconds = ( head_time - db.get_dynamic_global_properties().get_last_budget_time() ).to_seconds();
 
   //Calculate daily_budget_limit
   int64_t daily_budget_limit = treasury_fund.amount.value / total_amount_divider;
@@ -165,7 +165,7 @@ void dhf_processor::transfer_payments( const time_point_sec& head_time, HBD_asse
 
   const auto& treasury_account = db.get_treasury();
 
-  uint32_t passed_time_seconds = ( head_time - db.get_dynamic_global_properties().last_budget_time ).to_seconds();
+  uint32_t passed_time_seconds = ( head_time - db.get_dynamic_global_properties().get_last_budget_time() ).to_seconds();
 
   auto processing = [this, &treasury_account]( const proposal_object& _item, const HBD_asset& payment )
   {
@@ -175,8 +175,9 @@ void dhf_processor::transfer_payments( const time_point_sec& head_time, HBD_asse
     /// Push vop to be recorded by other parts (like AH plugin etc.)
     push_virtual_operation( db, vop);
     /// Virtual ops have no evaluators, so operation must be immediately "evaluated"
-    db.adjust_balance( treasury_account, -payment );
-    db.adjust_balance( receiver_account, payment );
+    temp_HBD_balance transfer;
+    db.adjust_balance( treasury_account, transfer, -payment );
+    db.adjust_balance( receiver_account, transfer, payment );
   };
 
   for( auto& item : proposals )
@@ -198,7 +199,7 @@ void dhf_processor::transfer_payments( const time_point_sec& head_time, HBD_asse
       // (start_date, daily_pay, last_budget_time, head_time), so every node computes the same value
       // on replay and across forks.
       const uint128_t rate = uint128_t( uint64_t( _item.daily_pay.amount.value ) );
-      const time_point_sec from = std::max( db.get_dynamic_global_properties().last_budget_time, _item.start_date );
+      const time_point_sec from = std::max( db.get_dynamic_global_properties().get_last_budget_time(), _item.start_date );
       const uint64_t elapsed_now = head_time > _item.start_date ? uint64_t( ( head_time - _item.start_date ).to_seconds() ) : 0;
       const uint64_t elapsed_prev = from > _item.start_date ? uint64_t( ( from - _item.start_date ).to_seconds() ) : 0;
       const uint64_t paid_now = fc::uint128_to_uint64( ( uint128_t( elapsed_now ) * rate ) / uint64_t( daily_seconds ) );
@@ -234,8 +235,7 @@ void dhf_processor::update_settings( const time_point_sec& head_time )
   {
     //shifting from current time instead of proper maintenance time causes drift
     //when maintenance block was missed, but the fix is problematic - see MR!168 for details
-    _dgpo.next_maintenance_time = head_time + fc::seconds( HIVE_PROPOSAL_MAINTENANCE_PERIOD );
-    _dgpo.last_budget_time = head_time;
+    _dgpo.set_next_maintenance_time( head_time, HIVE_PROPOSAL_MAINTENANCE_PERIOD );
   } );
 }
 
@@ -327,15 +327,15 @@ void dhf_processor::record_funding( const block_notification& note )
 
   const auto& props = db.get_dynamic_global_properties();
 
-  if( props.dhf_interval_ledger.amount.value <= 0 )
+  if( props.get_dhf_interval_ledger().amount.value <= 0 )
     return;
 
-  operation vop = dhf_funding_operation( db.get_treasury_name(), props.dhf_interval_ledger );
+  operation vop = dhf_funding_operation( db.get_treasury_name(), props.get_dhf_interval_ledger() );
   push_virtual_operation( db, vop );
 
   db.modify( props, []( dynamic_global_property_object& dgpo )
   {
-    dgpo.dhf_interval_ledger = HBD_asset( 0 );
+    dgpo.clear_dhf_interval_ledger();
   } );
 }
 
@@ -345,11 +345,12 @@ void dhf_processor::convert_funds( const block_notification& note )
   if( !is_daily_maintenance_period( block_ts ))
     return;
 
-  db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& _dgpo )
+  const auto& dgpo = db.get_dynamic_global_properties();
+  db.modify( dgpo, [&]( dynamic_global_property_object& _dgpo )
   {
     //shifting from current time instead of proper maintenance time causes drift
     //when maintenance block was missed, but the fix is problematic - see MR!168 for details
-    _dgpo.next_daily_maintenance_time = block_ts + fc::seconds( HIVE_DAILY_PROPOSAL_MAINTENANCE_PERIOD );
+    _dgpo.set_next_daily_maintenance_time( block_ts, HIVE_DAILY_PROPOSAL_MAINTENANCE_PERIOD );
   } );
 
   const auto& treasury_account = db.get_treasury();
@@ -358,19 +359,22 @@ void dhf_processor::convert_funds( const block_notification& note )
 
   const auto to_convert = HIVE_PROPOSAL_CONVERSION_RATE * treasury_account.get_hive_balance() / HIVE_100_PERCENT;
 
-  const feed_history_object& fhistory = db.get_feed_history();
-  FC_ASSERT( not fhistory.current_median_history.is_null() ); //current_median_history was null only until block 933600
+  const auto& exchange_rate = db.get_hbd_price();
+  FC_ASSERT( not exchange_rate.is_null() ); //current_median_history was null only until block 933600
 
-  auto converted_hbd = to_convert * fhistory.current_median_history;
+  auto converted_hbd = to_convert * exchange_rate;
   // Don't convert if the conversion would result in an amount lower than the dust threshold
   if( converted_hbd < HIVE_MIN_PAYOUT_HBD )
     return;
 
-  db.adjust_balance( treasury_account, -to_convert );
-  db.adjust_balance( treasury_account, converted_hbd );
-
-  db.adjust_supply( -to_convert );
-  db.adjust_supply( converted_hbd );
+  temp_HIVE_balance to_convert_balance;
+  temp_HBD_balance converted_hbd_balance;
+  db.adjust_balance( treasury_account, to_convert_balance, -to_convert );
+  db.modify( dgpo, [&]( dynamic_global_property_object& _dgpo )
+  {
+    converted_hbd_balance = _dgpo.convert_HIVE_to_HBD( to_convert_balance, exchange_rate );
+  } );
+  db.adjust_balance( treasury_account, converted_hbd_balance, converted_hbd_balance.as_asset() );
 
   operation vop = dhf_conversion_operation( treasury_account.get_name(), to_convert, converted_hbd );
   push_virtual_operation( db, vop );

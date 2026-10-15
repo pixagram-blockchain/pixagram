@@ -2,7 +2,7 @@
 #include <hive/chain/hive_object_types.hpp>
 
 #include <hive/protocol/authority.hpp>
-#include <chainbase/chainbase.hpp>
+#include <chainbase/util/object.hpp>
 #include <boost/interprocess/managed_mapped_file.hpp>
 
 namespace hive { namespace chain {
@@ -36,9 +36,11 @@ namespace hive { namespace chain {
       weight_threshold = a.weight_threshold;
     }
 
-    shared_authority( const shared_authority& cpy ) :
-      weight_threshold( cpy.weight_threshold ),
-      account_auths( cpy.account_auths ), key_auths( cpy.key_auths ) {}
+    shared_authority( const shared_authority& ) = default;
+    shared_authority( shared_authority&& ) = default;
+
+    shared_authority& operator=( const shared_authority& ) = default;
+    shared_authority& operator=( shared_authority&& ) = default;
 
     template< typename Allocator >
     explicit shared_authority( const Allocator& alloc ) :
@@ -54,7 +56,14 @@ namespace hive { namespace chain {
       add_authorities( auths... );
     }
 
-    operator authority()const;
+    template< typename Allocator >
+    shared_authority( const Allocator& alloc, uint32_t weight_threshold ) :
+      weight_threshold( weight_threshold ),
+      account_auths( account_pair_allocator_type( alloc ) ),
+      key_auths( key_pair_allocator_type( alloc ) )
+    {}
+
+    authority to_authority()const;
 
     shared_authority& operator=( const authority& a );
 

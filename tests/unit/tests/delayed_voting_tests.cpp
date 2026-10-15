@@ -22,12 +22,12 @@
 #include <hive/chain/detail/state/recurrent_transfer_object.hpp>
 
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -41,14 +41,14 @@
 #include <hive/chain/detail/state/liquidity_reward_balance_object_multiindex.hpp>
 #include <hive/chain/detail/state/withdraw_vesting_route_object_multiindex.hpp>
 
-#include <hive/chain/dhf_objects.hpp>
+#include <hive/chain/detail/state/dhf_objects.hpp>
 
 #include <hive/protocol/testnet_blockchain_configuration.hpp>
 
 #include <hive/chain/util/delayed_voting_processor.hpp>
 #include <hive/chain/util/delayed_voting.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 
@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE( delayed_proposal_test_01 )
     const auto TBD_100 = HBD_asset( 100'000 );
     
     //setup
-    ACTORS( (alice)(bob)(carol) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
 
     set_price_feed( HBD_price( 1000, 1000 ) );
     generate_block();
@@ -171,7 +171,7 @@ BOOST_AUTO_TEST_CASE( delayed_proposal_test_02 )
     const auto TBD_100 = HBD_asset( 100'000 );
 
     //setup
-    ACTORS( (alice)(bob)(carol) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
 
     set_price_feed( HBD_price( 1000, 1000 ) );
     generate_block();
@@ -278,7 +278,8 @@ BOOST_AUTO_TEST_CASE( delayed_voting_proxy_02 )
 
     auto start_time = db->head_block_time();
 
-    ACTORS( (alice)(bob)(celine)(witness1)(witness2) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(celine) );
+    ACTORS( HIVE_asset( 15'000 ), (witness1)(witness2) ); // extra RC for witness_create
     generate_block();
 
     HIVE_asset _1( 1'000 );
@@ -367,9 +368,9 @@ BOOST_AUTO_TEST_CASE( delayed_voting_proxy_02 )
       ISSUE_FUNDS( "witness1", HIVE_asset( 10'000'000 ) );
       ISSUE_FUNDS( "witness2", HIVE_asset( 10'000'000 ) );
 
-      witness_create( "witness1", witness1_private_key, "url.witness1", witness1_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+      witness_create( "witness1", witness1_private_key, "url.witness1", witness1_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
       witness_plugin->add_signing_key( witness1_private_key );
-      witness_create( "witness2", witness2_private_key, "url.witness2", witness2_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+      witness_create( "witness2", witness2_private_key, "url.witness2", witness2_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
       witness_plugin->add_signing_key( witness2_private_key );
       generate_block();
 
@@ -865,7 +866,8 @@ BOOST_AUTO_TEST_CASE( delayed_voting_proxy_01 )
   {
     BOOST_TEST_MESSAGE( "Testing: Setting proxy" );
 
-    ACTORS( (alice)(bob)(celine)(witness) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(celine) );
+    ACTORS( HIVE_asset( 15'000 ), (witness) ); // extra RC for witness_create
     generate_block();
 
     {
@@ -882,7 +884,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_proxy_01 )
     {
       BOOST_TEST_MESSAGE( "Preparing witnesses..." );
 
-      witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+      witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
       witness_plugin->add_signing_key( witness_private_key );
       generate_block();
     }
@@ -1007,7 +1009,8 @@ BOOST_AUTO_TEST_CASE( delayed_voting_many_vesting_01 )
   {
     BOOST_TEST_MESSAGE( "Testing: Transferring vests many times from one person to another" );
 
-    ACTORS( (alice)(bob)(witness) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
+    ACTORS( HIVE_asset( 15'000 ), (witness) ); // extra RC for witness_create
     generate_block();
 
     {
@@ -1023,7 +1026,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_many_vesting_01 )
     {
       BOOST_TEST_MESSAGE( "Preparing witnesses..." );
 
-      witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+      witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
       witness_plugin->add_signing_key( witness_private_key );
       generate_block();
     }
@@ -1109,7 +1112,8 @@ BOOST_AUTO_TEST_CASE( delayed_voting_01 )
   {
     BOOST_TEST_MESSAGE( "Testing: delaying voting" );
 
-    ACTORS( (alice)(bob)(witness) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
+    ACTORS( HIVE_asset( 15'000 ), (witness) ); // extra RC for witness_create
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -1122,7 +1126,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_01 )
     ISSUE_FUNDS( "witness", HIVE_asset( 10'000'000 ) );
     //Prepare witnesses
     
-    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness_private_key );
     generate_block();
 
@@ -1157,7 +1161,8 @@ BOOST_AUTO_TEST_CASE( delayed_voting_04 )
   {
     BOOST_TEST_MESSAGE( "Testing: delaying voting v4" );
 
-    ACTORS( (bob)(witness) )
+    ACTORS( DEFAULT_VESTING, (bob) );
+    ACTORS( HIVE_asset( 15'000 ), (witness) ); // extra RC for witness_create
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -1169,7 +1174,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_04 )
     ISSUE_FUNDS( "witness", HIVE_asset( 10'000'000 ) );
     
     //Prepare witnesses
-    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness_private_key );
     generate_block();
 
@@ -1206,7 +1211,8 @@ BOOST_AUTO_TEST_CASE( delayed_voting_05 )
   {
     BOOST_TEST_MESSAGE( "Testing: delaying voting v5" );
 
-    ACTORS( (bob)(witness1)(witness2) )
+    ACTORS( DEFAULT_VESTING, (bob) );
+    ACTORS( HIVE_asset( 15'000 ), (witness1)(witness2) ); // extra RC for witness_create
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -1219,9 +1225,9 @@ BOOST_AUTO_TEST_CASE( delayed_voting_05 )
     ISSUE_FUNDS( "witness2", HIVE_asset( 10'000'000 ) );
     
     //Prepare witnesses
-    witness_create( "witness1", witness1_private_key, "url.witness1", witness1_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness1", witness1_private_key, "url.witness1", witness1_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness1_private_key );
-    witness_create( "witness2", witness2_private_key, "url.witness2", witness2_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness2", witness2_private_key, "url.witness2", witness2_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness2_private_key );
     generate_block();
 
@@ -1266,7 +1272,8 @@ BOOST_AUTO_TEST_CASE( delayed_voting_06 )
   {
     BOOST_TEST_MESSAGE( "Testing: delaying voting v6" );
 
-    ACTORS( (bob)(witness) )
+    ACTORS( DEFAULT_VESTING, (bob) );
+    ACTORS( HIVE_asset( 15'000 ), (witness) ); // extra RC for witness_create
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -1279,7 +1286,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_06 )
     
     //Prepare witnesses
     const auto start_time = db->head_block_time();
-    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness_private_key );
     generate_block();
 
@@ -1315,7 +1322,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_basic_06 )
   {
     BOOST_TEST_MESSAGE( "Complex scenario for `delayed_voting` class" );
 
-    ACTORS( (user0)(user1)(user2)(user3)(user4)(user5)(user6)(user7)(user8)(user9) )
+    ACTORS( DEFAULT_VESTING, (user0)(user1)(user2)(user3)(user4)(user5)(user6)(user7)(user8)(user9) );
 
     std::array< std::string, 10 > accs{
                             "user0",
@@ -1380,7 +1387,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_basic_05 )
   {
     BOOST_TEST_MESSAGE( "Complex scenario for `delayed_voting` class" );
 
-    ACTORS( (user0)(user1)(user2)(user3)(user4)(user5)(user6)(user7)(user8)(user9) )
+    ACTORS( DEFAULT_VESTING, (user0)(user1)(user2)(user3)(user4)(user5)(user6)(user7)(user8)(user9) );
 
     std::array< std::string, 10 > accs{
                             "user0",
@@ -1452,7 +1459,8 @@ BOOST_AUTO_TEST_CASE( delayed_voting_basic_03 )
     // user setup
     BOOST_TEST_MESSAGE( "Testing: `delayed_voting::run` method" );
     const auto start_time = db->head_block_time();
-    ACTORS( (alice)(celine)(bob)(witness) )
+    ACTORS( DEFAULT_VESTING, (alice)(celine)(bob) );
+    ACTORS( HIVE_asset( 15'000 ), (witness) ); // extra RC for witness_create
     generate_block();
     ISSUE_FUNDS( "bob", HIVE_asset( 100'000'000 ) );
     ISSUE_FUNDS( "celine", HIVE_asset( 100'000'000 ) );
@@ -1460,7 +1468,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_basic_03 )
     ISSUE_FUNDS( "witness", HIVE_asset( 100'000'000 ) );
     
     //Prepare witnesses
-    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness_private_key );
     generate_block();
     vest( "bob", "bob", HIVE_asset( 100'000 ), bob_private_key );
@@ -1538,7 +1546,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_basic_04 )
   {
     BOOST_TEST_MESSAGE( "Complex scenario for `delayed_voting` class" );
 
-    ACTORS( (user0)(user1)(user2)(user3)(user4)(user5)(user6)(user7)(user8)(user9) )
+    ACTORS( DEFAULT_VESTING, (user0)(user1)(user2)(user3)(user4)(user5)(user6)(user7)(user8)(user9) );
 
     std::array< std::string, 10 > accs{
                             "user0",
@@ -1622,7 +1630,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_basic_02 )
   set_price_feed( HBD_price( 1000, 1000 ) );
   generate_block();
 
-  ACTORS( (alice)(bob) )
+  ACTORS( DEFAULT_VESTING, (alice)(bob) );
   generate_block();
 
   ISSUE_FUNDS( "alice", HIVE_asset( 10'000'000 ) );
@@ -1726,7 +1734,7 @@ BOOST_AUTO_TEST_CASE( delayed_voting_basic_01 )
 
   BOOST_TEST_MESSAGE( "Testing: `delayed_voting::add_votes` method" );
 
-  ACTORS( (alice)(bob)(celine) )
+  ACTORS( DEFAULT_VESTING, (alice)(bob)(celine) );
 
   std::array< const account_object*, 3 > accs{ &db->get_account( "alice" ),
                                 &db->get_account( "bob" ),
@@ -2029,7 +2037,8 @@ BOOST_AUTO_TEST_CASE( decline_voting_rights_01 )
   {
     BOOST_TEST_MESSAGE( "Testing: decline voting rights: casual use" );
 
-    ACTORS( (bob)(alice)(witness) )
+    ACTORS( DEFAULT_VESTING, (bob)(alice) );
+    ACTORS( HIVE_asset( 15'000 ), (witness) ); // extra RC for witness_create
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -2041,7 +2050,7 @@ BOOST_AUTO_TEST_CASE( decline_voting_rights_01 )
     ISSUE_FUNDS( "witness", HIVE_asset( 10'000'000 ) );
     
     //Prepare witnesses
-    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness_private_key );
     generate_block();
 
@@ -2080,7 +2089,8 @@ BOOST_AUTO_TEST_CASE( decline_voting_rights_02 )
   {
     BOOST_TEST_MESSAGE( "Testing: decline voting rights: casual use with spontaneus vote" );
 
-    ACTORS( (bob)(alice)(witness) )
+    ACTORS( DEFAULT_VESTING, (bob)(alice) );
+    ACTORS( HIVE_asset( 15'000 ), (witness) ); // extra RC for witness_create
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -2091,7 +2101,7 @@ BOOST_AUTO_TEST_CASE( decline_voting_rights_02 )
     ISSUE_FUNDS( "witness", HIVE_asset( 10'000'000 ) );
     
     //Prepare witnesses
-    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness_private_key );
     generate_block();
 
@@ -2149,7 +2159,8 @@ BOOST_AUTO_TEST_CASE( decline_voting_rights_03 )
       return request_idx.find( name ) == request_idx.end();
     };
 
-    ACTORS( (bob)(alice)(witness)(witness2) )
+    ACTORS( DEFAULT_VESTING, (bob)(alice) );
+    ACTORS( HIVE_asset( 15'000 ), (witness)(witness2) ); // extra RC for witness_create
     generate_block();
 
     set_price_feed( HBD_price( 1000, 1000 ) );
@@ -2162,9 +2173,9 @@ BOOST_AUTO_TEST_CASE( decline_voting_rights_03 )
     ISSUE_FUNDS( "witness2", HIVE_asset( 10'000'000 ) );
     
     //Prepare witnesses
-    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness_private_key );
-    witness_create( "witness2", witness2_private_key, "url.witness2", witness2_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness2", witness2_private_key, "url.witness2", witness2_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness2_private_key );
     generate_block();
 
@@ -2230,7 +2241,8 @@ BOOST_AUTO_TEST_CASE( decline_voting_rights_04 )
       return request_idx.find( name ) == request_idx.end();
     };
 
-    ACTORS( (bob)(alice)(witness) )
+    ACTORS( DEFAULT_VESTING, (bob)(alice) );
+    ACTORS( HIVE_asset( 15'000 ), (witness) ); // extra RC for witness_create
     generate_block();
 
     // auto start_time = db->head_block_time();
@@ -2239,7 +2251,7 @@ BOOST_AUTO_TEST_CASE( decline_voting_rights_04 )
     ISSUE_FUNDS( "witness", HIVE_asset( 10'000'000 ) );
     
     //Prepare witnesses
-    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness_private_key );
     generate_block();
 
@@ -2287,7 +2299,8 @@ BOOST_AUTO_TEST_CASE( small_common_test_01 )
     set_price_feed( HBD_price( 1000, 1000 ) );
     generate_block();
 
-    ACTORS( (alice)(witness) )
+    ACTORS( DEFAULT_VESTING, (alice) );
+    ACTORS( HIVE_asset( 15'000 ), (witness) ); // extra RC for witness_create
     generate_block();
 
     //auto start_time = db->head_block_time();
@@ -2296,7 +2309,7 @@ BOOST_AUTO_TEST_CASE( small_common_test_01 )
     ISSUE_FUNDS( "witness", HIVE_asset( 10'000'000 ) );
     //Prepare witnesses
     
-    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+    witness_create( "witness", witness_private_key, "url.witness", witness_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
     witness_plugin->add_signing_key( witness_private_key );
     generate_block();
 
@@ -2426,16 +2439,16 @@ BOOST_AUTO_TEST_CASE( scenario_01 )
 
   actors: alice, alice.bp (witness of alice choice), bob, bob.bp (witness of bob choice), carol
 */
-  ACTORS( (alice)(alice0bp)(bob)(bob0bp)(carol) );
+  ACTORS( HIVE_asset( 15'000 ), (alice)(alice0bp)(bob)(bob0bp)(carol) ); // extra RC for various operations
   generate_block();
 
   BOOST_TEST_MESSAGE( "[scenario_01]: after account creation" );
   BOOST_TEST_MESSAGE( "[scenario_01]: alice has " << asset_to_string( get_vesting( "alice" )) );
   BOOST_TEST_MESSAGE( "[scenario_01]: alice has " << asset_to_string( get_hive_balance( "alice" )) );
 
-  witness_create( "alice0bp", alice0bp_private_key, "url.alice.bp", alice0bp_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+  witness_create( "alice0bp", alice0bp_private_key, "url.alice.bp", alice0bp_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
   witness_plugin->add_signing_key( alice0bp_private_key );
-  witness_create( "bob0bp", bob0bp_private_key, "url.bob.bp", bob0bp_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD.amount );
+  witness_create( "bob0bp", bob0bp_private_key, "url.bob.bp", bob0bp_private_key.get_public_key(), HIVE_MIN_PRODUCER_REWARD );
   witness_plugin->add_signing_key( bob0bp_private_key );
   generate_block();
 
@@ -2829,8 +2842,8 @@ BOOST_AUTO_TEST_CASE( scenario_01 )
   INTERVAL_REPORT( today );
 
   expected_alice_vests  = initial_alice_vests - VEST_asset( new_vests );
-  expected_alice_vests += VEST_asset( quarter - 6 );
-  expected_bob_vests = initial_bob_vests + VEST_asset( quarter - 6 );
+  expected_alice_vests += VEST_asset( quarter - 9 );
+  expected_bob_vests = initial_bob_vests + VEST_asset( quarter - 9 );
   BOOST_REQUIRE_EQUAL( get_vesting( "alice" ), get_vesting( "bob" ) );
   DAY_CHECK;
   

@@ -5,15 +5,17 @@
   * Copyright (c) 2015 Cryptonomex, Inc., and contributors.
   */
 #pragma once
-#include <hive/chain/global_property_object.hpp>
+#include <chainbase/chainbase.hpp>
+
+#include <hive/chain/detail/state/global_property_object.hpp>
 #include <hive/chain/node_property_object.hpp>
 
 #include <hive/chain/util/advanced_benchmark_dumper.hpp>
 #include <hive/chain/util/type_registrar.hpp>
 #include <hive/chain/external_storage/comments_handler_ptr.hpp>
 #include <hive/chain/external_storage/comment.hpp>
+#include <hive/chain/util/balance.hpp>
 
-#include <hive/protocol/asset.hpp>
 #include <hive/protocol/hardfork.hpp>
 #include <hive/protocol/block_header.hpp>
 
@@ -64,6 +66,7 @@ namespace chain {
   struct prepare_snapshot_supplement_notification;
   struct load_snapshot_supplement_notification;
 
+  class escrow_object;
   class database;
 
   struct hardfork_versions
@@ -319,6 +322,8 @@ namespace chain {
       uint32_t                               get_node_skip_flags()const;
       void                                   set_node_skip_flags( uint32_t skip_flags );
       const feed_history_object&             get_feed_history()const;
+      // returns current internal HBD-HIVE exchange rate
+      const HBD_price&                       get_hbd_price()const;
       const witness_schedule_object&         get_witness_schedule_object()const;
       const witness_schedule_object&         get_future_witness_schedule_object() const;
 
@@ -383,7 +388,7 @@ namespace chain {
       void notify_pre_apply_custom_operation( const custom_operation_notification& note );
       void notify_post_apply_custom_operation( const custom_operation_notification& note );
       void notify_finish_push_block( const block_notification& note );
-      void notify_flush();
+      void notify_flush( bool force_storage_flush );
 
       using apply_operation_handler_t = std::function< void(const operation_notification&) >;
       using apply_transaction_handler_t = std::function< void(const transaction_notification&) >;
@@ -391,7 +396,7 @@ namespace chain {
       using push_block_handler_t = std::function< void(const block_notification&) >;
       using apply_custom_operation_handler_t = std::function< void(const custom_operation_notification&) >;
       using irreversible_block_handler_t = std::function< void(uint32_t) >;
-      using flush_handler_t = std::function< void() >;
+      using flush_handler_t = std::function< void( bool /* force_storage_flush */ ) >;
       using switch_fork_handler_t = std::function< void(uint32_t) >;
       using reindex_handler_t = std::function< void(const reindex_notification&) >;
       using prepare_snapshot_handler_t = std::function < void(const database&, const database::abstract_index_cntr_t&)>;
@@ -460,7 +465,20 @@ namespace chain {
 
       //////////////////// db_witness_schedule.cpp ////////////////////
 
-      void flush_to_all_storages();
+      /**
+        * Persist state and external storages as one unit.
+        *
+        * @param force_storage_flush when true the external storages additionally force their
+        * in-memory tables out into immutable files. That is only wanted at the explicit flush
+        * points (shutdown, snapshot, end of syncing). On the per-block path it must stay false:
+        * submitting the pending write batch is what keeps the external storages in step with
+        * flushed shared memory, while forcing files out on every block creates a near-empty file
+        * per column family per flush (issue #869).
+        */
+      void flush_to_all_storages( bool force_storage_flush = false );
+
+      /// Block on which the flush after the one at @p block_num should happen.
+      uint32_t schedule_next_flush_block( uint32_t block_num ) const;
 
       /**
         * @brief Get the witness scheduled for block production in a slot.
@@ -497,50 +515,30 @@ namespace chain {
       uint32_t get_slot_at_time(fc::time_point_sec when)const;
 
       /** @return the HBD created and deposited to_account, may return HIVE if there is no median feed */
-      std::pair< HBD_asset, HIVE_asset > create_hbd( const account_object& to_account, const HIVE_asset& hive, bool to_reward_balance=false );
+      std::pair< HBD_asset, HIVE_asset > award_hbd( const account_object& to_account, temp_HIVE_balance& hive_balance, bool is_reward );
 
       using Before = std::function< void( const VEST_asset& ) >;
-      VEST_asset adjust_account_vesting_balance( const account_object& to_account, const HIVE_asset& liquid, bool to_reward_balance, Before&& before_vesting_callback );
+      VEST_asset adjust_account_vesting_balance( const account_object& to_account, temp_HIVE_balance& liquid, bool is_reward, Before&& before_vesting_callback );
 
-      VEST_asset create_vesting( const account_object& to_account, const HIVE_asset& liquid, bool to_reward_balance=false );
+      VEST_asset create_vesting( const account_object& to_account, temp_HIVE_balance& liquid, bool is_reward = false );
 
       void adjust_liquidity_reward( const account_object& owner, const asset& volume, bool is_hbd );
 
-      void adjust_balance( const account_object& a, const asset& delta );
-      void adjust_balance( const account_object& a, const HIVE_asset& delta );
-      void adjust_balance( const account_object& a, const HBD_asset& delta );
-      void adjust_balance( const account_name_type& name, const asset& delta ) { adjust_balance( get_account( name ), delta ); }
-      void adjust_balance( const account_name_type& name, const HIVE_asset& delta ) { adjust_balance( get_account( name ), delta ); }
-      void adjust_balance( const account_name_type& name, const HBD_asset& delta ) { adjust_balance( get_account( name ), delta ); }
+      void adjust_balance( const account_object& a, temp_balance& any_balance, const asset& delta );
+      void adjust_balance( const account_object& a, temp_HIVE_balance& hive_balance, const HIVE_asset& delta );
+      void adjust_balance( const account_object& a, temp_HBD_balance& hbd_balance, const HBD_asset& delta );
+      void adjust_balance( const account_name_type& name, temp_balance& any_balance, const asset& delta ) { adjust_balance( get_account( name ), any_balance, delta ); }
+      void adjust_balance( const account_name_type& name, temp_HIVE_balance& hive_balance, const HIVE_asset& delta ) { adjust_balance( get_account( name ), hive_balance, delta ); }
+      void adjust_balance( const account_name_type& name, temp_HBD_balance& hbd_balance, const HBD_asset& delta ) { adjust_balance( get_account( name ), hbd_balance, delta ); }
 
-      void adjust_savings_balance( const account_object& a, const asset& delta );
-      void adjust_savings_balance( const account_object& a, const HIVE_asset& delta );
-      void adjust_savings_balance( const account_object& a, const HBD_asset& delta );
+      void adjust_savings_balance( const account_object& a, temp_balance& any_balance, const asset& delta );
+      void adjust_savings_balance( const account_object& a, temp_HIVE_balance& hive_balance, const HIVE_asset& delta );
+      void adjust_savings_balance( const account_object& a, temp_HBD_balance& hbd_balance, const HBD_asset& delta );
 
-      void adjust_reward_balance( const account_object& a, const asset& value_delta, const asset& share_delta = asset(0,VESTS_SYMBOL) );
-      void adjust_reward_balance( const account_object& a, const HIVE_asset& value_delta );
-      void adjust_reward_balance( const account_object& a, const HBD_asset& value_delta );
-      void adjust_reward_balance( const account_object& a, const HIVE_asset& value_delta, const VEST_asset& share_delta );
-      void adjust_reward_balance( const account_name_type& name, const asset& value_delta, const asset& share_delta = asset(0,VESTS_SYMBOL) )
-      {
-        adjust_reward_balance( get_account( name ), value_delta, share_delta );
-      }
-      void adjust_reward_balance( const account_name_type& name, const HIVE_asset& value_delta )
-      {
-        adjust_reward_balance( get_account( name ), value_delta );
-      }
-      void adjust_reward_balance( const account_name_type& name, const HBD_asset& value_delta )
-      {
-        adjust_reward_balance( get_account( name ), value_delta );
-      }
-      void adjust_reward_balance( const account_name_type& name, const HIVE_asset& value_delta, const VEST_asset& share_delta )
-      {
-        adjust_reward_balance( get_account( name ), value_delta, share_delta );
-      }
+      void adjust_reward_balance( const account_object& a, temp_HIVE_balance& hive_balance, const HIVE_asset& value_delta );
+      void adjust_reward_balance( const account_object& a, temp_HBD_balance& hbd_balance, const HBD_asset& value_delta );
 
-      void adjust_supply( const asset& delta, bool adjust_vesting = false );
-      void adjust_supply( const HIVE_asset& delta, bool adjust_vesting = false );
-      void adjust_supply( const HBD_asset& delta );
+      temp_HIVE_balance issue_mining_reward( const HIVE_asset& reward );
       void adjust_rshares2( fc::uint128_t old_rshares2, fc::uint128_t new_rshares2 );
       void update_owner_authority( const account_object& account, const authority& owner_authority );
 
@@ -573,10 +571,11 @@ namespace chain {
         */
       void clear_witness_votes( const account_object& a );
       void process_vesting_withdrawals();
-      HIVE_asset pay_curators( const comment_object& comment, const comment_cashout_object& comment_cashout, HIVE_asset& max_rewards );
-      HIVE_asset cashout_comment_helper( util::comment_reward_context& ctx, const comment_object& comment,
-        const comment_cashout_object& comment_cashout, const comment_cashout_ex_object* comment_cashout_ex,
-        bool forward_curation_remainder = true );
+      HIVE_asset pay_curators( const comment_object& comment, const comment_cashout_object& comment_cashout,
+        HIVE_asset& max_rewards, VEST_asset& total_paid_reward, temp_HIVE_balance& reward_balance );
+      HIVE_asset cashout_comment_helper( util::comment_reward_context& ctx, temp_HIVE_balance& reward_balance,
+        const comment_object& comment, const comment_cashout_object& comment_cashout,
+        const comment_cashout_ex_object* comment_cashout_ex, bool forward_curation_remainder = true );
       void process_comment_cashout();
       void process_funds();
       void process_conversions();
@@ -586,6 +585,7 @@ namespace chain {
       void process_subsidized_accounts();
       void account_recovery_processing();
       void expire_escrow_ratification();
+      void remove_escrow( const escrow_object& escrow, bool emit_rejected_vop = true );
       void remove_pending_escrows( const account_object& account, const account_name_type& account_name );
       void get_escrow_totals( HIVE_asset& total_hive, HBD_asset& total_hbd, uint64_t& escrow_count ) const;
       void remove_pending_savings_withdraws( const account_object& account, const account_name_type& account_name );
@@ -597,15 +597,14 @@ namespace chain {
 
       HIVE_asset get_liquidity_reward()const;
       HIVE_asset get_content_reward()const;
-      HIVE_asset get_producer_reward();
+      HIVE_asset get_producer_reward()const;
       HIVE_asset get_curation_reward()const;
       HIVE_asset get_pow_reward()const;
 
       uint16_t get_curation_rewards_percent() const;
 
-      HIVE_asset pay_reward_funds( const HIVE_asset& reward );
-
-      void  pay_liquidity_reward();
+      void pay_reward_funds( temp_HIVE_balance& reward_balance, const HIVE_asset& content_reward );
+      void pay_liquidity_reward();
 
       /**
         * Helper method to return the current HBD value of a given amount of
@@ -655,7 +654,7 @@ namespace chain {
       std::unordered_map<account_name_type, uint8_t>           _pending_tx_custom_op_count;
 
       bool apply_order( const limit_order_object& new_order_object );
-      bool fill_order( const limit_order_object& order, const asset& pays, const asset& receives );
+      bool fill_order( const limit_order_object& order, const asset& pays, temp_balance&& receives );
       void cancel_order( const limit_order_object& obj, bool suppress_vop = false );
       int  match( const limit_order_object& bid, const limit_order_object& ask, const price& trade_price );
 
@@ -682,6 +681,10 @@ namespace chain {
       const std::string& get_json_schema() const;
 
       void set_flush_interval( uint32_t flush_blocks );
+      /// Interval applied when the node leaves syncing and enters live mode. Configured through
+      /// the `flush-state-interval-live` option; defaults to flushing on every block so that a
+      /// crash leaves state at most one block behind.
+      void set_live_flush_interval( uint32_t flush_blocks );
       void check_free_memory( bool force_print, uint32_t current_block_num );
 
       void apply_transaction( const std::shared_ptr<full_transaction_type>& trx, uint32_t skip = skip_nothing );
@@ -737,8 +740,9 @@ namespace chain {
       void create_block_summary(const std::shared_ptr<full_block_type>& full_block);
 
       //calculates sum of all balances stored on given account, returns true if any is nonzero
-      bool collect_account_total_balance( const account_object& account, HIVE_asset* total_hive, HBD_asset* total_hbd,
-        VEST_asset* total_vests, HIVE_asset* vesting_shares_hive_value );
+      bool collect_account_total_balance( const account_object& account, HIVE_asset* total_hive, HBD_asset* total_hbd, VEST_asset* total_vests );
+      //liquifies vesting rewards held on given account returning liquid balance
+      temp_HIVE_balance liquify_reward_balance( const account_object& account );
       //removes (burns) balances held on null account
       void clear_null_account_balance();
       //moves balances from old treasury account to current one
@@ -841,6 +845,7 @@ namespace chain {
       node_property_object          _node_property_object;
 
       uint32_t                      _flush_blocks = 0;
+      uint32_t                      _live_flush_blocks = 1;
       uint32_t                      _next_flush_block = 0;
 
       uint32_t                      _last_free_gb_printed = 0;
@@ -861,7 +866,7 @@ namespace chain {
         if( _current_timestamp )
           return *_current_timestamp;
         else
-          return get_dynamic_global_properties().time;
+          return get_dynamic_global_properties().get_head_block_time();
       }
 
       void set_comments_handler( comments_handler_ptr obj )

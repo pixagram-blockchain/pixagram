@@ -82,7 +82,6 @@ namespace graphene { namespace net {
 
           The simplest solution is softening a condition regarding 'chain_id'( see usage in 'node_impl::on_hello_message' method ).
         */
-         virtual hive::protocol::chain_id_type get_old_chain_id() const = 0;
          virtual hive::protocol::chain_id_type get_new_chain_id() const = 0;
          virtual hive::protocol::chain_id_type get_chain_id() const = 0;
 
@@ -183,6 +182,10 @@ namespace graphene { namespace net {
          virtual fc::time_point_sec get_blockchain_now() = 0;
 
          virtual item_hash_t get_head_block_id() const = 0;
+
+         /** returns the number of the last irreversible block; blocks at or below this height
+          * that are not on our chain can never become part of it */
+         virtual uint32_t get_last_irreversible_block_num() const = 0;
 
          virtual uint32_t estimate_last_known_fork_from_git_revision_timestamp(uint32_t unix_timestamp) const = 0;
 

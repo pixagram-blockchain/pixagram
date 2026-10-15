@@ -3,7 +3,7 @@
 #include <hive/chain/detail/state/decline_voting_rights_request_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
 
-#include <hive/chain/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
 #include <hive/chain/database_virtual_operations.hpp>
 #include <hive/chain/database_exceptions.hpp>
 #include <hive/chain/index.hpp>
@@ -55,29 +55,50 @@ const limit_order_object* database::find_limit_order( const account_name_type& n
   return find< limit_order_object, by_account >( boost::make_tuple( name, orderid ) );
 }
 
+void database::remove_escrow( const escrow_object& escrow, bool emit_rejected_vop )
+{
+  // Extract all funds via temp balances
+  temp_HIVE_balance hive_ret;
+  temp_HBD_balance hbd_ret;
+  temp_balance fee_ret( escrow.get_fee().symbol );
+  modify( escrow, [&]( escrow_object& esc )
+  {
+    esc.access_hive_balance().transfer_to( hive_ret );
+    esc.access_hbd_balance().transfer_to( hbd_ret );
+    esc.access_fee().transfer_to( fee_ret );
+  } );
+
+  auto vop = escrow_rejected_operation( escrow.get_from(), escrow.get_to(), escrow.get_agent(),
+    escrow.get_escrow_id(), hbd_ret.as_asset(), hive_ret.as_asset(), fee_ret.as_asset() );
+
+  // Return funds to originator
+  const auto& from_account = get_account( escrow.get_from() );
+  adjust_balance( from_account, hive_ret, hive_ret.as_asset() );
+  adjust_balance( from_account, hbd_ret, hbd_ret.as_asset() );
+  adjust_balance( from_account, fee_ret, fee_ret.as_asset() );
+
+  if( emit_rejected_vop )
+    push_virtual_operation( *this, vop );
+
+  // Decrement counter and remove
+  modify( from_account, []( account_object& a )
+  {
+    a.pending_escrow_transfers--;
+  } );
+  remove( escrow );
+}
+
 void database::expire_escrow_ratification()
 {
-  const auto& escrow_idx = get_index< escrow_index >().indices().get< by_ratification_deadline >();
+  const auto& escrow_idx = get_index< escrow_index, by_ratification_deadline >();
   auto escrow_itr = escrow_idx.lower_bound( false );
+  auto now = head_block_time();
 
-  while( escrow_itr != escrow_idx.end() && !escrow_itr->is_approved() && escrow_itr->ratification_deadline <= head_block_time() )
+  while( escrow_itr != escrow_idx.end() && !escrow_itr->is_approved() && escrow_itr->get_ratification_deadline() <= now )
   {
     const auto& old_escrow = *escrow_itr;
     ++escrow_itr;
-
-    adjust_balance( old_escrow.from, old_escrow.get_hive_balance() );
-    adjust_balance( old_escrow.from, old_escrow.get_hbd_balance() );
-    adjust_balance( old_escrow.from, old_escrow.get_fee() );
-
-    push_virtual_operation( *this, escrow_rejected_operation( old_escrow.from, old_escrow.to, old_escrow.agent, old_escrow.escrow_id,
-      old_escrow.get_hbd_balance(), old_escrow.get_hive_balance(), old_escrow.get_fee() ) );
-
-    modify( get_account( old_escrow.from ), []( account_object& a )
-    {
-      a.pending_escrow_transfers--;
-    } );
-
-    remove( old_escrow );
+    remove_escrow( old_escrow );
   }
 }
 
@@ -86,21 +107,11 @@ void database::remove_pending_escrows( const account_object& account, const acco
   // Remove pending escrows (return balance to account - compare with expire_escrow_ratification())
   const auto& escrow_idx = get_index< escrow_index, by_from_id >();
   auto escrow_itr = escrow_idx.lower_bound( account_name );
-  while( escrow_itr != escrow_idx.end() && escrow_itr->from == account_name )
+  while( escrow_itr != escrow_idx.end() && escrow_itr->get_from() == account_name )
   {
     auto& escrow = *escrow_itr;
     ++escrow_itr;
-
-    adjust_balance( account, escrow.get_hive_balance() );
-    adjust_balance( account, escrow.get_hbd_balance() );
-    adjust_balance( account, escrow.get_fee() );
-
-    modify( account, []( account_object& a )
-    {
-      a.pending_escrow_transfers--;
-    } );
-
-    remove( escrow );
+    remove_escrow( escrow, false /*emit_rejected_vop*/ );
   }
 }
 
@@ -133,24 +144,32 @@ const savings_withdraw_object& database::get_savings_withdraw( const account_nam
 
 void database::process_savings_withdraws()
 {
-  const auto& idx = get_index< savings_withdraw_index >().indices().get< by_complete_from_rid >();
+  const auto& idx = get_index< savings_withdraw_index, by_complete_from_rid >();
   auto itr = idx.begin();
 
+  auto now = head_block_time();
   int count = 0;
   if( _benchmark_dumper.is_enabled() )
     _benchmark_dumper.begin();
-  while( itr != idx.end() )
+  while( itr != idx.end() && itr->get_completion_time() <= now )
   {
-    if( itr->complete > head_block_time() )
-      break;
-    adjust_balance( get_account( itr->to ), itr->amount );
+    temp_balance withdrawn( itr->get_withdraw_amount().symbol );
+    auto vop = fill_transfer_from_savings_operation( itr->get_from(), itr->get_to(),
+      itr->get_withdraw_amount(), itr->get_request_id(), to_string( itr->get_memo() ) );
 
-    modify( get_account( itr->from ), [&]( account_object& a )
+    modify( *itr, [&]( savings_withdraw_object& swo )
+    {
+      swo.access_amount().transfer_to( withdrawn );
+    } );
+
+    adjust_balance( get_account( itr->get_to() ), withdrawn, withdrawn.as_asset() );
+
+    modify( get_account( itr->get_from() ), [&]( account_object& a )
     {
       a.savings_withdraw_requests--;
-    });
+    } );
 
-    push_virtual_operation( *this, fill_transfer_from_savings_operation( itr->from, itr->to, itr->amount, itr->request_id, to_string( itr->memo) ) );
+    push_virtual_operation( *this, vop );
 
     remove( *itr );
     itr = idx.begin();
@@ -165,12 +184,18 @@ void database::remove_pending_savings_withdraws( const account_object& account, 
   // Remove ongoing saving withdrawals (return/pass balance to account)
   const auto& withdraw_from_idx = get_index< savings_withdraw_index, by_from_rid >();
   auto withdraw_from_itr = withdraw_from_idx.lower_bound( account_name );
-  while( withdraw_from_itr != withdraw_from_idx.end() && withdraw_from_itr->from == account_name )
+  while( withdraw_from_itr != withdraw_from_idx.end() && withdraw_from_itr->get_from() == account_name )
   {
     auto& withdrawal = *withdraw_from_itr;
     ++withdraw_from_itr;
 
-    adjust_balance( account, withdrawal.amount );
+    temp_balance drained( withdrawal.get_withdraw_amount().symbol );
+    modify( withdrawal, [&]( savings_withdraw_object& swo )
+    {
+      swo.access_amount().transfer_to( drained );
+    } );
+
+    adjust_balance( account, drained, drained.as_asset() );
     modify( account, []( account_object& a )
     {
       a.savings_withdraw_requests--;
@@ -181,13 +206,19 @@ void database::remove_pending_savings_withdraws( const account_object& account, 
 
   const auto& withdraw_to_idx = get_index< savings_withdraw_index, by_to_complete >();
   auto withdraw_to_itr = withdraw_to_idx.lower_bound( account_name );
-  while( withdraw_to_itr != withdraw_to_idx.end() && withdraw_to_itr->to == account_name )
+  while( withdraw_to_itr != withdraw_to_idx.end() && withdraw_to_itr->get_to() == account_name )
   {
     auto& withdrawal = *withdraw_to_itr;
     ++withdraw_to_itr;
 
-    adjust_balance( account, withdrawal.amount );
-    modify( get_account( withdrawal.from ), []( account_object& a )
+    temp_balance drained( withdrawal.get_withdraw_amount().symbol );
+    modify( withdrawal, [&]( savings_withdraw_object& swo )
+    {
+      swo.access_amount().transfer_to( drained );
+    } );
+
+    adjust_balance( account, drained, drained.as_asset() );
+    modify( get_account( withdrawal.get_from() ), []( account_object& a )
     {
       a.savings_withdraw_requests--;
     } );
@@ -202,12 +233,12 @@ void database::get_savings_withdraw_totals( HIVE_asset& total_hive, HBD_asset& t
 
   for( auto itr = savings_withdraw_idx.begin(); itr != savings_withdraw_idx.end(); ++itr )
   {
-    if( itr->amount.symbol == HIVE_SYMBOL )
-      total_hive += HIVE_asset( itr->amount );
+    if( itr->get_withdraw_amount().symbol == HIVE_SYMBOL )
+      total_hive += HIVE_asset( itr->get_withdraw_amount() );
     else
     {
-      FC_ASSERT( itr->amount.symbol == HBD_SYMBOL, "found savings withdraw that is not HBD or HIVE" );
-      total_hbd += HBD_asset( itr->amount );
+      FC_ASSERT( itr->get_withdraw_amount().symbol == HBD_SYMBOL, "found savings withdraw that is not HBD or HIVE" );
+      total_hbd += HBD_asset( itr->get_withdraw_amount() );
     }
     ++withdrawal_count;
   }
@@ -229,7 +260,7 @@ bool database::apply_order( const limit_order_object& new_order_object )
 
   const auto& limit_price_idx = get_index<limit_order_index>().indices().get<by_price>();
 
-  auto max_price = ~new_order_object.sell_price;
+  auto max_price = ~new_order_object.get_sell_price();
   auto limit_itr = limit_price_idx.lower_bound(max_price.max());
   auto limit_end = limit_price_idx.upper_bound(max_price);
 
@@ -239,7 +270,7 @@ bool database::apply_order( const limit_order_object& new_order_object )
     auto old_limit_itr = limit_itr;
     ++limit_itr;
     // match returns 2 when only the old order was fully filled. In this case, we keep matching; otherwise, we stop.
-    finished = ( match(new_order_object, *old_limit_itr, old_limit_itr->sell_price) & 0x1 );
+    finished = ( match(new_order_object, *old_limit_itr, old_limit_itr->get_sell_price()) & 0x1 );
   }
 
   return find< limit_order_object >( order_id ) == nullptr;
@@ -247,19 +278,19 @@ bool database::apply_order( const limit_order_object& new_order_object )
 
 int database::match( const limit_order_object& new_order, const limit_order_object& old_order, const price& match_price )
 {
-  HIVE_ASSERT( new_order.sell_price.quote.symbol == old_order.sell_price.base.symbol,
+  HIVE_ASSERT( new_order.get_sell_price().quote.symbol == old_order.get_sell_price().base.symbol,
     order_match_exception, "error matching orders: ${new_order} ${old_order} ${match_price}",
     ("new_order", new_order)("old_order", old_order)("match_price", match_price) );
-  HIVE_ASSERT( new_order.sell_price.base.symbol  == old_order.sell_price.quote.symbol,
+  HIVE_ASSERT( new_order.get_sell_price().base.symbol  == old_order.get_sell_price().quote.symbol,
     order_match_exception, "error matching orders: ${new_order} ${old_order} ${match_price}",
     ("new_order", new_order)("old_order", old_order)("match_price", match_price) );
-  HIVE_ASSERT( new_order.for_sale > 0 && old_order.for_sale > 0,
+  HIVE_ASSERT( new_order.amount_for_sale().amount > 0 && old_order.amount_for_sale().amount > 0,
     order_match_exception, "error matching orders: ${new_order} ${old_order} ${match_price}",
     ("new_order", new_order)("old_order", old_order)("match_price", match_price) );
-  HIVE_ASSERT( match_price.quote.symbol == new_order.sell_price.base.symbol,
+  HIVE_ASSERT( match_price.quote.symbol == new_order.get_sell_price().base.symbol,
     order_match_exception, "error matching orders: ${new_order} ${old_order} ${match_price}",
     ("new_order", new_order)("old_order", old_order)("match_price", match_price) );
-  HIVE_ASSERT( match_price.base.symbol == old_order.sell_price.base.symbol,
+  HIVE_ASSERT( match_price.base.symbol == old_order.get_sell_price().base.symbol,
     order_match_exception, "error matching orders: ${new_order} ${old_order} ${match_price}",
     ("new_order", new_order)("old_order", old_order)("match_price", match_price) );
 
@@ -291,89 +322,104 @@ int database::match( const limit_order_object& new_order, const limit_order_obje
     order_match_exception, "error matching orders: ${new_order} ${old_order} ${match_price}",
     ("new_order", new_order)("old_order", old_order)("match_price", match_price) );
 
-  auto age = head_block_time() - old_order.created;
+  auto age = head_block_time() - old_order.get_created();
   if( !has_hardfork( HIVE_HARDFORK_0_12__178 ) &&
       ( (age >= HIVE_MIN_LIQUIDITY_REWARD_PERIOD_SEC && !has_hardfork( HIVE_HARDFORK_0_10__149)) ||
       (age >= HIVE_MIN_LIQUIDITY_REWARD_PERIOD_SEC_HF10 && has_hardfork( HIVE_HARDFORK_0_10__149) ) ) )
   {
     if( old_order_receives.symbol == HIVE_SYMBOL )
     {
-      adjust_liquidity_reward( get_account( old_order.seller ), old_order_receives, false );
-      adjust_liquidity_reward( get_account( new_order.seller ), -old_order_receives, false );
+      adjust_liquidity_reward( get_account( old_order.get_seller() ), old_order_receives, false );
+      adjust_liquidity_reward( get_account( new_order.get_seller() ), -old_order_receives, false );
     }
     else
     {
-      adjust_liquidity_reward( get_account( old_order.seller ), new_order_receives, true );
-      adjust_liquidity_reward( get_account( new_order.seller ), -new_order_receives, true );
+      adjust_liquidity_reward( get_account( old_order.get_seller() ), new_order_receives, true );
+      adjust_liquidity_reward( get_account( new_order.get_seller() ), -new_order_receives, true );
     }
   }
 
-  push_virtual_operation( *this, fill_order_operation( new_order.seller, new_order.orderid, new_order_pays, old_order.seller, old_order.orderid, old_order_pays ) );
+  push_virtual_operation( *this, fill_order_operation( new_order.get_seller(), new_order.get_orderid(), new_order_pays, old_order.get_seller(), old_order.get_orderid(), old_order_pays ) );
 
   int result = 0;
-  result |= fill_order( new_order, new_order_pays, new_order_receives );
-  result |= fill_order( old_order, old_order_pays, old_order_receives ) << 1;
+
+  // pull adequate amounts from both orders
+  temp_balance old_order_balance( old_order.amount_for_sale().symbol );
+  temp_balance new_order_balance( new_order.amount_for_sale().symbol );
+  modify( old_order, [&]( limit_order_object& o )
+  {
+    o.access_amount_for_sale().transfer_to( old_order_balance, new_order_receives );
+  } );
+  modify( new_order, [&]( limit_order_object& o )
+  {
+    o.access_amount_for_sale().transfer_to( new_order_balance, old_order_receives );
+  } );
+  // execute orders
+  result |= fill_order( new_order, new_order_pays, std::move( old_order_balance ) );
+  result |= fill_order( old_order, old_order_pays, std::move( new_order_balance ) ) << 1;
 
   HIVE_ASSERT( result != 0,
     order_match_exception, "error matching orders: ${new_order} ${old_order} ${match_price}",
     ("new_order", new_order)("old_order", old_order)("match_price", match_price) );
+    // ABW: note that above assertion should never fire, and if it does, it means neither of
+    // limit_order_objects were removed, which means it is safe to use them in assertion;
+    // the objects are already (partially) drained though
   return result;
 }
 
-bool database::fill_order( const limit_order_object& order, const asset& pays, const asset& receives )
+bool database::fill_order( const limit_order_object& order, const asset& pays, temp_balance&& receives )
 {
+  bool fully_filled = false;
   try
   {
     HIVE_ASSERT( order.amount_for_sale().symbol == pays.symbol,
       order_fill_exception, "error filling orders: ${order} ${pays} ${receives}",
       ("order", order)("pays", pays)("receives", receives) );
-    HIVE_ASSERT( pays.symbol != receives.symbol,
+    HIVE_ASSERT( pays.symbol != receives.as_asset().symbol,
       order_fill_exception, "error filling orders: ${order} ${pays} ${receives}",
       ("order", order)("pays", pays)("receives", receives) );
 
-    adjust_balance( order.seller, receives );
+    adjust_balance( order.get_seller(), receives, receives.as_asset() );
 
-    if( pays == order.amount_for_sale() )
+    if( order.amount_for_sale().amount == 0 )
     {
       remove( order );
-      return true;
+      fully_filled = true;
     }
-    else
+    else // order still has funds
     {
-      HIVE_ASSERT( pays < order.amount_for_sale(),
-        order_fill_exception, "error filling orders: ${order} ${pays} ${receives}",
-        ("order", order)("pays", pays)("receives", receives) );
-
-      modify( order, [&]( limit_order_object& b )
-      {
-        b.for_sale -= pays.amount;
-      } );
-      /**
-        *  There are times when the AMOUNT_FOR_SALE * SALE_PRICE == 0 which means that we
-        *  have hit the limit where the seller is asking for nothing in return.  When this
-        *  happens we must refund any balance back to the seller, it is too small to be
-        *  sold at the sale price.
-        */
+      /*
+      There are times when the AMOUNT_FOR_SALE * SALE_PRICE == 0 which means that we
+      have hit the limit where the seller is asking for nothing in return. When this
+      happens we must refund any balance back to the seller, it is too small to be
+      sold at the sale price.
+      */
       if( order.amount_to_receive().amount == 0 )
       {
-        cancel_order(order);
-        return true;
+        cancel_order( order );
+        fully_filled = true;
       }
-      return false;
     }
   }
   FC_CAPTURE_AND_RETHROW( (order)(pays)(receives) )
+  return fully_filled;
 }
 
 void database::cancel_order( const limit_order_object& order, bool suppress_vop )
 {
-  auto amount_back = order.amount_for_sale();
+  auto vop = limit_order_cancelled_operation( order.get_seller(), order.get_orderid(), order.amount_for_sale() );
 
-  adjust_balance( order.seller, amount_back );
+  temp_balance amount_back( order.amount_for_sale().symbol );
+  modify( order, [&]( limit_order_object& o )
+  {
+    o.access_amount_for_sale().transfer_to( amount_back );
+  } );
+
+  adjust_balance( order.get_seller(), amount_back, amount_back.as_asset() );
   if( !suppress_vop )
-    push_virtual_operation( *this, limit_order_cancelled_operation(order.seller, order.orderid, amount_back));
+    push_virtual_operation( *this, vop );
 
-  remove(order);
+  remove( order );
 }
 
 void database::clear_expired_orders()
@@ -381,7 +427,7 @@ void database::clear_expired_orders()
   auto now = head_block_time();
   const auto& orders_by_exp = get_index<limit_order_index>().indices().get<by_expiration>();
   auto itr = orders_by_exp.begin();
-  while( itr != orders_by_exp.end() && itr->expiration < now )
+  while( itr != orders_by_exp.end() && itr->get_expiration() < now )
   {
     cancel_order( *itr );
     itr = orders_by_exp.begin();
@@ -394,13 +440,13 @@ void database::get_limit_order_totals( HIVE_asset& total_hive, HBD_asset& total_
 
   for( auto itr = limit_order_idx.begin(); itr != limit_order_idx.end(); ++itr )
   {
-    if( itr->sell_price.base.symbol == HIVE_SYMBOL )
+    if( itr->amount_for_sale().symbol == HIVE_SYMBOL )
     {
-      total_hive += HIVE_asset( itr->for_sale );
+      total_hive += HIVE_asset( itr->amount_for_sale() );
     }
-    else if ( itr->sell_price.base.symbol == HBD_SYMBOL )
+    else if ( itr->amount_for_sale().symbol == HBD_SYMBOL )
     {
-      total_hbd += HBD_asset( itr->for_sale );
+      total_hbd += HBD_asset( itr->amount_for_sale() );
     }
     ++order_count;
   }
@@ -410,7 +456,7 @@ void database::remove_pending_limit_orders( const account_object& account, const
 {
   const auto& order_idx = get_index< limit_order_index, by_account >();
   auto order_itr = order_idx.lower_bound( account_name );
-  while( order_itr != order_idx.end() && order_itr->seller == account_name )
+  while( order_itr != order_idx.end() && order_itr->get_seller() == account_name )
   {
     auto& order = *order_itr;
     ++order_itr;

@@ -1,10 +1,10 @@
 #include <hive/plugins/database_api/database_api_objects.hpp>
 
-#include <hive/chain/account_object.hpp>
-#include <hive/chain/block_summary_object.hpp>
-#include <hive/chain/hardfork_property_object.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/global_property_object.hpp>
+#include <hive/chain/detail/state/account_object.hpp>
+#include <hive/chain/detail/state/block_summary_object.hpp>
+#include <hive/chain/detail/state/hardfork_property_object.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/global_property_object.hpp>
 #include <hive/chain/detail/state/convert_request_object.hpp>
 #include <hive/chain/detail/state/collateralized_convert_request_object.hpp>
 #include <hive/chain/detail/state/escrow_object.hpp>
@@ -15,10 +15,10 @@
 #include <hive/chain/detail/state/decline_voting_rights_request_object.hpp>
 #include <hive/chain/detail/state/reward_fund_object.hpp>
 #include <hive/chain/detail/state/recurrent_transfer_object.hpp>
-#include <hive/chain/dhf_objects.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/transaction_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/dhf_objects.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/database.hpp>
 #include <hive/chain/notifications.hpp>
 
@@ -36,15 +36,15 @@ using namespace hive::protocol;
 // api_reward_fund_object constructor
 api_reward_fund_object::api_reward_fund_object( const reward_fund_object& o, const database& db ):
   id( o.get_id() ),
-  name( o.name ),
-  reward_balance( o.reward_balance.to_asset() ),
-  recent_claims( o.recent_claims ),
-  last_update( o.last_update ),
-  content_constant( o.content_constant ),
-  percent_curation_rewards( o.percent_curation_rewards ),
-  percent_content_rewards( o.percent_content_rewards ),
-  author_reward_curve( o.author_reward_curve ),
-  curation_reward_curve( o.curation_reward_curve )
+  name( o.get_name() ),
+  reward_balance( o.get_reward_balance().to_asset() ),
+  recent_claims( o.get_recent_claims() ),
+  last_update( o.get_last_update() ),
+  content_constant( o.get_content_constant() ),
+  percent_curation_rewards( o.get_percent_curation_rewards() ),
+  percent_content_rewards( o.get_percent_content_rewards() ),
+  author_reward_curve( o.get_author_reward_curve() ),
+  curation_reward_curve( o.get_curation_reward_curve() )
 {}
 
 // api_witness_vote_object constructor
@@ -57,18 +57,18 @@ api_witness_vote_object::api_witness_vote_object( const witness_vote_object& o, 
 // api_escrow_object constructor
 api_escrow_object::api_escrow_object( const escrow_object& o, const database& db ):
   id( o.get_id() ),
-  escrow_id( o.escrow_id ),
-  from( o.from ),
-  to( o.to ),
-  agent( o.agent ),
-  ratification_deadline( o.ratification_deadline ),
-  escrow_expiration( o.escrow_expiration ),
-  hbd_balance( o.hbd_balance.to_asset() ),
-  hive_balance( o.hive_balance.to_asset() ),
-  pending_fee( o.pending_fee ),
-  to_approved( o.to_approved ),
-  agent_approved( o.agent_approved ),
-  disputed( o.disputed )
+  escrow_id( o.get_escrow_id() ),
+  from( o.get_from() ),
+  to( o.get_to() ),
+  agent( o.get_agent() ),
+  ratification_deadline( o.get_ratification_deadline() ),
+  escrow_expiration( o.get_escrow_expiration() ),
+  hbd_balance( o.get_hbd_balance().to_asset() ),
+  hive_balance( o.get_hive_balance().to_asset() ),
+  pending_fee( o.get_fee() ),
+  to_approved( o.is_to_approved() ),
+  agent_approved( o.is_agent_approved() ),
+  disputed( o.is_disputed() )
 {}
 
 // api_withdraw_vesting_route_object constructors
@@ -129,62 +129,60 @@ api_decline_voting_rights_request_object::api_decline_voting_rights_request_obje
 // api_limit_order_object constructors
 api_limit_order_object::api_limit_order_object( const limit_order_object& o, const database& db ):
   id( o.get_id() ),
-  created( o.created ),
-  expiration( o.expiration ),
-  seller( o.seller ),
-  orderid( o.orderid ),
-  for_sale( o.for_sale ),
-  sell_price( o.sell_price )
+  created( o.get_created() ),
+  expiration( o.get_expiration() ),
+  seller( o.get_seller() ),
+  orderid( o.get_orderid() ),
+  for_sale( o.amount_for_sale().amount ),
+  sell_price( o.get_sell_price() )
 {}
 
 
 // api_dynamic_global_property_object constructors
 api_dynamic_global_property_object::api_dynamic_global_property_object( const dynamic_global_property_object& o, const database& db ) :
   id( o.get_id() ),
-  head_block_number( o.head_block_number ),
-  head_block_id( o.head_block_id ),
-  time( o.time ),
-  current_witness( o.current_witness ),
-  total_pow( o.total_pow ),
-  num_pow_witnesses( o.num_pow_witnesses ),
-  virtual_supply( o.virtual_supply.to_asset() ),
-  current_supply( o.current_supply.to_asset() ),
-  init_hbd_supply( o.init_hbd_supply.to_asset() ),
-  current_hbd_supply( o.current_hbd_supply.to_asset() ),
-  total_vesting_fund_hive( o.total_vesting_fund_hive.to_asset() ),
-  total_vesting_shares( o.total_vesting_shares.to_asset() ),
-  total_reward_fund_hive( o.total_reward_fund_hive.to_asset() ),
-  total_reward_shares2( o.total_reward_shares2 ),
-  pending_rewarded_vesting_shares( o.pending_rewarded_vesting_shares.to_asset() ),
-  pending_rewarded_vesting_hive( o.pending_rewarded_vesting_hive.to_asset() ),
-  hbd_interest_rate( o.hbd_interest_rate ),
-  hbd_print_rate( o.hbd_print_rate ),
-  maximum_block_size( o.maximum_block_size ),
-  current_aslot( o.current_aslot ),
-  recent_slots_filled( o.recent_slots_filled ),
-  participation_count( o.participation_count ),
+  head_block_number( o.get_head_block_number() ),
+  head_block_id( o.get_head_block_id() ),
+  time( o.get_head_block_time() ),
+  current_witness( o.get_current_witness() ),
+  total_pow( o.get_total_pow() ),
+  num_pow_witnesses( o.get_current_pow_witnesses() ),
+  virtual_supply( o.get_virtual_supply().to_asset() ),
+  current_supply( o.get_current_supply().to_asset() ),
+  init_hbd_supply( o.get_initial_hbd_supply().to_asset() ),
+  current_hbd_supply( o.get_current_hbd_supply().to_asset() ),
+  total_vesting_fund_hive( o.get_total_vesting_fund_hive().to_asset() ),
+  total_vesting_shares( o.get_total_vesting_shares().to_asset() ),
+  pending_rewarded_vesting_shares( o.get_pending_rewarded_vesting_shares().to_asset() ),
+  pending_rewarded_vesting_hive( o.get_pending_rewarded_vesting_hive().to_asset() ),
+  hbd_interest_rate( o.get_hbd_interest_rate() ),
+  hbd_print_rate( o.get_hbd_print_rate() ),
+  maximum_block_size( o.get_maximum_block_size() ),
+  current_aslot( o.get_current_aslot() ),
+  recent_slots_filled( o.get_recent_slots_filled() ),
+  participation_count( o.get_participation_count() ),
   last_irreversible_block_num( db.get_last_irreversible_block_num()),
-  vote_power_reserve_rate( o.vote_power_reserve_rate ),
-  delegation_return_period( o.delegation_return_period ),
-  reverse_auction_seconds( o.reverse_auction_seconds ),
-  available_account_subsidies( o.available_account_subsidies ),
-  hbd_stop_percent( o.hbd_stop_percent ),
-  hbd_start_percent( o.hbd_start_percent ),
-  next_maintenance_time( o.next_maintenance_time ),
-  last_budget_time( o.last_budget_time ),
-  next_daily_maintenance_time( o.next_daily_maintenance_time ),
-  content_reward_percent( o.content_reward_percent ),
-  vesting_reward_percent( o.vesting_reward_percent ),
-  proposal_fund_percent( o.proposal_fund_percent ),
-  dhf_interval_ledger( o.dhf_interval_ledger.to_asset() ),
-  downvote_pool_percent( o.downvote_pool_percent ),
-  current_remove_threshold( o.current_remove_threshold ),
-  early_voting_seconds( o.early_voting_seconds ),
-  mid_voting_seconds( o.mid_voting_seconds ),
-  max_consecutive_recurrent_transfer_failures( o.max_consecutive_recurrent_transfer_failures ),
-  max_recurrent_transfer_end_date( o.max_recurrent_transfer_end_date ),
-  min_recurrent_transfers_recurrence( o.min_recurrent_transfers_recurrence ),
-  max_open_recurrent_transfers( o.max_open_recurrent_transfers )
+  vote_power_reserve_rate( o.get_vote_power_reserve_rate() ),
+  delegation_return_period( o.get_delegation_return_period() ),
+  reverse_auction_seconds( o.get_reverse_auction_seconds() ),
+  available_account_subsidies( o.get_available_account_subsidies() ),
+  hbd_stop_percent( o.get_hbd_stop_percent() ),
+  hbd_start_percent( o.get_hbd_start_percent() ),
+  next_maintenance_time( o.get_next_maintenance_time() ),
+  last_budget_time( o.get_last_budget_time() ),
+  next_daily_maintenance_time( o.get_next_daily_maintenance_time() ),
+  content_reward_percent( o.get_content_reward_percent() ),
+  vesting_reward_percent( o.get_vesting_reward_percent() ),
+  proposal_fund_percent( o.get_proposal_fund_percent() ),
+  dhf_interval_ledger( o.get_dhf_interval_ledger().to_asset() ),
+  downvote_pool_percent( o.get_downvote_pool_percent() ),
+  current_remove_threshold( o.get_current_remove_threshold() ),
+  early_voting_seconds( o.get_early_voting_seconds() ),
+  mid_voting_seconds( o.get_mid_voting_seconds() ),
+  max_consecutive_recurrent_transfer_failures( o.get_max_consecutive_recurrent_transfer_failures() ),
+  max_recurrent_transfer_end_date( o.get_max_recurrent_transfer_end_date() ),
+  min_recurrent_transfers_recurrence( o.get_min_recurrent_transfers_recurrence() ),
+  max_open_recurrent_transfers( o.get_max_open_recurrent_transfers() )
 {}
 
 
@@ -213,7 +211,7 @@ api_account_object::api_account_object( const account_object& a, const database&
   downvote_manabar( a.downvote_manabar ),
   balance( a.get_hive_balance().to_asset() ),
   savings_balance( a.get_hive_savings().to_asset() ),
-  hbd_balance( a.hbd_balance.to_asset() ),
+  hbd_balance( a.get_hbd_balance().to_asset() ),
   hbd_seconds( a.hbd_seconds ),
   hbd_seconds_last_update( a.hbd_seconds_last_update ),
   hbd_last_interest_payment( a.hbd_last_interest_payment ),
@@ -228,9 +226,9 @@ api_account_object::api_account_object( const account_object& a, const database&
   reward_vesting_hive( a.get_vest_rewards_as_hive().to_asset() ),
   curation_rewards( a.curation_rewards.amount ),
   posting_rewards( a.posting_rewards.amount ),
-  vesting_shares( a.vesting_shares.to_asset() ),
-  delegated_vesting_shares( a.delegated_vesting_shares.to_asset() ),
-  received_vesting_shares( a.received_vesting_shares.to_asset() ),
+  vesting_shares( a.get_vesting().to_asset() ),
+  delegated_vesting_shares( a.get_delegated_vesting().to_asset() ),
+  received_vesting_shares( a.get_received_vesting().to_asset() ),
   vesting_withdraw_rate( a.vesting_withdraw_rate.to_asset() ),
   next_vesting_withdrawal( a.next_vesting_withdrawal ),
   withdrawn( a.withdrawn.amount ),
@@ -258,11 +256,11 @@ api_account_object::api_account_object( const account_object& a, const database&
     proxied_vsf_votes.push_back( a.proxied_vsf_votes[i] );
 
   const auto& auth = db.get< account_authority_object, by_account >( name );
-  owner = authority( auth.owner );
-  active = authority( auth.active );
-  posting = authority( auth.posting );
-  previous_owner_update = auth.previous_owner_update;
-  last_owner_update = auth.last_owner_update;
+  owner = auth.get_owner().to_authority();
+  active = auth.get_active().to_authority();
+  posting = auth.get_posting().to_authority();
+  previous_owner_update = auth.get_previous_owner_update();
+  last_owner_update = auth.get_last_owner_update();
   if( metadata_plugin )
   {
     auto meta = metadata_plugin->get_account_metadata( a );
@@ -280,9 +278,9 @@ api_account_object::api_account_object( const account_object& a, const database&
 // api_owner_authority_history_object constructors
 api_owner_authority_history_object::api_owner_authority_history_object( const owner_authority_history_object& o, const database& db ) :
   id( o.get_id() ),
-  account( o.account ),
-  previous_owner_authority( authority( o.previous_owner_authority ) ),
-  last_valid_time( o.last_valid_time )
+  account( o.get_account() ),
+  previous_owner_authority( o.get_previous_owner_authority().to_authority() ),
+  last_valid_time( o.get_last_valid_time() )
 {}
 
 
@@ -290,7 +288,7 @@ api_owner_authority_history_object::api_owner_authority_history_object( const ow
 api_account_recovery_request_object::api_account_recovery_request_object( const account_recovery_request_object& o, const database& db ) :
   id( o.get_id() ),
   account_to_recover( o.get_account_to_recover() ),
-  new_owner_authority( authority( o.get_new_owner_authority() ) ),
+  new_owner_authority( o.get_new_owner_authority().to_authority() ),
   expires( o.get_expiration_time() )
 {}
 
@@ -298,12 +296,12 @@ api_account_recovery_request_object::api_account_recovery_request_object( const 
 // api_savings_withdraw_object constructors
 api_savings_withdraw_object::api_savings_withdraw_object( const savings_withdraw_object& o, const database& db ) :
   id( o.get_id() ),
-  from( o.from ),
-  to( o.to ),
-  memo( to_string( o.memo ) ),
-  request_id( o.request_id ),
-  amount( o.amount ),
-  complete( o.complete )
+  from( o.get_from() ),
+  to( o.get_to() ),
+  memo( to_string( o.get_memo() ) ),
+  request_id( o.get_request_id() ),
+  amount( o.get_withdraw_amount() ),
+  complete( o.get_completion_time() )
 {}
 
 

@@ -6,7 +6,7 @@
 #include <hive/protocol/exceptions.hpp>
 #include <hive/protocol/hardfork.hpp>
 
-#include <hive/chain/block_summary_object.hpp>
+#include <hive/chain/detail/state/block_summary_object.hpp>
 #include <hive/chain/database.hpp>
 #include <hive/chain/detail/state/convert_request_object.hpp>
 #include <hive/chain/detail/state/collateralized_convert_request_object.hpp>
@@ -21,12 +21,12 @@
 #include <hive/chain/detail/state/recurrent_transfer_object.hpp>
 
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -39,13 +39,13 @@
 #include <hive/chain/detail/state/savings_withdraw_object_multiindex.hpp>
 #include <hive/chain/detail/state/liquidity_reward_balance_object_multiindex.hpp>
 #include <hive/chain/detail/state/withdraw_vesting_route_object_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
 
 #include <hive/chain/util/reward.hpp>
 
 #include <hive/plugins/debug_node/debug_node_plugin.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 
@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE( basic_checks )
 {
   try
   {
-    ACTORS( (alice)(bob) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
     vest( "alice", HIVE_asset( 10'000 ) );
     vest( "bob", HIVE_asset( 10'000 ) );
 
@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE( nested_comments )
 {
   try
   {
-    ACTORS( (alice)(bob)(sam)(dave) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(sam)(dave) );
     vest( "alice", HIVE_asset( 10'000 ) );
     vest( "bob", HIVE_asset( 10'000 ) );
     vest( "sam", HIVE_asset( 10'000 ) );
@@ -238,8 +238,10 @@ BOOST_AUTO_TEST_CASE( nested_comments )
 
 void fork_reverts_cashout_scanario( const std::string& comment_archive_type, bool migrate, bool undoable_migration, const char* assertion_message )
 {
+  configuration_data = configuration(); // start with fresh configuration
   configuration_data.set_cashout_related_values( 0, 9, 9 * 2, 9 * 7, 3 );
   autoscope( []() { configuration_data.reset_cashout_values(); } );
+  // note: the test does not stabilize vest price, so RC costs remain minimal while rc_adjustment is large
 
   hived_fixture test;
   test.postponed_init( {
@@ -258,7 +260,7 @@ void fork_reverts_cashout_scanario( const std::string& comment_archive_type, boo
   {
     test.account_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), test.init_account_pub_key );
     test.fund( HIVE_INIT_MINER_NAME + fc::to_string( i ), HIVE_MIN_PRODUCER_REWARD );
-    test.witness_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), test.init_account_priv_key, "foo.bar", test.init_account_pub_key, HIVE_MIN_PRODUCER_REWARD.amount );
+    test.witness_create( HIVE_INIT_MINER_NAME + fc::to_string( i ), test.init_account_priv_key, "foo.bar", test.init_account_pub_key, HIVE_MIN_PRODUCER_REWARD );
   }
   // disable OBI to allow forking
   test.witness_plugin->disable_fast_confirm();
@@ -266,7 +268,7 @@ void fork_reverts_cashout_scanario( const std::string& comment_archive_type, boo
   // create 'alice'
   fc::ecc::private_key alice_private_key = test.generate_private_key( "alice" );
   fc::ecc::private_key alice_post_key = test.generate_private_key( "alice_post" );
-  test.account_create( "alice", alice_private_key.get_public_key(), alice_post_key.get_public_key() );
+  test.account_create( "alice", alice_private_key.get_public_key(), alice_post_key.get_public_key(), DEFAULT_VESTING );
 
   test.generate_block();
 
@@ -436,8 +438,8 @@ BOOST_FIXTURE_TEST_CASE( inconsistent_comment_archive, empty_fixture )
     {
       clean_database_fixture fixture( 512U, fc::optional<uint32_t>(), false ); // don't init AH (there is separate test for that)
       comment_archive_dir = fixture.get_chain_plugin().comment_storage_dir();
-      fixture.account_create( "alice", fixture.init_account_pub_key );
-      fixture.account_create( "bob", fixture.init_account_pub_key );
+      fixture.account_create( "alice", fixture.init_account_pub_key, fixture.init_account_pub_key, HIVE_asset( 10'000 ) );
+      fixture.account_create( "bob", fixture.init_account_pub_key, fixture.init_account_pub_key, HIVE_asset( 10'000 ) );
       fixture.post_comment( "alice", "test", "test", "test body", "category", fixture.init_account_priv_key );
       // first 30 blocks use different LIB mechanics
       fixture.generate_blocks( 3 * HIVE_MAX_WITNESSES ); // the comment should be archived after that

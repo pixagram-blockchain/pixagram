@@ -7,17 +7,17 @@
 #include <hive/utilities/signal.hpp>
 
 #include <hive/chain/database_exceptions.hpp>
-#include <hive/chain/comment_object.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/comment_object.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/detail/state/hardfork_property_object.hpp>
 #include <hive/chain/detail/state/global_property_object.hpp>
 // Multiindex headers for index type definitions
-#include <hive/chain/comment_object_multiindex.hpp>
-#include <hive/chain/transaction_object_multiindex.hpp>
-#include <hive/chain/dhf_objects_multiindex.hpp>
-#include <hive/chain/block_summary_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/transaction_object_multiindex.hpp>
+#include <hive/chain/detail/state/dhf_objects_multiindex.hpp>
+#include <hive/chain/detail/state/block_summary_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/limit_order_object_multiindex.hpp>
@@ -180,11 +180,11 @@ BOOST_AUTO_TEST_CASE( regular_transactions )
     {
       db.modify( db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& dgpo )
       {
-        dgpo.maximum_block_size = HIVE_MIN_BLOCK_SIZE_LIMIT;
+        dgpo.set_maximum_block_size( HIVE_MIN_BLOCK_SIZE_LIMIT );
       } );
     } );
 
-    ACTORS( (alice)(bob)(carol)(dan) )
+    ACTORS( HIVE_asset( 15'000 ), (alice)(bob)(carol)(dan) ); // extra RC for comments
     generate_block();
 
     expectation_set check( *db );
@@ -294,7 +294,7 @@ BOOST_AUTO_TEST_CASE( popped_transactions )
   {
     BOOST_TEST_MESSAGE( "Testing popped transactions" );
 
-    ACTORS( (alice)(bob)(carol) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
     generate_block();
     fund( "alice", HIVE_asset( 10'000 ) );
     fund( "bob", HIVE_asset( 10'000 ) );
@@ -452,7 +452,7 @@ BOOST_AUTO_TEST_CASE( transactions_in_forks )
   {
     BOOST_TEST_MESSAGE( "Testing transactions in forked database" );
 
-    ACTORS( (alice)(bob)(carol) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
     generate_block();
     fund( "alice", HIVE_asset( 10'000 ) );
     fund( "bob", HIVE_asset( 10'000 ) );
@@ -470,7 +470,7 @@ BOOST_AUTO_TEST_CASE( transactions_in_forks )
       tx.set_expiration( db->head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION/2 );
         //if we used max expiration time, popped transactions would fail not due to tapos, but because
         //their expiration time is too much into the future
-      tx.set_reference_block( dgpo.head_block_id );
+      tx.set_reference_block( dgpo.get_head_block_id() );
         //normal database_fixture::push_transaction() does not set tapos - they all point to genesis
       tx.operations.push_back( op );
       push_transaction( tx, key );
@@ -652,7 +652,7 @@ BOOST_AUTO_TEST_CASE( failure_during_fork_switch )
   {
     BOOST_TEST_MESSAGE( "Testing transactions during failed for switch" );
 
-    ACTORS( (alice)(bob)(carol) )
+    ACTORS( DEFAULT_VESTING, (alice)(bob)(carol) );
     generate_block();
     fund( "alice", HIVE_asset( 10'000 ) );
     generate_block();
@@ -761,5 +761,98 @@ BOOST_AUTO_TEST_CASE( failure_during_fork_switch )
   FC_LOG_AND_RETHROW()
 }
 
+BOOST_AUTO_TEST_CASE( skip_faulty_tx_during_block_production )
+{
+  try
+  {
+    BOOST_TEST_MESSAGE( "Test if faulty transaction is skipped when block is produced" );
+
+    ACTORS( DEFAULT_VESTING, (alice)(bob) );
+    fund( "alice", HIVE_asset( 2000 ) );
+    generate_block();
+
+    transfer_operation transfer;
+    transfer.from = "alice";
+    transfer.to = "bob";
+    transfer.amount = ASSET( "1.000 TESTS" );
+    db_plugin->debug_push_pending_transaction( build_transaction( transfer, alice_private_key ) );
+    transfer.amount = ASSET( "2.000 TESTS" );
+    db_plugin->debug_push_pending_transaction( build_transaction( transfer, alice_private_key ) );
+    transfer.amount = ASSET( "0.500 TESTS" );
+    db_plugin->debug_push_pending_transaction( build_transaction( transfer, alice_private_key ) );
+    transfer.from = "bob";
+    transfer.to = "alice";
+    transfer.amount = ASSET( "1.500 TESTS" );
+    db_plugin->debug_push_pending_transaction( build_transaction( transfer, bob_private_key ) );
+
+    // transactions pushed directly to pending without evaluation
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), HIVE_asset( 2000 ) );
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "bob" ), HIVE_asset( 0 ) );
+
+    // block contains 3 transactions, second one is skipped, but applied after the block from pending
+    expectation_set check( *db );
+    check.expect( expectation::gen_block( expectation::PRE_TX ) );
+    check.expect( expectation::gen_block( expectation::POST_TX ) );
+    check.expect( expectation::gen_block( expectation::PRE_TX ) ); // transfer too big - skipped
+    check.expect( expectation::gen_block( expectation::PRE_TX ) );
+    check.expect( expectation::gen_block( expectation::POST_TX ) );
+    check.expect( expectation::gen_block( expectation::PRE_TX ) );
+    check.expect( expectation::gen_block( expectation::POST_TX ) );
+    check.expect( expectation::p2p_block( expectation::PRE_BLOCK ) );
+    check.expect( expectation::p2p_block( expectation::PRE_TX ) );
+    check.expect( expectation::p2p_block( expectation::POST_TX ) );
+    check.expect( expectation::p2p_block( expectation::PRE_TX ) );
+    check.expect( expectation::p2p_block( expectation::POST_TX ) );
+    check.expect( expectation::p2p_block( expectation::PRE_TX ) );
+    check.expect( expectation::p2p_block( expectation::POST_TX ) );
+    check.expect( expectation::p2p_block( expectation::POST_BLOCK ) );
+    check.expect( expectation::pending_transaction( expectation::PRE_TX ) ); // transfer ok after last tx
+    check.expect( expectation::pending_transaction( expectation::POST_TX ) );
+    generate_block();
+    check.check_empty();
+
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), HIVE_asset( 0 ) );
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "bob" ), HIVE_asset( 2000 ) );
+
+    // when pending are removed, effects also disappear
+    db->clear_pending();
+    check.expect( expectation::p2p_block( expectation::PRE_BLOCK ) );
+    check.expect( expectation::p2p_block( expectation::POST_BLOCK ) );
+    generate_block();
+    check.check_empty();
+
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), HIVE_asset( 2000 ) );
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "bob" ), HIVE_asset( 0 ) );
+
+    // do the same again but without transfer back from bob
+    transfer.from = "alice";
+    transfer.to = "bob";
+    transfer.amount = ASSET( "1.000 TESTS" );
+    db_plugin->debug_push_pending_transaction( build_transaction( transfer, alice_private_key ) );
+    transfer.amount = ASSET( "2.000 TESTS" );
+    db_plugin->debug_push_pending_transaction( build_transaction( transfer, alice_private_key ) );
+    transfer.amount = ASSET( "0.500 TESTS" );
+    db_plugin->debug_push_pending_transaction( build_transaction( transfer, alice_private_key ) );
+
+    check.expect( expectation::gen_block( expectation::PRE_TX ) );
+    check.expect( expectation::gen_block( expectation::POST_TX ) );
+    check.expect( expectation::gen_block( expectation::PRE_TX ) ); // transfer too big - skipped
+    check.expect( expectation::gen_block( expectation::PRE_TX ) );
+    check.expect( expectation::gen_block( expectation::POST_TX ) );
+    check.expect( expectation::p2p_block( expectation::PRE_BLOCK ) );
+    check.expect( expectation::p2p_block( expectation::PRE_TX ) );
+    check.expect( expectation::p2p_block( expectation::POST_TX ) );
+    check.expect( expectation::p2p_block( expectation::PRE_TX ) );
+    check.expect( expectation::p2p_block( expectation::POST_TX ) );
+    check.expect( expectation::p2p_block( expectation::POST_BLOCK ) );
+    check.expect( expectation::pending_transaction( expectation::PRE_TX ) ); // transfer fails and is removed from pending
+    generate_block();
+    check.check_empty();
+
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "alice" ), HIVE_asset( 500 ) );
+    BOOST_REQUIRE_EQUAL( get_hive_balance( "bob" ), HIVE_asset( 1500 ) );
+  }
+  FC_LOG_AND_RETHROW()
+}
 
 BOOST_AUTO_TEST_SUITE_END()

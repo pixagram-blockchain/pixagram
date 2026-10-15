@@ -3,16 +3,16 @@
 #include <hive/chain/database.hpp>
 #include <hive/chain/database_virtual_operations.hpp>
 #include <hive/chain/database_exceptions.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
-#include <hive/chain/global_property_object_multiindex.hpp>
-#include <hive/chain/hardfork_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/global_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/hardfork_property_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object_multiindex.hpp>
 #include <hive/chain/detail/state/liquidity_reward_balance_object_multiindex.hpp>
 #include <hive/chain/detail/state/reward_fund_object_multiindex.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 #include <hive/chain/witness_schedule.hpp>
 
-#include <hive/chain/rc/rc_objects.hpp>
+#include <hive/chain/rc/rc_objects_multiindex.hpp>
 
 #include <hive/protocol/get_config.hpp>
 #include <hive/protocol/hardfork.hpp>
@@ -115,6 +115,12 @@ void database::init_hardforks()
   FC_ASSERT( HIVE_HARDFORK_1_30 == 30, "Invalid hardfork configuration" );
   _hardfork_versions.times[ HIVE_HARDFORK_1_30 ] = fc::time_point_sec( HIVE_HARDFORK_1_30_TIME );
   _hardfork_versions.versions[ HIVE_HARDFORK_1_30 ] = HIVE_HARDFORK_1_30_VERSION;
+#ifdef USE_ALTERNATE_CHAIN_ID
+  // Mainnet does not support HF31 yet (HIVE_NUM_HARDFORKS is 30 there), so the arrays have no slot for it.
+  FC_ASSERT( HIVE_HARDFORK_1_31 == 31, "Invalid hardfork configuration" );
+  _hardfork_versions.times[ HIVE_HARDFORK_1_31 ] = fc::time_point_sec( HIVE_HARDFORK_1_31_TIME );
+  _hardfork_versions.versions[ HIVE_HARDFORK_1_31 ] = HIVE_HARDFORK_1_31_VERSION;
+#endif
 }
 
 void database::process_hardforks()
@@ -238,9 +244,9 @@ void database::apply_hardfork( uint32_t hardfork )
 
           modify( get< account_authority_object, by_account >( account->get_name() ), [&]( account_authority_object& auth )
           {
-            auth.active  = authority( 1, public_key_type(HIVE_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR), 1 );
-            auth.posting = authority( 1, public_key_type(HIVE_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR), 1 );
-          });
+            auth.set_active( authority( 1, public_key_type( HIVE_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR ), 1 ) );
+            auth.set_posting( authority( 1, public_key_type( HIVE_HF_9_COMPROMISED_ACCOUNTS_PUBLIC_KEY_STR ), 1 ) );
+          } );
         }
       }
       break;
@@ -270,7 +276,7 @@ void database::apply_hardfork( uint32_t hardfork )
         {
           while( fho.price_history.size() > HIVE_FEED_HISTORY_WINDOW )
             fho.price_history.pop_front();
-        });
+        } );
       }
       break;
     case HIVE_HARDFORK_0_17:
@@ -287,25 +293,15 @@ void database::apply_hardfork( uint32_t hardfork )
           wso.max_voted_witnesses = HIVE_MAX_VOTED_WITNESSES_HF17;
           wso.max_miner_witnesses = HIVE_MAX_MINER_WITNESSES_HF17;
           wso.max_runner_witnesses = HIVE_MAX_RUNNER_WITNESSES_HF17;
-        });
+        } );
 
-        const auto& gpo = get_dynamic_global_properties();
-
-        auto& post_rf = create< reward_fund_object >( HIVE_POST_REWARD_FUND_NAME, gpo.get_total_reward_fund_hive(), head_block_time()
-#ifndef IS_TEST_NET
-          , HIVE_HF_17_RECENT_CLAIMS
-#endif
-          );
-
-        // As a shortcut in payout processing, we use the id as an array index.
-        // The IDs must be assigned this way. The assertion is a dummy check to ensure this happens.
-        FC_ASSERT( post_rf.get_id() == reward_fund_id_type() );
-
-        modify( gpo, [&]( dynamic_global_property_object& g )
+        modify( get_reward_fund(), [&]( reward_fund_object& rfo )
         {
-          g.total_reward_fund_hive = HIVE_asset( 0 );
-          g.total_reward_shares2 = 0;
-        });
+          rfo.access_last_update() = head_block_time();
+#ifndef IS_TEST_NET
+          rfo.access_recent_claims() = HIVE_HF_17_RECENT_CLAIMS;
+#endif
+        } );
 
         apply_hardfork_17_comment_cashout_fix();
       }
@@ -316,17 +312,17 @@ void database::apply_hardfork( uint32_t hardfork )
       {
         modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
         {
-          gpo.vote_power_reserve_rate = HIVE_REDUCED_VOTE_POWER_RATE;
+          gpo.set_vote_power_reserve_rate( HIVE_REDUCED_VOTE_POWER_RATE );
         });
 
-        modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object &rfo )
+        modify( get_reward_fund(), [&]( reward_fund_object& rfo )
         {
 #ifndef IS_TEST_NET
-          rfo.recent_claims = HIVE_HF_19_RECENT_CLAIMS;
+          rfo.access_recent_claims() = HIVE_HF_19_RECENT_CLAIMS;
 #endif
-          rfo.author_reward_curve = curve_id::linear;
-          rfo.curation_reward_curve = curve_id::square_root;
-        });
+          rfo.set_author_reward_curve( curve_id::linear );
+          rfo.set_curation_reward_curve( curve_id::square_root );
+        } );
 
         /* Remove all 0 delegation objects */
         vector< const vesting_delegation_object* > to_remove;
@@ -354,11 +350,11 @@ void database::apply_hardfork( uint32_t hardfork )
         const auto& dgpo = get_dynamic_global_properties();
         modify( dgpo, [&]( dynamic_global_property_object& gpo )
         {
-          gpo.delegation_return_period = HIVE_DELEGATION_RETURN_PERIOD_HF20;
-          gpo.reverse_auction_seconds = HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF20;
-          gpo.hbd_stop_percent = HIVE_HBD_STOP_PERCENT_HF20;
-          gpo.hbd_start_percent = HIVE_HBD_START_PERCENT_HF20;
-          gpo.available_account_subsidies = 0;
+          gpo.set_delegation_return_period( HIVE_DELEGATION_RETURN_PERIOD_HF20 );
+          gpo.set_reverse_auction_seconds( HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF20 );
+          gpo.set_hbd_stop_percent( HIVE_HBD_STOP_PERCENT_HF20 );
+          gpo.set_hbd_start_percent( HIVE_HBD_START_PERCENT_HF20 );
+          gpo.set_available_account_subsidies( 0 );
         } );
 
         const auto& wso = get_witness_schedule_object();
@@ -386,7 +382,7 @@ void database::apply_hardfork( uint32_t hardfork )
         fc::variant resource_params_var = fc::json::from_string( resource_params_json, fc::json::format_validation_mode::full, fc::json::strict_parser );
         std::vector< std::pair< fc::variant, std::pair< fc::variant_object, fc::variant_object > > > resource_params_pairs;
         fc::from_variant( resource_params_var, resource_params_pairs );
-        fc::time_point_sec now = dgpo.time;
+        fc::time_point_sec now = dgpo.get_head_block_time();
 
         const auto& rc_params = create< rc_resource_param_object >( [&]( rc_resource_param_object& params_obj )
         {
@@ -435,12 +431,12 @@ void database::apply_hardfork( uint32_t hardfork )
     {
       modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        gpo.proposal_fund_percent = HIVE_PROPOSAL_FUND_PERCENT_HF21;
-        gpo.content_reward_percent = HIVE_CONTENT_REWARD_PERCENT_HF21;
-        gpo.vesting_reward_percent = 0;
-        gpo.downvote_pool_percent = HIVE_DOWNVOTE_POOL_PERCENT_HF21;
-        gpo.reverse_auction_seconds = HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF21;
-      });
+        gpo.set_proposal_fund_percent( HIVE_PROPOSAL_FUND_PERCENT_HF21 );
+        gpo.set_content_reward_percent( HIVE_CONTENT_REWARD_PERCENT_HF21 );
+        gpo.set_vesting_reward_percent( 0 );
+        gpo.set_downvote_pool_percent( HIVE_DOWNVOTE_POOL_PERCENT_HF21 );
+        gpo.set_reverse_auction_seconds( HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF21 );
+      } );
 
       const auto treasury_name = get_treasury_name();
 
@@ -454,16 +450,16 @@ void database::apply_hardfork( uint32_t hardfork )
 
       lock_account( get_treasury() );
 
-      modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
+      modify( get_reward_fund(), [&]( reward_fund_object& rfo )
       {
-        rfo.percent_curation_rewards = 40 * HIVE_1_PERCENT;
-        rfo.author_reward_curve = convergent_linear;
-        rfo.curation_reward_curve = convergent_square_root;
-        rfo.content_constant = HIVE_CONTENT_CONSTANT_HF21;
+        rfo.set_percent_curation_rewards( 40 * HIVE_1_PERCENT );
+        rfo.set_author_reward_curve( convergent_linear );
+        rfo.set_curation_reward_curve( convergent_square_root );
+        rfo.set_content_constant( HIVE_CONTENT_CONSTANT_HF21 );
 #ifndef  IS_TEST_NET
-        rfo.recent_claims = HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS;
+        rfo.access_recent_claims() = HIVE_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS;
 #endif
-      });
+      } );
     }
     break;
     case HIVE_HARDFORK_0_22:
@@ -497,26 +493,26 @@ void database::apply_hardfork( uint32_t hardfork )
     }
     case HIVE_HARDFORK_1_25:
     {
-      modify( get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
+      modify( get_reward_fund(), [&]( reward_fund_object& rfo )
       {
-        rfo.author_reward_curve = convergent_linear;
-        rfo.curation_reward_curve = convergent_square_root;
-        rfo.content_constant = HIVE_CONTENT_CONSTANT_HF21;
-      });
+        rfo.set_author_reward_curve( convergent_linear );
+        rfo.set_curation_reward_curve( convergent_square_root );
+        rfo.set_content_constant( HIVE_CONTENT_CONSTANT_HF21 );
+      } );
       modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        gpo.reverse_auction_seconds = HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF25;
-        gpo.early_voting_seconds    = HIVE_EARLY_VOTING_SECONDS_HF25;
-        gpo.mid_voting_seconds      = HIVE_MID_VOTING_SECONDS_HF25;
-      });
+        gpo.set_reverse_auction_seconds( HIVE_REVERSE_AUCTION_WINDOW_SECONDS_HF25 );
+        gpo.set_early_voting_seconds( HIVE_EARLY_VOTING_SECONDS_HF25 );
+        gpo.set_mid_voting_seconds( HIVE_MID_VOTING_SECONDS_HF25 );
+      } );
       break;
     }
     case HIVE_HARDFORK_1_26:
     {
       modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
       {
-        gpo.hbd_stop_percent = HIVE_HBD_STOP_PERCENT_HF26;
-        gpo.hbd_start_percent = HIVE_HBD_START_PERCENT_HF26;
+        gpo.set_hbd_stop_percent( HIVE_HBD_STOP_PERCENT_HF26 );
+        gpo.set_hbd_start_percent( HIVE_HBD_START_PERCENT_HF26 );
       } );
       const auto& fwso = create<witness_schedule_object>( [&]( witness_schedule_object& future_witness_schedule )
       {
@@ -541,14 +537,14 @@ void database::apply_hardfork( uint32_t hardfork )
       // that still exceeds the target is reduced; a fund already at or below it is left alone.
       // That includes a fund still at zero: IS_TEST_NET builds skip the mainnet seeds, so
       // tests explicitly exercise both seeded and empty funds.
-      const auto& post_rf = get< reward_fund_object, by_name >( HIVE_POST_REWARD_FUND_NAME );
+      const auto& post_rf = get_reward_fund();
       const uint128_t target = PIXA_HF29_RECENT_CLAIMS;
       modify( post_rf, [&]( reward_fund_object& rfo )
       {
-        rfo.recent_claims = std::min( rfo.recent_claims, target );
-        rfo.last_update = head_block_time();
+        rfo.access_recent_claims() = std::min( rfo.get_recent_claims(), target );
+        rfo.access_last_update() = head_block_time();
       } );
-      ilog( "HF29: post reward fund recent_claims is now ${claims}", ( "claims", post_rf.recent_claims ) );
+      ilog( "HF29: post reward fund recent_claims is now ${claims}", ( "claims", post_rf.get_recent_claims() ) );
 
       // Record the scaled quorum that the witness schedule now uses, so it is visible over the
       // API. This stored value is descriptive after HF29: witness_schedule.cpp recomputes the
@@ -601,7 +597,7 @@ void database::apply_hardfork( uint32_t hardfork )
     consolidate_treasury_balance();
   }
   // HF 24 updates blockchain configuration.
-  if (hardfork == HIVE_HARDFORK_1_24)
+  if( hardfork == HIVE_HARDFORK_1_24 )
   {
     const auto current_blockchain_config = protocol::get_config(get_treasury_name(), get_chain_id());
     fc::variant current_blockchain_config_as_variant;

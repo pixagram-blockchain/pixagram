@@ -2,10 +2,11 @@
 #include <hive/chain/hive_fwd.hpp>
 
 #include <hive/plugins/account_history_rocksdb/account_history_rocksdb_plugin.hpp>
+#include <hive/plugins/account_history_rocksdb/account_history_rocksdb_objects_multiindex.hpp>
 
 #include <hive/chain/database.hpp>
 #include <hive/chain/notifications.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
 #include <hive/chain/index.hpp>
 #include <chainbase/chainbase.inl>
 #include <hive/chain/util/impacted.hpp>
@@ -167,9 +168,9 @@ public:
       on_wipe();
     }, _self );
 
-    _on_flush_conn = _mainDb.add_flush_handler( [&]()
+    _on_flush_conn = _mainDb.add_flush_handler( [&]( bool force_storage_flush )
     {
-      on_flush();
+      on_flush( force_storage_flush );
     }, _self );
 
     HIVE_ADD_PLUGIN_INDEX(_mainDb, volatile_operation_index);
@@ -201,6 +202,21 @@ public:
     hive::utilities::disconnect_signal(_on_fail_apply_block_conn);
     hive::utilities::disconnect_signal(_on_wipe_conn);
     hive::utilities::disconnect_signal(_on_flush_conn);
+  }
+
+  /// Runs under the chain write lock: the chain plugin's write thread keeps applying blocks until
+  /// chain_plugin::plugin_shutdown(), which comes after ours. Without the lock a block in progress
+  /// can still be writing into _writeBuffer (e.g. on_irreversible_block -> importOperation) while
+  /// shutdownDb() flushes it, and two concurrent submits of the same WriteBatch corrupt it or
+  /// deadlock inside RocksDB. Holding the lock lets that block finish; disconnecting the signals
+  /// first means no later block can reach this plugin.
+  void shutdown_under_write_lock()
+  {
+    _mainDb.with_write_lock( [&]()
+    {
+      disconnect_signals();
+      shutdownDb();
+    } );
   }
 
   void printReport(uint32_t blockNo, const char* detailText) const;
@@ -300,7 +316,7 @@ private:
   void on_post_apply_block(const block_notification& bn);
 
   void on_wipe();
-  void on_flush();
+  void on_flush( bool force_storage_flush );
 
   void collectOptions(const bpo::variables_map& options);
 
@@ -1271,9 +1287,16 @@ void account_history_rocksdb_plugin::impl::on_irreversible_block( uint32_t block
   _provider->update_lib(block_num);
 }
 
-void account_history_rocksdb_plugin::impl::on_flush()
+void account_history_rocksdb_plugin::impl::on_flush( bool force_storage_flush )
 {
-  _provider->flushDb();
+  // On the per-block path only the pending write batch is submitted: that is what keeps this
+  // store in step with flushed shared memory. Forcing all column families out into SST files
+  // on every flush is what produced a near-empty file per column family per flush, growing the
+  // open-file count without bound (issue #869).
+  if( force_storage_flush )
+    _provider->flushDb();
+  else
+    _provider->flushWriteBuffer();
 }
 
 void account_history_rocksdb_plugin::impl::on_post_apply_block(const block_notification& bn)
@@ -1298,45 +1321,45 @@ void account_history_rocksdb_plugin::impl::on_post_apply_block(const block_notif
         bool balances_changed = saved_balance_iter == _saved_balances.end();
         saved_balances& saved_balance_record = _saved_balances[account_iter->get_name()];
 
-        if (saved_balance_record.hive_balance != account.balance)
+        if (saved_balance_record.hive_balance != account.get_hive_balance())
         {
-          saved_balance_record.hive_balance = account.balance;
+          saved_balance_record.hive_balance = account.get_hive_balance();
           balances_changed = true;
         }
-        if (saved_balance_record.savings_hive_balance != account.savings_balance)
+        if (saved_balance_record.savings_hive_balance != account.get_hive_savings())
         {
-          saved_balance_record.savings_hive_balance = account.savings_balance;
+          saved_balance_record.savings_hive_balance = account.get_hive_savings();
           balances_changed = true;
         }
-        if (saved_balance_record.hbd_balance != account.hbd_balance)
+        if (saved_balance_record.hbd_balance != account.get_hbd_balance())
         {
-          saved_balance_record.hbd_balance = account.hbd_balance;
+          saved_balance_record.hbd_balance = account.get_hbd_balance();
           balances_changed = true;
         }
-        if (saved_balance_record.savings_hbd_balance != account.savings_hbd_balance)
+        if (saved_balance_record.savings_hbd_balance != account.get_hbd_savings())
         {
-          saved_balance_record.savings_hbd_balance = account.savings_hbd_balance;
+          saved_balance_record.savings_hbd_balance = account.get_hbd_savings();
           balances_changed = true;
         }
 
-        if (saved_balance_record.reward_hbd_balance != account.reward_hbd_balance)
+        if (saved_balance_record.reward_hbd_balance != account.get_hbd_rewards())
         {
-          saved_balance_record.reward_hbd_balance = account.reward_hbd_balance;
+          saved_balance_record.reward_hbd_balance = account.get_hbd_rewards();
           balances_changed = true;
         }
-        if (saved_balance_record.reward_hive_balance != account.reward_hive_balance)
+        if (saved_balance_record.reward_hive_balance != account.get_hive_rewards())
         {
-          saved_balance_record.reward_hive_balance = account.reward_hive_balance;
+          saved_balance_record.reward_hive_balance = account.get_hive_rewards();
           balances_changed = true;
         }
-        if (saved_balance_record.reward_vesting_balance != account.reward_vesting_balance)
+        if (saved_balance_record.reward_vesting_balance != account.get_vest_rewards())
         {
-          saved_balance_record.reward_vesting_balance = account.reward_vesting_balance;
+          saved_balance_record.reward_vesting_balance = account.get_vest_rewards();
           balances_changed = true;
         }
-        if (saved_balance_record.reward_vesting_hive_balance != account.reward_vesting_hive)
+        if (saved_balance_record.reward_vesting_hive_balance != account.get_vest_rewards_as_hive())
         {
-          saved_balance_record.reward_vesting_hive_balance = account.reward_vesting_hive;
+          saved_balance_record.reward_vesting_hive_balance = account.get_vest_rewards_as_hive();
           balances_changed = true;
         }
 
@@ -1345,14 +1368,14 @@ void account_history_rocksdb_plugin::impl::on_post_apply_block(const block_notif
           saved_balance_record.vesting_shares = account.get_vesting();
           balances_changed = true;
         }
-        if (saved_balance_record.delegated_vesting_shares != account.delegated_vesting_shares)
+        if (saved_balance_record.delegated_vesting_shares != account.get_delegated_vesting())
         {
-          saved_balance_record.delegated_vesting_shares = account.delegated_vesting_shares;
+          saved_balance_record.delegated_vesting_shares = account.get_delegated_vesting();
           balances_changed = true;
         }
-        if (saved_balance_record.received_vesting_shares != account.received_vesting_shares)
+        if (saved_balance_record.received_vesting_shares != account.get_received_vesting())
         {
-          saved_balance_record.received_vesting_shares = account.received_vesting_shares;
+          saved_balance_record.received_vesting_shares = account.get_received_vesting();
           balances_changed = true;
         }
 
@@ -1455,9 +1478,7 @@ void account_history_rocksdb_plugin::plugin_shutdown()
   /// chain_plugin::plugin_shutdown() -> database::close() -> notify_flush(),
   /// which fires _flush_signal after AH RocksDB has already been finalized.
   /// Note: disconnect_signals() is idempotent, safe to call from both here and ~impl().
-  _my->disconnect_signals();
-
-  _my->shutdownDb();
+  _my->shutdown_under_write_lock();
 }
 
 void account_history_rocksdb_plugin::find_account_history_data(const account_name_type& name, uint64_t start, uint32_t limit,

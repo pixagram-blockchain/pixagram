@@ -1,14 +1,14 @@
 
 #include <hive/chain/rc/resource_count.hpp>
 #include <hive/chain/rc/resource_sizes.hpp>
-#include <hive/chain/rc/rc_objects.hpp>
+#include <hive/chain/rc/rc_objects_multiindex.hpp>
 #include <hive/chain/rc/rc_utility.hpp>
 
 #include <hive/protocol/hive_custom_operations.hpp>
 
-#include <hive/chain/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
 #include <hive/chain/database.hpp>
-#include <hive/chain/witness_objects_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects_multiindex.hpp>
 
 namespace hive { namespace chain {
 
@@ -54,11 +54,11 @@ struct count_differential_operation_visitor
 
     int64_t usage = 0;
     if( op.owner )
-      usage += get_authority_dynamic_size( auth_ptr->owner );
+      usage += get_authority_dynamic_size( auth_ptr->get_owner() );
     if( op.active )
-      usage += get_authority_dynamic_size( auth_ptr->active );
+      usage += get_authority_dynamic_size( auth_ptr->get_active() );
     if( op.posting )
-      usage += get_authority_dynamic_size( auth_ptr->posting );
+      usage += get_authority_dynamic_size( auth_ptr->get_posting() );
 
     //metadata not handled by differential usage because it could be a source of RC differences
     //on different nodes, since its existence depends on if metadata plugin is attached
@@ -74,11 +74,11 @@ struct count_differential_operation_visitor
 
     int64_t usage = 0;
     if( op.owner )
-      usage += get_authority_dynamic_size( auth_ptr->owner );
+      usage += get_authority_dynamic_size( auth_ptr->get_owner() );
     if( op.active )
-      usage += get_authority_dynamic_size( auth_ptr->active );
+      usage += get_authority_dynamic_size( auth_ptr->get_active() );
     if( op.posting )
-      usage += get_authority_dynamic_size( auth_ptr->posting );
+      usage += get_authority_dynamic_size( auth_ptr->get_posting() );
 
     //metadata not handled by differential usage because it could be a source of RC differences
     //on different nodes, since its existence depends on if metadata plugin is attached
@@ -93,7 +93,7 @@ struct count_differential_operation_visitor
       return false;
 
     //if transaction qualifies for subsidy old state usage will be ignored
-    state_bytes_count += get_authority_dynamic_size( auth_ptr->owner );
+    state_bytes_count += get_authority_dynamic_size( auth_ptr->get_owner() );
     return true;
   }
 

@@ -8,7 +8,7 @@
 
 #include <hive/chain/notifications.hpp>
 #include <hive/chain/database_exceptions.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 
 #define DEFAULT_QUEEN_TARGET_BLOCK_SIZE 0 // max blocks allowed by witnesses
 #define DEFAULT_QUEEN_TARGET_TX_COUNT 0 // unlimited transactions
@@ -171,7 +171,7 @@ void queen_plugin_impl::prepare_for_new_block()
 
   // reset counters
   const auto& dgpo = _db.get_dynamic_global_properties();
-  uint32_t max_block_size = dgpo.maximum_block_size - 256; // 256 taken from trx_size_limit check in database.cpp
+  uint32_t max_block_size = dgpo.get_maximum_block_size() - 256; // 256 taken from trx_size_limit check in database.cpp
   if( _target_block_size )
     remaining_block_size = std::min( _target_block_size, max_block_size );
   else

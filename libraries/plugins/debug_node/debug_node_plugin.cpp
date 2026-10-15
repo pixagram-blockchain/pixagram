@@ -3,11 +3,11 @@
 #include <hive/plugins/witness/block_producer.hpp>
 #include <hive/plugins/witness/witness_plugin.hpp>
 
-#include <hive/chain/account_object.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
-#include <hive/chain/global_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/account_object.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/notifications.hpp>
-#include <hive/chain/witness_objects.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
 #include <hive/chain/database_exceptions.hpp>
 
 #include <hive/chain/rc/rc_utility.hpp>
@@ -36,9 +36,12 @@ class debug_generate_block_flow_control final : public hive::chain::generate_blo
 public:
   using hive::chain::generate_block_flow_control::generate_block_flow_control;
   debug_generate_block_flow_control( const fc::time_point_sec _block_ts, const protocol::account_name_type& _wo,
-    const fc::ecc::private_key& _key, uint32_t _skip, bool _print_stats )
-    : generate_block_flow_control( _block_ts, _wo, _key, _skip ), print_stats( _print_stats ) {}
+    const fc::ecc::private_key& _key, uint32_t _skip, bool _print_stats, bool _skip_tx_reapplication )
+  : generate_block_flow_control( _block_ts, _wo, _key, _skip ),
+    print_stats( _print_stats ), skip_tx_reapplication( _skip_tx_reapplication ) {}
   virtual ~debug_generate_block_flow_control() = default;
+
+  virtual bool skip_transaction_reapplication() const override { return skip_tx_reapplication; }
 
   virtual void on_worker_done( appbase::application& app ) const override
   {
@@ -53,6 +56,7 @@ private:
   virtual const char* buffer_type() const override { return "debug"; }
 
   bool print_stats = true;
+  bool skip_tx_reapplication = false;
 };
 
 class debug_node_plugin_impl
@@ -65,7 +69,7 @@ class debug_node_plugin_impl
     chain::database&                          _db;
     plugins::witness::witness_plugin*         _witness_plugin_ptr = nullptr;
 
-    typedef std::vector< std::pair< protocol::transaction_id_type, bool> > current_debug_update_transactions;
+    typedef std::vector< std::pair< protocol::transaction_id_type, bool > > current_debug_update_transactions;
     current_debug_update_transactions         _current_debug_update_txs;
     bool                                      _force_new_artificial_transaction_for_debug_update = true;
 
@@ -153,8 +157,8 @@ const protocol::transaction_id_type& debug_node_plugin::make_artificial_transact
 
   const auto& dgpo = database().get_dynamic_global_properties();
   protocol::signed_transaction tx;
-  tx.set_reference_block( dgpo.head_block_id );
-  tx.set_expiration( dgpo.time + HIVE_MAX_TIME_UNTIL_EXPIRATION );
+  tx.set_reference_block( dgpo.get_head_block_id() );
+  tx.set_expiration( dgpo.get_head_block_time() + HIVE_MAX_TIME_UNTIL_EXPIRATION );
   tx.operations.push_back( op );
 
   const auto pack_type = serialization_mode_controller::get_current_pack();
@@ -172,6 +176,31 @@ const protocol::transaction_id_type& debug_node_plugin::make_artificial_transact
   return my->_current_debug_update_txs.back().first;
 }
 
+void debug_node_plugin::debug_push_pending_transaction( const std::shared_ptr<hive::chain::full_transaction_type>& tx )
+{
+  auto& db = database();
+  auto now = db.head_block_time();
+
+  if( tx->get_runtime_expiration() == fc::time_point_sec::min() )
+  {
+    auto expiration = tx->get_transaction().expiration;
+    if( db.has_hardfork( HIVE_HARDFORK_1_28_EXPIRATION_TIME ) )
+    {
+      HIVE_ASSERT( expiration <= now + HIVE_MAX_TIME_UNTIL_SIGNATURE_EXPIRATION, hive::chain::transaction_expiration_exception,
+        "", (expiration)(now)("max_til_exp", HIVE_MAX_TIME_UNTIL_SIGNATURE_EXPIRATION) );
+      tx->set_runtime_expiration( std::min( expiration, now + HIVE_MAX_TIME_UNTIL_EXPIRATION ) );
+    }
+    else
+    {
+      HIVE_ASSERT( expiration <= now + HIVE_MAX_TIME_UNTIL_EXPIRATION, hive::chain::transaction_expiration_exception,
+        "", (expiration)(now)("max_til_exp", HIVE_MAX_TIME_UNTIL_EXPIRATION) );
+      tx->set_runtime_expiration( expiration );
+    }
+  }
+
+  db._pending_tx.push_back( tx );
+  db._pending_tx_size += tx->get_transaction_size();
+}
 
 /*
 void debug_apply_update( chain::database& db, const fc::variant_object& vo, bool logging )
@@ -269,23 +298,24 @@ void debug_node_plugin::calculate_modifiers_according_to_new_price(const VEST_pr
   hive_modifier = HIVE_asset( 0 );
   vest_modifier = VEST_asset( 0 );
 
-  auto alpha_x = new_price.get_base().amount * total_hive.amount;
-  auto alpha_y = new_price.get_quote().amount * total_vests.amount;
+  fc::uint128_t a = total_vests.amount.value;
+  fc::uint128_t b = total_hive.amount.value;
+
+  auto alpha_x = fc::uint128_t( new_price.get_base().amount.value ) * b;
+  auto alpha_y = fc::uint128_t( new_price.get_quote().amount.value ) * a;
 
   if( alpha_x >= alpha_y )
   {
     /// Means that alpha is >= 1, so we will be increasing vests pool
-    fc::uint128_t a = total_vests.amount.value;
-    a *= ( alpha_x - alpha_y ).value;
-    a /= alpha_y.value;
+    a *= alpha_x - alpha_y;
+    a /= alpha_y;
     vest_modifier = VEST_asset( fc::uint128_to_int64(a) );
   }
   else
   {
     /// Means that alpha is < 1, so we will be increasing Hive pool
-    fc::uint128_t b = total_hive.amount.value;
-    b *= ( alpha_y - alpha_x ).value;
-    b /= alpha_x.value;
+    b *= alpha_y - alpha_x;
+    b /= alpha_x;
     hive_modifier = HIVE_asset( fc::uint128_to_int64(b) );
   }
 }
@@ -297,41 +327,40 @@ void debug_node_plugin::debug_set_vest_price( const VEST_price& new_price,
   HIVE_asset hive_modifier;
 
   const auto& dgpo = database().get_dynamic_global_properties();
-  calculate_modifiers_according_to_new_price( new_price, dgpo.total_vesting_fund_hive, dgpo.total_vesting_shares, hive_modifier, vest_modifier );
+  calculate_modifiers_according_to_new_price( new_price, dgpo.get_total_vesting_fund_hive(), dgpo.get_total_vesting_shares(), hive_modifier, vest_modifier );
   ilog( "vest_modifier=${vest_modifier}, hive_modifier=${hive_modifier}", ( vest_modifier ) ( hive_modifier ) );
 
   ilog( "Before modification: total_vesting_shares=${vest}, total_vesting_fund_hive=${hive}",
-    ( "vest", dgpo.total_vesting_shares )( "hive", dgpo.total_vesting_fund_hive ) );
+    ( "vest", dgpo.get_total_vesting_shares() )( "hive", dgpo.get_total_vesting_fund_hive() ) );
 
   debug_update( [ this, vest_modifier, hive_modifier ]( chain::database& db )
   {
-    const hive::chain::account_object& miner_account = db.get_account( HIVE_INIT_MINER_NAME );
-    auto _update_initminer = [ &db, &vest_modifier, &miner_account ]()
+    hive::chain::temp_VEST_balance new_vests;
+    db.modify( db.get_dynamic_global_properties(), [&]( hive::chain::dynamic_global_property_object& p )
     {
-      /// If we increased vests pool, we need to put them to initminer account to avoid validate_invariants failure 
-      db.modify( miner_account, [ &vest_modifier ]( hive::chain::account_object& account )
+      new_vests = p.issue_VESTS( vest_modifier );
+      hive::chain::temp_HIVE_balance new_hive = p.issue_HIVE( hive_modifier );
+      p.access_total_vesting_fund_hive().transfer_from( new_hive );
+    } );
+    const hive::chain::account_object& miner_account = db.get_account( HIVE_INIT_MINER_NAME );
+    auto _update_initminer = [&]()
+    {
+      // new vests need to be put somewhere, on initminer account in this case
+      db.modify( miner_account, [&]( hive::chain::account_object& account )
       {
-        account.vesting_shares += vest_modifier;
+        account.access_vesting().transfer_from( new_vests );
       } );
     };
     db.rc().update_rc_for_custom_action( _update_initminer, miner_account );
-
-    db.modify( db.get_dynamic_global_properties(), [ &vest_modifier, &hive_modifier ]( hive::chain::dynamic_global_property_object& p )
-    {
-      p.total_vesting_shares += vest_modifier;
-      p.total_vesting_fund_hive += hive_modifier;
-      p.current_supply += hive_modifier;
-      p.virtual_supply += hive_modifier;
-    } );
   }, hive::chain::database::skip_nothing, transaction_id );
 
   ilog( "After modification: total_vesting_shares=${vest}, total_vesting_fund_hive=${hive}",
-    ( "vest", dgpo.total_vesting_shares )( "hive", dgpo.total_vesting_fund_hive ) );
+    ( "vest", dgpo.get_total_vesting_shares() )( "hive", dgpo.get_total_vesting_fund_hive() ) );
   ilog( "Final price=${p}", ( "p", dgpo.get_vesting_share_price() ) );
 }
 
 uint32_t debug_node_plugin::debug_generate_blocks( fc::optional<fc::ecc::private_key> debug_private_key,
-  uint32_t count, uint32_t skip, uint32_t miss_blocks, bool immediate_generation )
+  uint32_t count, uint32_t skip, uint32_t miss_blocks, bool immediate_generation, bool skip_tx_reapplication )
 {
   if( count == 0 )
     return 0;
@@ -376,8 +405,8 @@ uint32_t debug_node_plugin::debug_generate_blocks( fc::optional<fc::ecc::private
       break;
     }
 
-    auto generate_block_ctrl = std::make_shared< detail::debug_generate_block_flow_control >(scheduled_time,
-      scheduled_witness_name, private_key, skip, logging);
+    auto generate_block_ctrl = std::make_shared< detail::debug_generate_block_flow_control >( scheduled_time,
+      scheduled_witness_name, private_key, skip, logging, skip_tx_reapplication );
 
     if( immediate_generation ) // use this mode when called from debug node API (it takes write lock) - also in most unit tests
     {

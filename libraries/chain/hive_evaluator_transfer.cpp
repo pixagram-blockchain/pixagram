@@ -7,7 +7,7 @@
 #include <hive/chain/database.hpp>
 #include <hive/chain/database_virtual_operations.hpp>
 #include <hive/chain/rc/rc_utility.hpp>
-#include <hive/chain/account_object_multiindex.hpp>
+#include <hive/chain/detail/state/account_object_multiindex.hpp>
 #include <hive/chain/detail/state/convert_request_object_multiindex.hpp>
 #include <hive/chain/detail/state/collateralized_convert_request_object_multiindex.hpp>
 #include <hive/chain/detail/state/feed_history_object.hpp>
@@ -16,8 +16,8 @@
 #include <hive/chain/detail/state/savings_withdraw_object_multiindex.hpp>
 #include <hive/chain/detail/state/withdraw_vesting_route_object_multiindex.hpp>
 #include <hive/chain/detail/state/recurrent_transfer_object_multiindex.hpp>
-#include <hive/chain/witness_objects.hpp>
-#include <hive/chain/global_property_object_multiindex.hpp>
+#include <hive/chain/detail/state/witness_objects.hpp>
+#include <hive/chain/detail/state/global_property_object_multiindex.hpp>
 #include <hive/chain/evaluator_registry.hpp>
 
 #include <hive/chain/chain_validation.hpp>
@@ -89,15 +89,33 @@ void escrow_transfer_evaluator::do_apply( const escrow_transfer_operation& o )
     HBD_asset o_hbd_amount = o.get_hbd_amount();
     HIVE_asset hive_spent = o_hive_amount;
     HBD_asset hbd_spent = o_hbd_amount;
+    HIVE_asset hive_fee;
+    HBD_asset hbd_fee;
     if( o.fee.symbol == HIVE_SYMBOL )
-      hive_spent += HIVE_asset( o.fee );
+    {
+      hive_fee = HIVE_asset( o.fee );
+      hive_spent += hive_fee;
+    }
     else
-      hbd_spent += HBD_asset( o.fee );
+    {
+      hbd_fee = HBD_asset( o.fee );
+      hbd_spent += hbd_fee;
+    }
 
-    _db.adjust_balance( from_account, -hive_spent );
-    _db.adjust_balance( from_account, -hbd_spent );
+    temp_HIVE_balance escrow_hive;
+    _db.adjust_balance( from_account, escrow_hive, -hive_spent );
+    temp_HBD_balance escrow_hbd;
+    _db.adjust_balance( from_account, escrow_hbd, -hbd_spent );
 
-    _db.create<escrow_object>( from_account, to_account, agent_account, o_hive_amount, o_hbd_amount, o.fee, o.ratification_deadline, o.escrow_expiration, o.escrow_id );
+    temp_balance escrow_fee( o.fee.symbol );
+    if( o.fee.symbol == HIVE_SYMBOL )
+      escrow_fee.transfer_from( escrow_hive, hive_fee );
+    else
+      escrow_fee.transfer_from( escrow_hbd, hbd_fee );
+
+    _db.create<escrow_object>( from_account, to_account, agent_account,
+      std::move( escrow_hive ), std::move( escrow_hbd ), std::move( escrow_fee ),
+      o.ratification_deadline, o.escrow_expiration, o.escrow_id );
     _db.modify( from_account, []( account_object& a )
     {
       a.pending_escrow_transfers++;
@@ -110,66 +128,54 @@ void escrow_approve_evaluator::do_apply( const escrow_approve_operation& o )
 {
   try
   {
-
     const auto& escrow = _db.get_escrow( o.from, o.escrow_id );
 
-    HIVE_CHAIN_STATE_ASSERT( escrow.to == o.to, o.to, "Operation 'to' (${o}) does not match escrow 'to' (${e}).", ("o", o.to)("e", escrow.to) );
-    HIVE_CHAIN_STATE_ASSERT( escrow.agent == o.agent, o.agent, "Operation 'agent' (${a}) does not match escrow 'agent' (${e}).", ("o", o.agent)("e", escrow.agent) );
-    HIVE_CHAIN_TIME_ASSERT( escrow.ratification_deadline >= _db.head_block_time(), escrow.ratification_deadline, "The escrow ratification deadline has passed. Escrow can no longer be ratified." );
+    HIVE_CHAIN_STATE_ASSERT( escrow.get_to() == o.to, o.to, "Operation 'to' (${o}) does not match escrow 'to' (${e}).", ("o", o.to)("e", escrow.get_to()) );
+    HIVE_CHAIN_STATE_ASSERT( escrow.get_agent() == o.agent, o.agent, "Operation 'agent' (${a}) does not match escrow 'agent' (${e}).", ("o", o.agent)("e", escrow.get_agent()) );
+    HIVE_CHAIN_TIME_ASSERT( escrow.get_ratification_deadline() >= _db.head_block_time(), escrow.get_ratification_deadline(), "The escrow ratification deadline has passed. Escrow can no longer be ratified." );
 
     bool reject_escrow = !o.approve;
 
     if( o.who == o.to )
     {
-      HIVE_CHAIN_STATE_ASSERT( !escrow.to_approved, o.to, "Account 'to' (${t}) has already approved the escrow.", ("t", o.to) );
+      HIVE_CHAIN_STATE_ASSERT( !escrow.is_to_approved(), o.to, "Account 'to' (${t}) has already approved the escrow.", ("t", o.to) );
 
       if( !reject_escrow )
       {
         _db.modify( escrow, [&]( escrow_object& esc )
         {
-          esc.to_approved = true;
-        });
+          esc.approve_to();
+        } );
       }
     }
     if( o.who == o.agent )
     {
-      HIVE_CHAIN_STATE_ASSERT( !escrow.agent_approved, o.agent, "Account 'agent' (${a}) has already approved the escrow.", ("a", o.agent) );
+      HIVE_CHAIN_STATE_ASSERT( !escrow.is_agent_approved(), o.agent, "Account 'agent' (${a}) has already approved the escrow.", ("a", o.agent) );
 
       if( !reject_escrow )
       {
         _db.modify( escrow, [&]( escrow_object& esc )
         {
-          esc.agent_approved = true;
-        });
+          esc.approve_agent();
+        } );
       }
     }
 
     if( reject_escrow )
     {
-      _db.adjust_balance( o.from, escrow.get_hive_balance() );
-      _db.adjust_balance( o.from, escrow.get_hbd_balance() );
-      _db.adjust_balance( o.from, escrow.get_fee() );
-
-      push_virtual_operation( _db, escrow_rejected_operation( o.from, o.to, o.agent, o.escrow_id,
-        escrow.get_hbd_balance(), escrow.get_hive_balance(), escrow.get_fee() ) );
-
-      _db.modify( _db.get_account( escrow.from ), []( account_object& a )
-      {
-        a.pending_escrow_transfers--;
-      } );
-      _db.remove( escrow );
+      _db.remove_escrow( escrow );
     }
-    else if( escrow.to_approved && escrow.agent_approved )
+    else if( escrow.is_to_approved() && escrow.is_agent_approved() )
     {
-      _db.adjust_balance( o.agent, escrow.get_fee() );
-
-      push_virtual_operation( _db, escrow_approved_operation( o.from, o.to, o.agent,
-        o.escrow_id, escrow.get_fee() ) );
-
+      temp_balance fee_released( escrow.get_fee().symbol );
       _db.modify( escrow, [&]( escrow_object& esc )
       {
-        esc.pending_fee.amount = 0;
-      });
+        esc.access_fee().transfer_to( fee_released );
+      } );
+
+      auto vop = escrow_approved_operation( o.from, o.to, o.agent, o.escrow_id, fee_released.as_asset() );
+      _db.adjust_balance( o.agent, fee_released, fee_released.as_asset() );
+      push_virtual_operation( _db, vop );
     }
   }
   FC_CAPTURE_AND_RETHROW( (o) )
@@ -182,16 +188,16 @@ void escrow_dispute_evaluator::do_apply( const escrow_dispute_operation& o )
     _db.get_account( o.from ); // Verify from account exists
 
     const auto& e = _db.get_escrow( o.from, o.escrow_id );
-    HIVE_CHAIN_TIME_ASSERT( _db.head_block_time() < e.escrow_expiration, e.escrow_expiration, "Disputing the escrow must happen before expiration." );
-    HIVE_CHAIN_STATE_ASSERT( e.to_approved && e.agent_approved && "The escrow must be approved by all parties before a dispute can be raised.", o.from, "Escrow for '${subject}' is not fully approved." );
-    HIVE_CHAIN_STATE_ASSERT( !e.disputed, o.from, "The escrow is already under dispute." );
-    HIVE_CHAIN_STATE_ASSERT( e.to == o.to && "dispute", o.to, "Operation 'to' (${o}) does not match escrow 'to' (${e}).", ("o", o.to)("e", e.to) );
-    HIVE_CHAIN_STATE_ASSERT( e.agent == o.agent && "dispute", o.agent, "Operation 'agent' (${a}) does not match escrow 'agent' (${e}).", ("o", o.agent)("e", e.agent) );
+    HIVE_CHAIN_TIME_ASSERT( _db.head_block_time() < e.get_escrow_expiration(), e.get_escrow_expiration(), "Disputing the escrow must happen before expiration." );
+    HIVE_CHAIN_STATE_ASSERT( e.is_approved() && "The escrow must be approved by all parties before a dispute can be raised.", o.from, "Escrow for '${subject}' is not fully approved." );
+    HIVE_CHAIN_STATE_ASSERT( !e.is_disputed(), o.from, "The escrow is already under dispute." );
+    HIVE_CHAIN_STATE_ASSERT( e.get_to() == o.to && "dispute", o.to, "Operation 'to' (${o}) does not match escrow 'to' (${e}).", ("o", o.to)("e", e.get_to()) );
+    HIVE_CHAIN_STATE_ASSERT( e.get_agent() == o.agent && "dispute", o.agent, "Operation 'agent' (${a}) does not match escrow 'agent' (${e}).", ("o", o.agent)("e", e.get_agent()) );
 
     _db.modify( e, [&]( escrow_object& esc )
     {
-      esc.disputed = true;
-    });
+      esc.start_dispute();
+    } );
   }
   FC_CAPTURE_AND_RETHROW( (o) )
 }
@@ -208,43 +214,45 @@ void escrow_release_evaluator::do_apply( const escrow_release_operation& o )
 
     HIVE_CHAIN_BALANCE_ASSERT( e.get_hive_balance() >= o_hive_amount, o.from, "Release amount exceeds escrow balance. Amount: ${a}, Balance: ${b}", ("a", o_hive_amount)("b", e.get_hive_balance()) );
     HIVE_CHAIN_BALANCE_ASSERT( e.get_hbd_balance() >= o_hbd_amount, o.from, "Release amount exceeds escrow balance. Amount: ${a}, Balance: ${b}", ("a", o_hbd_amount)("b", e.get_hbd_balance()) );
-    HIVE_CHAIN_STATE_ASSERT( e.to == o.to && "release", o.to, "Operation 'to' (${o}) does not match escrow 'to' (${e}).", ("o", o.to)("e", e.to) );
-    HIVE_CHAIN_STATE_ASSERT( e.agent == o.agent && "release", o.agent, "Operation 'agent' (${a}) does not match escrow 'agent' (${e}).", ("o", o.agent)("e", e.agent) );
-    HIVE_CHAIN_PERMISSION_ASSERT( o.receiver == e.from || o.receiver == e.to, o.receiver, "Funds must be released to 'from' (${f}) or 'to' (${t})", ("f", e.from)("t", e.to) );
-    HIVE_CHAIN_STATE_ASSERT( e.to_approved && e.agent_approved && "Funds cannot be released prior to escrow approval.", o.from, "Escrow for '${subject}' is not approved." );
+    HIVE_CHAIN_STATE_ASSERT( e.get_to() == o.to && "release", o.to, "Operation 'to' (${o}) does not match escrow 'to' (${e}).", ("o", o.to)("e", e.get_to()) );
+    HIVE_CHAIN_STATE_ASSERT( e.get_agent() == o.agent && "release", o.agent, "Operation 'agent' (${a}) does not match escrow 'agent' (${e}).", ("o", o.agent)("e", e.get_agent()) );
+    HIVE_CHAIN_PERMISSION_ASSERT( o.receiver == e.get_from() || o.receiver == e.get_to(), o.receiver, "Funds must be released to 'from' (${f}) or 'to' (${t})", ("f", e.get_from())("t", e.get_to()) );
+    HIVE_CHAIN_STATE_ASSERT( e.is_approved() && "Funds cannot be released prior to escrow approval.", o.from, "Escrow for '${subject}' is not approved." );
 
     // If there is a dispute regardless of expiration, the agent can release funds to either party
-    if( e.disputed )
+    if( e.is_disputed() )
     {
-      HIVE_CHAIN_PERMISSION_ASSERT( o.who == e.agent, o.who, "Only 'agent' (${a}) can release funds in a disputed escrow.", ("a", e.agent) );
+      HIVE_CHAIN_PERMISSION_ASSERT( o.who == e.get_agent(), o.who, "Only 'agent' (${a}) can release funds in a disputed escrow.", ("a", e.get_agent()) );
     }
     else
     {
-      HIVE_CHAIN_PERMISSION_ASSERT( o.who == e.from || o.who == e.to, o.who, "Only 'from' (${f}) and 'to' (${t}) can release funds from a non-disputed escrow", ("f", e.from)("t", e.to) );
+      HIVE_CHAIN_PERMISSION_ASSERT( o.who == e.get_from() || o.who == e.get_to(), o.who, "Only 'from' (${f}) and 'to' (${t}) can release funds from a non-disputed escrow", ("f", e.get_from())("t", e.get_to()) );
 
-      if( e.escrow_expiration > _db.head_block_time() )
+      if( e.get_escrow_expiration() > _db.head_block_time() )
       {
         // If there is no dispute and escrow has not expired, either party can release funds to the other.
-        if( o.who == e.from )
+        if( o.who == e.get_from() )
         {
-          HIVE_CHAIN_PERMISSION_ASSERT( o.receiver == e.to, o.who, "Only 'from' (${f}) can release funds to 'to' (${t}).", ("f", e.from)("t", e.to) );
+          HIVE_CHAIN_PERMISSION_ASSERT( o.receiver == e.get_to(), o.who, "Only 'from' (${f}) can release funds to 'to' (${t}).", ("f", e.get_from())("t", e.get_to()) );
         }
-        else if( o.who == e.to )
+        else if( o.who == e.get_to() )
         {
-          HIVE_CHAIN_PERMISSION_ASSERT( o.receiver == e.from, o.who, "Only 'to' (${t}) can release funds to 'from' (${t}).", ("f", e.from)("t", e.to) );
+          HIVE_CHAIN_PERMISSION_ASSERT( o.receiver == e.get_from(), o.who, "Only 'to' (${t}) can release funds to 'from' (${t}).", ("f", e.get_from())("t", e.get_to()) );
         }
       }
     }
     // If escrow expires and there is no dispute, either party can release funds to either party.
 
-    _db.adjust_balance( o.receiver, o_hive_amount );
-    _db.adjust_balance( o.receiver, o_hbd_amount );
-
+    temp_HIVE_balance hive_released;
+    temp_HBD_balance hbd_released;
     _db.modify( e, [&]( escrow_object& esc )
     {
-      esc.hive_balance -= o_hive_amount;
-      esc.hbd_balance -= o_hbd_amount;
+      esc.access_hive_balance().transfer_to( hive_released, o_hive_amount );
+      esc.access_hbd_balance().transfer_to( hbd_released, o_hbd_amount );
     } );
+
+    _db.adjust_balance( o.receiver, hive_released, hive_released.as_asset() );
+    _db.adjust_balance( o.receiver, hbd_released, hbd_released.as_asset() );
 
     if( e.get_hive_balance().amount == 0 && e.get_hbd_balance().amount == 0 )
     {
@@ -265,20 +273,21 @@ void transfer_evaluator::do_apply( const transfer_operation& o )
 
   if( _db.has_hardfork( HIVE_HARDFORK_1_24 ) && o.amount.symbol == HIVE_SYMBOL && _db.is_treasury( o.to ) )
   {
-    const auto &fhistory = _db.get_feed_history();
+    const auto& exchange_rate = _db.get_hbd_price();
 
-    validate_price_feed_available( fhistory, "send HIVE to treasury" );
+    validate_price_feed_available( exchange_rate, "send HIVE to treasury" );
 
     HIVE_asset o_amount( o.amount );
-    auto amount_to_transfer = o_amount * fhistory.current_median_history;
+    auto amount_to_transfer = o_amount * exchange_rate;
 
-    _db.adjust_balance( o.from, -o_amount );
-    _db.adjust_balance( o.to, amount_to_transfer );
-
-    _db.adjust_supply( -o_amount );
-
-    if( amount_to_transfer.amount > 0 )
-      _db.adjust_supply( amount_to_transfer );
+    temp_HIVE_balance hive_balance;
+    _db.adjust_balance( o.from, hive_balance, -o_amount );
+    temp_HBD_balance converted_hbd_balance;
+    _db.modify( _db.get_dynamic_global_properties(), [&]( dynamic_global_property_object& dgpo )
+    {
+      converted_hbd_balance = dgpo.convert_HIVE_to_HBD( hive_balance, exchange_rate, amount_to_transfer.amount > 0 );
+    } );
+    _db.adjust_balance( o.to, converted_hbd_balance, converted_hbd_balance.as_asset() );
 
     // o.to will always be the treasury so no need to call _db.get_treasury
     push_virtual_operation( _db, dhf_conversion_operation( o.to, o_amount, amount_to_transfer ) );
@@ -300,19 +309,20 @@ void transfer_evaluator::do_apply( const transfer_operation& o )
       "Account does not have sufficient Pixa Power for delayed votes." );
 
     _db.rc().regenerate_rc_mana( account, now );
+    temp_VEST_balance moved_vests;
     _db.modify( account, [&]( account_object& a )
     {
       if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
       {
         util::update_manabar( dgpo, a );
         a.voting_manabar.use_mana( o.amount.amount.value );
-        if( dgpo.downvote_pool_percent )
+        if( dgpo.get_downvote_pool_percent() )
         {
           a.downvote_manabar.use_mana(
-            fc::uint128_to_int64( ( uint128_t( o.amount.amount.value ) * dgpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
+            fc::uint128_to_int64( ( uint128_t( o.amount.amount.value ) * dgpo.get_downvote_pool_percent() ) / HIVE_100_PERCENT ) );
         }
       }
-      a.vesting_shares -= vests_amount;
+      moved_vests.transfer_from( a.access_vesting(), vests_amount );
     } );
     _db.rc().update_account_after_vest_change( account, now );
     _db.adjust_proxied_witness_votes( account, -o.amount.amount );
@@ -324,7 +334,7 @@ void transfer_evaluator::do_apply( const transfer_operation& o )
     {
       if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
         util::update_manabar( dgpo, a, o.amount.amount.value );
-      a.vesting_shares += vests_amount;
+      a.access_vesting().transfer_from( moved_vests );
     } );
 
     _db.rc().update_account_after_vest_change( to_account, now );
@@ -345,8 +355,9 @@ void transfer_evaluator::do_apply( const transfer_operation& o )
     HIVE_CHAIN_TREASURY_ASSERT( o.amount.symbol == HBD_SYMBOL || !_db.is_treasury( o.to ), o.to, "Can only transfer HBD or HIVE to ${s}", ( "s", o.to ) );
   }
 
-  _db.adjust_balance( o.from, -o.amount );
-  _db.adjust_balance( o.to, o.amount );
+  temp_balance transfer( o.amount.symbol );
+  _db.adjust_balance( o.from, transfer, -o.amount );
+  _db.adjust_balance( o.to, transfer, o.amount );
 }
 
 void transfer_to_vesting_evaluator::do_apply( const transfer_to_vesting_operation& o )
@@ -361,7 +372,8 @@ void transfer_to_vesting_evaluator::do_apply( const transfer_to_vesting_operatio
     HIVE_CHAIN_TREASURY_ASSERT( !_db.is_treasury( o.to ), o.to, "Cannot vest on behalf of ${s}", ("s", o.to ) );
 
   HIVE_asset o_amount( o.get_amount() );
-  _db.adjust_balance( from_account, -o_amount );
+  temp_HIVE_balance vesting_funds;
+  _db.adjust_balance( from_account, vesting_funds, -o_amount );
 
   VEST_asset amount_vested;
 
@@ -373,14 +385,14 @@ void transfer_to_vesting_evaluator::do_apply( const transfer_to_vesting_operatio
   */
   if( _db.has_hardfork( HIVE_HARDFORK_1_24 ) )
   {
-    amount_vested = _db.adjust_account_vesting_balance( to_account, o_amount, false/*to_reward_balance*/, []( VEST_asset vests_created ) {} );
+    amount_vested = _db.adjust_account_vesting_balance( to_account, vesting_funds, false, []( VEST_asset vests_created ) {} );
 
     delayed_voting dv( _db );
     dv.add_delayed_value( to_account, _db.head_block_time(), amount_vested.get_amount() );
   }
   else
   {
-    amount_vested = _db.create_vesting( to_account, o_amount );
+    amount_vested = _db.create_vesting( to_account, vesting_funds );
   }
 
   /// Emit this vop unconditionally, since VESTS balance changed immediately, indepdenent to subsequent updates of account voting power done inside `delayed_voting` mechanism.
@@ -524,31 +536,33 @@ void convert_evaluator::do_apply( const convert_operation& o )
 {
   const auto& owner = _db.get_account( o.owner );
   HBD_asset o_amount = o.get_amount();
-  _db.adjust_balance( owner, -o_amount );
+  temp_HBD_balance convert_amount;
+  _db.adjust_balance( owner, convert_amount, -o_amount );
 
-  const auto& fhistory = _db.get_feed_history();
-  validate_price_feed_available( fhistory, "convert HBD" );
+  const auto& exchange_rate = _db.get_hbd_price();
+  validate_price_feed_available( exchange_rate, "convert HBD" );
 
   auto hive_conversion_delay = HIVE_CONVERSION_DELAY_PRE_HF_16;
   if( _db.has_hardfork( HIVE_HARDFORK_0_16__551) )
     hive_conversion_delay = HIVE_CONVERSION_DELAY;
 
-  _db.create<convert_request_object>( owner, o_amount, _db.head_block_time() + hive_conversion_delay, o.requestid );
+  _db.create<convert_request_object>( owner, std::move( convert_amount ),
+    _db.head_block_time() + hive_conversion_delay, o.requestid );
 }
 
 void collateralized_convert_evaluator::do_apply( const collateralized_convert_operation& o )
 {
-  HIVE_CHAIN_HARDFORK_ASSERT( _db.has_hardfork( HIVE_HARDFORK_1_25 ) && "Operation not available until HF25",
-    "" );
+  HIVE_CHAIN_HARDFORK_ASSERT( _db.has_hardfork( HIVE_HARDFORK_1_25 ) && "Operation not available until HF25", "" );
 
   const auto& owner = _db.get_account( o.owner );
   HIVE_asset o_amount = o.get_amount();
-  _db.adjust_balance( owner, -o_amount );
+  temp_HIVE_balance collateral;
+  _db.adjust_balance( owner, collateral, -o_amount );
 
   const auto& fhistory = _db.get_feed_history();
-  validate_price_feed_available( fhistory, "convert HIVE" );
+  validate_price_feed_available( fhistory.current_median_history, "convert HIVE" );
   const auto& dgpo = _db.get_dynamic_global_properties();
-  HIVE_CHAIN_STATE_ASSERT( dgpo.hbd_print_rate > 0, dgpo.hbd_print_rate, "Creation of new HBD blocked at this time due to global limit." );
+  HIVE_CHAIN_STATE_ASSERT( dgpo.get_hbd_print_rate() > 0, dgpo.get_hbd_print_rate(), "Creation of new HBD blocked at this time due to global limit." );
     //note that feed and therefore print rate is updated once per hour, so without above check there could be
     //enough room for new HBD, but there is a chance the official price would still be artificial (artificial
     //price is not used in this conversion, but users might think it is - better to stop them from making mistake)
@@ -563,23 +577,23 @@ void collateralized_convert_evaluator::do_apply( const collateralized_convert_op
   HBD_asset converted_amount = multiply_with_fee< HIVE_ASSET_NUM_HIVE >( for_immediate_conversion,
     fhistory.current_min_history, HIVE_COLLATERALIZED_CONVERSION_FEE );
   HIVE_CHAIN_ASSET_ASSERT( converted_amount.amount > 0, converted_amount, "Amount of collateral too low - conversion gives no HBD" );
-  _db.adjust_balance( owner, converted_amount );
 
+  temp_HBD_balance converted;
   _db.modify( dgpo, [&]( dynamic_global_property_object& p )
   {
     //HIVE supply (and virtual supply in part related to HIVE) will be corrected after actual conversion
-    p.current_hbd_supply += converted_amount;
-    p.virtual_supply += converted_amount * fhistory.current_median_history;
+    converted = p.issue_HBD( converted_amount, fhistory.current_median_history );
   } );
   //note that we created new HBD out of thin air and we will burn the related HIVE when actual conversion takes
   //place; there is alternative approach - we could burn all collateral now and print back excess when we are
   //to return it to the user; the difference slightly changes calculations below, that is, currently we might
   //allow slightly more HBD to be printed
+  _db.adjust_balance( owner, converted, converted.as_asset() );
 
   uint16_t percent_hbd = _db.calculate_HBD_percent();
-  HIVE_CHAIN_LIMIT_ASSERT( percent_hbd <= dgpo.hbd_stop_percent, percent_hbd, "Creation of new ${hbd} violates global limit.", ( "hbd", converted_amount ) );
+  HIVE_CHAIN_LIMIT_ASSERT( percent_hbd <= dgpo.get_hbd_stop_percent(), percent_hbd, "Creation of new ${hbd} violates global limit.", ( "hbd", converted_amount ) );
 
-  _db.create<collateralized_convert_request_object>( owner, o_amount, converted_amount,
+  _db.create<collateralized_convert_request_object>( owner, std::move( collateral ), converted_amount,
     _db.head_block_time() + HIVE_COLLATERALIZED_CONVERSION_DELAY, o.requestid );
 
   push_virtual_operation( _db, collateralized_convert_immediate_conversion_operation( o.owner, o.requestid, converted_amount ) );
@@ -587,9 +601,16 @@ void collateralized_convert_evaluator::do_apply( const collateralized_convert_op
 
 void limit_order_create_evaluator::do_apply( const limit_order_create_operation& o )
 {
-  HIVE_CHAIN_TIME_ASSERT( o.expiration > _db.head_block_time(), o.expiration, "Limit order has to expire after head block time." );
+  HIVE_CHAIN_TIME_ASSERT( o.expiration > _db.head_block_time() && "Limit order", o.expiration,
+    "Limit order has to expire after head block time." );
 
-  FC_TODO( "Limit to HIVE/HBD after next hardfork (HF29)" ); // if possible edit check in validate after hardfork triggers
+  // once HF29 triggers try trimming the check in validate
+  if( _db.is_in_control() || _db.has_hardfork( HIVE_HARDFORK_1_31_FIX_LIMIT_ORDER_ASSETS ) )
+  {
+    HIVE_PROTOCOL_ASSET_ASSERT( ( is_asset_type( o.amount_to_sell, HIVE_SYMBOL ) && is_asset_type( o.min_to_receive, HBD_SYMBOL ) )
+      || ( is_asset_type( o.amount_to_sell, HBD_SYMBOL ) && is_asset_type( o.min_to_receive, HIVE_SYMBOL ) ),
+      "Limit order must be for the HIVE:HBD market", ("subject", o.amount_to_sell)(o.min_to_receive) );
+  }
 
   time_point_sec expiration = o.expiration;
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__1449 ) ) // 307842c657d54f576615cd312a425c517ad68db4 example tx with extra long expiration
@@ -604,8 +625,12 @@ void limit_order_create_evaluator::do_apply( const limit_order_create_operation&
   }
 #endif
 
-  _db.adjust_balance( o.owner, -o.amount_to_sell );
-  const auto& order = _db.create<limit_order_object>( o.owner, o.amount_to_sell, o.get_price(), _db.head_block_time(), expiration, o.orderid );
+  const auto& seller = _db.get_account( o.owner );
+  temp_balance amount_to_sell( o.amount_to_sell.symbol );
+  _db.adjust_balance( seller, amount_to_sell, -o.amount_to_sell );
+
+  const auto& order = _db.create<limit_order_object>( seller, std::move( amount_to_sell ),
+    o.get_price(), _db.head_block_time(), expiration, o.orderid );
 
   bool filled = _db.apply_order( order );
 
@@ -614,9 +639,16 @@ void limit_order_create_evaluator::do_apply( const limit_order_create_operation&
 
 void limit_order_create2_evaluator::do_apply( const limit_order_create2_operation& o )
 {
-  HIVE_CHAIN_TIME_ASSERT( o.expiration > _db.head_block_time() && "Limit order has to expire after head block time.", o.expiration, "Order expiration ${subject} is not after head block time." );
+  HIVE_CHAIN_TIME_ASSERT( o.expiration > _db.head_block_time() && "Limit order 2",
+    o.expiration, "Limit order has to expire after head block time." );
 
-  FC_TODO( "Limit to HIVE/HBD after next hardfork (HF29)" ); // if possible edit check in validate after hardfork triggers
+  // once HF29 triggers try trimming the check in validate
+  if( _db.is_in_control() || _db.has_hardfork( HIVE_HARDFORK_1_31_FIX_LIMIT_ORDER_ASSETS ) )
+  {
+    HIVE_PROTOCOL_ASSET_ASSERT( ( is_asset_type( o.amount_to_sell, HIVE_SYMBOL ) && is_asset_type( o.exchange_rate.quote, HBD_SYMBOL ) )
+      || ( is_asset_type( o.amount_to_sell, HBD_SYMBOL ) && is_asset_type( o.exchange_rate.quote, HIVE_SYMBOL ) ),
+      "Limit order must be for the HIVE:HBD market", ("subject", o.amount_to_sell)(o.exchange_rate) );
+  }
 
   time_point_sec expiration = o.expiration;
   if( _db.has_hardfork( HIVE_HARDFORK_0_20__1449 ) ) // 8bce7ca4b2bea9af848db927342a88f82eea0684 example tx with extra long expiration
@@ -628,8 +660,12 @@ void limit_order_create2_evaluator::do_apply( const limit_order_create2_operatio
     expiration = std::min( o.expiration, fc::time_point_sec( HIVE_HARDFORK_0_20_TIME + HIVE_MAX_LIMIT_ORDER_EXPIRATION ) );
   }
 
-  _db.adjust_balance( o.owner, -o.amount_to_sell );
-  const auto& order = _db.create<limit_order_object>( o.owner, o.amount_to_sell, o.exchange_rate, _db.head_block_time(), expiration, o.orderid );
+  const auto& seller = _db.get_account( o.owner );
+  temp_balance amount_to_sell( o.amount_to_sell.symbol );
+  _db.adjust_balance( seller, amount_to_sell, -o.amount_to_sell );
+
+  const auto& order = _db.create<limit_order_object>( seller, std::move( amount_to_sell ),
+    o.exchange_rate, _db.head_block_time(), expiration, o.orderid );
 
   bool filled = _db.apply_order( order );
 
@@ -650,8 +686,9 @@ void transfer_to_savings_evaluator::do_apply( const transfer_to_savings_operatio
 
   HIVE_CHAIN_TREASURY_ASSERT( !_db.is_treasury( op.to ), op.to, "Cannot transfer to savings of treasury ${s}", ("s", op.to ) );
 
-  _db.adjust_balance( from, -op.amount );
-  _db.adjust_savings_balance( to, op.amount );
+  temp_balance transfer( op.amount.symbol );
+  _db.adjust_balance( from, transfer, -op.amount );
+  _db.adjust_savings_balance( to, transfer, op.amount );
 }
 
 void transfer_from_savings_evaluator::do_apply( const transfer_from_savings_operation& op )
@@ -659,15 +696,18 @@ void transfer_from_savings_evaluator::do_apply( const transfer_from_savings_oper
   assert_not_pixa_ico( op.from, "(savings transfer not allowed)" );
 
   const auto& from = _db.get_account( op.from );
-  _db.get_account(op.to); // Verify to account exists
+  const auto& to   = _db.get_account( op.to );
 
   HIVE_CHAIN_LIMIT_ASSERT( from.savings_withdraw_requests < HIVE_SAVINGS_WITHDRAW_REQUEST_LIMIT, from.savings_withdraw_requests, "Account has reached limit for pending withdraw requests." );
 
   HIVE_CHAIN_TREASURY_ASSERT( op.amount.symbol == HBD_SYMBOL || !_db.is_treasury( op.to ), op.to, "Can only transfer HBD to ${s}", ("s", op.to ) );
 
   HIVE_CHAIN_BALANCE_ASSERT( _db.get_savings_balance( from, op.amount.symbol ) >= op.amount, op.from, "Insufficient savings balance for '${subject}'." );
-  _db.adjust_savings_balance( from, -op.amount );
-  _db.create<savings_withdraw_object>( op.from, op.to, op.amount, op.memo, _db.head_block_time() + HIVE_SAVINGS_WITHDRAW_TIME, op.request_id );
+  temp_balance withdraw_amount( op.amount.symbol );
+  _db.adjust_savings_balance( from, withdraw_amount, -op.amount );
+
+  _db.create<savings_withdraw_object>( from, to, std::move( withdraw_amount ),
+    op.memo, _db.head_block_time() + HIVE_SAVINGS_WITHDRAW_TIME, op.request_id );
 
   _db.modify( from, [&]( account_object& a )
   {
@@ -678,7 +718,14 @@ void transfer_from_savings_evaluator::do_apply( const transfer_from_savings_oper
 void cancel_transfer_from_savings_evaluator::do_apply( const cancel_transfer_from_savings_operation& op )
 {
   const auto& swo = _db.get_savings_withdraw( op.from, op.request_id );
-  _db.adjust_savings_balance( _db.get_account( swo.from ), swo.amount );
+
+  temp_balance returned( swo.get_withdraw_amount().symbol );
+  _db.modify( swo, [&]( savings_withdraw_object& s )
+  {
+    s.access_amount().transfer_to( returned );
+  } );
+
+  _db.adjust_savings_balance( _db.get_account( swo.get_from() ), returned, returned.as_asset() );
   _db.remove( swo );
 
   const auto& from = _db.get_account( op.from );
@@ -695,7 +742,7 @@ void claim_reward_balance_evaluator::do_apply( const claim_reward_balance_operat
 
   const auto& acnt = _db.get_account( op.account );
   const auto& dgpo = _db.get_dynamic_global_properties();
-  auto now = dgpo.time;
+  auto now = dgpo.get_head_block_time();
 
   HIVE_asset op_reward_hive = op.get_reward_hive();
   HBD_asset op_reward_hbd = op.get_reward_hbd();
@@ -715,33 +762,33 @@ void claim_reward_balance_evaluator::do_apply( const claim_reward_balance_operat
     reward_vesting_hive_to_move = HIVE_asset( fc::uint128_to_uint64( ( uint128_t( op_reward_vests.amount.value ) * uint128_t( acnt.get_vest_rewards_as_hive().amount.value ) )
       / uint128_t( acnt.get_vest_rewards().amount.value ) ) );
 
-  _db.adjust_reward_balance( acnt, -op_reward_hive );
-  _db.adjust_reward_balance( acnt, -op_reward_hbd );
-  _db.adjust_balance( acnt, op_reward_hive );
-  _db.adjust_balance( acnt, op_reward_hbd );
+  temp_HIVE_balance hive_reward;
+  _db.adjust_reward_balance( acnt, hive_reward, -op_reward_hive );
+  _db.adjust_balance( acnt, hive_reward, op_reward_hive );
+  temp_HBD_balance hbd_reward;
+  _db.adjust_reward_balance( acnt, hbd_reward, -op_reward_hbd );
+  _db.adjust_balance( acnt, hbd_reward, op_reward_hbd );
 
+  if( _db.has_hardfork( HIVE_HARDFORK_0_20 ) )
+    _db.rc().regenerate_rc_mana( acnt, now );
+  temp_HIVE_balance reward_vesting_hive_balance;
   _db.modify( acnt, [&]( account_object& a )
   {
     if( _db.has_hardfork( HIVE_HARDFORK_0_20 ) )
-    {
       util::update_manabar( dgpo, a, op_reward_vests.amount.value );
-      _db.rc().regenerate_rc_mana( a, now );
-    }
-
-    a.vesting_shares += op_reward_vests;
-    a.reward_vesting_balance -= op_reward_vests;
-    a.reward_vesting_hive -= reward_vesting_hive_to_move;
+    a.access_vesting().transfer_from( a.access_vest_rewards(), op_reward_vests );
+    reward_vesting_hive_balance.transfer_from( a.access_vest_rewards_as_hive(), reward_vesting_hive_to_move );
   } );
   if( _db.has_hardfork( HIVE_HARDFORK_0_20 ) )
     _db.rc().update_account_after_vest_change( acnt, now );
 
   _db.modify( dgpo, [&]( dynamic_global_property_object& gpo )
   {
-    gpo.total_vesting_shares += op_reward_vests;
-    gpo.total_vesting_fund_hive += reward_vesting_hive_to_move;
+    gpo.access_total_vesting_shares() += op_reward_vests;
+    gpo.access_total_vesting_fund_hive().transfer_from( reward_vesting_hive_balance );
 
-    gpo.pending_rewarded_vesting_shares -= op_reward_vests;
-    gpo.pending_rewarded_vesting_hive -= reward_vesting_hive_to_move;
+    gpo.access_pending_rewarded_vesting_shares() -= op_reward_vests;
+    gpo.access_pending_rewarded_vesting_hive() -= reward_vesting_hive_to_move;
   } );
 
   _db.adjust_proxied_witness_votes( acnt, op_reward_vests.amount );
@@ -757,7 +804,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
   auto* delegation = _db.find< vesting_delegation_object, by_delegation >( boost::make_tuple( delegator.get_id(), delegatee.get_id() ) );
 
   const auto& gpo = _db.get_dynamic_global_properties();
-  auto now = gpo.time;
+  auto now = gpo.get_head_block_time();
 
   VEST_asset op_vesting_shares = op.get_vesting_shares();
   VEST_asset available_shares;
@@ -779,19 +826,19 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
     } );
 
     available_shares = VEST_asset( delegator.voting_manabar.current_mana );
-    if( gpo.downvote_pool_percent )
+    if( gpo.get_downvote_pool_percent() )
     {
       if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
       {
         available_downvote_shares = VEST_asset(
-          fc::uint128_to_int64( ( uint128_t( delegator.downvote_manabar.current_mana ) * HIVE_100_PERCENT ) / gpo.downvote_pool_percent
-          + ( HIVE_100_PERCENT / gpo.downvote_pool_percent ) - 1 ) );
+          fc::uint128_to_int64( ( uint128_t( delegator.downvote_manabar.current_mana ) * HIVE_100_PERCENT ) / gpo.get_downvote_pool_percent()
+          + ( HIVE_100_PERCENT / gpo.get_downvote_pool_percent() ) - 1 ) );
       }
       else
       {
         available_downvote_shares = VEST_asset(
-          ( delegator.downvote_manabar.current_mana * HIVE_100_PERCENT ) / gpo.downvote_pool_percent
-          + ( HIVE_100_PERCENT / gpo.downvote_pool_percent ) - 1 );
+          ( delegator.downvote_manabar.current_mana * HIVE_100_PERCENT ) / gpo.get_downvote_pool_percent()
+          + ( HIVE_100_PERCENT / gpo.get_downvote_pool_percent() ) - 1 );
       }
     }
     else
@@ -800,8 +847,8 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
     }
 
     // Assume delegated VESTS are used first when consuming mana. You cannot delegate received vesting shares
-    available_shares.amount = std::min( available_shares.amount, max_mana - delegator.received_vesting_shares.amount );
-    available_downvote_shares.amount = std::min( available_downvote_shares.amount, max_mana - delegator.received_vesting_shares.amount );
+    available_shares.amount = std::min( available_shares.amount, max_mana - delegator.get_received_vesting().amount );
+    available_downvote_shares.amount = std::min( available_downvote_shares.amount, max_mana - delegator.get_received_vesting().amount );
 
     if( delegator.next_vesting_withdrawal < fc::time_point_sec::maximum()
       && delegator.get_total_vesting_withdrawal() > delegator.vesting_withdraw_rate )
@@ -844,7 +891,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
 
     _db.modify( delegator, [&]( account_object& a )
     {
-      a.delegated_vesting_shares += op_vesting_shares;
+      a.access_delegated_vesting() += op_vesting_shares;
 
       if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
       {
@@ -852,7 +899,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
 
         if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
         {
-          a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( op_vesting_shares.amount.value ) * gpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
+          a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( op_vesting_shares.amount.value ) * gpo.get_downvote_pool_percent() ) / HIVE_100_PERCENT ) );
         }
         else if( _db.has_hardfork( HIVE_HARDFORK_0_21__3336 ) )
         {
@@ -868,7 +915,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
         util::update_manabar( gpo, a, op_vesting_shares.amount.value );
       }
 
-      a.received_vesting_shares += op_vesting_shares;
+      a.access_received_vesting() += op_vesting_shares;
     } );
   }
   else if( op_vesting_shares >= delegation->get_vesting() ) // delegation is increasing
@@ -883,7 +930,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
 
     _db.modify( delegator, [&]( account_object& a )
     {
-      a.delegated_vesting_shares += delta;
+      a.access_delegated_vesting() += delta;
 
       if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
       {
@@ -891,7 +938,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
 
         if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
         {
-          a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( delta.amount.value ) * gpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
+          a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( delta.amount.value ) * gpo.get_downvote_pool_percent() ) / HIVE_100_PERCENT ) );
         }
         else if( _db.has_hardfork( HIVE_HARDFORK_0_21__3336 ) )
         {
@@ -907,7 +954,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
         util::update_manabar( gpo, a, delta.amount.value );
       }
 
-      a.received_vesting_shares += delta;
+      a.access_received_vesting() += delta;
     } );
 
     _db.modify( *delegation, [&]( vesting_delegation_object& obj )
@@ -930,7 +977,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
     }
 
     _db.create< vesting_delegation_expiration_object >( delegator, delta,
-      std::max( now + gpo.delegation_return_period, delegation->get_min_delegation_time() ) );
+      std::max( now + gpo.get_delegation_return_period(), delegation->get_min_delegation_time() ) );
 
     _db.modify( delegatee, [&]( account_object& a )
     {
@@ -939,7 +986,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
         util::update_manabar( gpo, a );
       }
 
-      a.received_vesting_shares -= delta;
+      a.access_received_vesting() -= delta;
 
       if( _db.has_hardfork( HIVE_HARDFORK_0_20__2539 ) )
       {
@@ -949,7 +996,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
         {
           if( _db.has_hardfork( HIVE_HARDFORK_0_22__3485 ) )
           {
-            a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( delta.amount.value ) * gpo.downvote_pool_percent ) / HIVE_100_PERCENT ) );
+            a.downvote_manabar.use_mana( fc::uint128_to_int64( ( uint128_t( delta.amount.value ) * gpo.get_downvote_pool_percent() ) / HIVE_100_PERCENT ) );
           }
           else
           {
@@ -987,7 +1034,7 @@ void recurrent_transfer_evaluator::do_apply( const recurrent_transfer_operation&
   const auto& to_account = _db.get_account( op.to );
 
   asset available = _db.get_balance( from_account, op.amount.symbol );
-  HIVE_CHAIN_BALANCE_ASSERT( available >= op.amount, op.from, "Account does not have enough tokens for the first transfer, has ${has} needs ${needs}", ("has",  available)("needs", op.amount) );
+  HIVE_CHAIN_BALANCE_ASSERT( available >= op.amount, op.from, "Account does not have enough tokens for the first transfer, has ${has} needs ${needs}", ("has", available)("needs", op.amount) );
 
   uint8_t rtp_id = op.get_pair_id();
 
@@ -999,6 +1046,13 @@ void recurrent_transfer_evaluator::do_apply( const recurrent_transfer_operation&
     HIVE_CHAIN_LIMIT_ASSERT( from_account.open_recurrent_transfers < HIVE_MAX_OPEN_RECURRENT_TRANSFERS, from_account.open_recurrent_transfers, "Account can't have more than ${rt} recurrent transfers", ( "rt", HIVE_MAX_OPEN_RECURRENT_TRANSFERS ) );
     // If the recurrent transfer is not found and the amount is 0 it means the user wants to delete a transfer that doesn't exist
     HIVE_CHAIN_ASSET_ASSERT( op.amount.amount != 0, op.amount, "Cannot create a recurrent transfer with 0 amount" );
+    // A new recurrent transfer always requires at least 2 executions - a single execution would fire
+    // immediately and delete itself, in which case a normal transfer should be used instead.
+    // NB: the create and modify paths must use textually distinct assertion expressions
+    // ('>= 2' here vs '> 1' below) so the assertion-id generator does not produce a hash collision.
+    HIVE_CHAIN_LIMIT_ASSERT( op.executions >= 2, op.executions,
+      "Executions must be at least 2, if you set executions to 1 the recurrent transfer will execute immediately "
+      "and delete itself. You should use a normal transfer operation" );
     const auto& recurrent_transfer = _db.create< recurrent_transfer_object >( _db.head_block_time(), from_account, to_account, op.amount, op.memo, op.recurrence, op.executions, rtp_id );
     HIVE_CHAIN_TIME_ASSERT( recurrent_transfer.get_final_trigger_date() <= _db.head_block_time() + fc::days( HIVE_MAX_RECURRENT_TRANSFER_END_DATE ),
       recurrent_transfer.get_final_trigger_date(), "Cannot set a transfer that would last for longer than ${days} days", ( "days", HIVE_MAX_RECURRENT_TRANSFER_END_DATE ) );
@@ -1010,6 +1064,13 @@ void recurrent_transfer_evaluator::do_apply( const recurrent_transfer_operation&
   }
   else if( op.amount.amount == 0 )
   {
+    // Pre-HF29 nodes reject executions == 1 on every path (incl. delete) in validate()
+    if( !_db.has_hardfork( HIVE_HARDFORK_1_31_ALLOW_MODIFY_LAST_RECURRENT_TRANSFER ) )
+    {
+      HIVE_CHAIN_LIMIT_ASSERT( 2 <= op.executions, op.executions,
+        "Executions must be at least 2 when deleting a recurrent transfer before HF29, "
+        "setting executions to 1 was rejected by pre-HF29 nodes" );
+    }
     _db.remove( *itr );
     _db.modify( from_account, [&](account_object& a )
     {
@@ -1019,6 +1080,17 @@ void recurrent_transfer_evaluator::do_apply( const recurrent_transfer_operation&
   }
   else
   {
+    // Modifying an existing recurrent transfer. Before HF29 a modification also required at least 2
+    // executions; since HF29 executions may be set to 1 so users can update the last remaining
+    // execution (e.g. change the amount or memo on the final payment) - see issue #786.
+    // The expression is kept textually different from the create path above ('> 1' vs '>= 2') so the
+    // two assertions hash to distinct assertion ids.
+    if( !_db.has_hardfork( HIVE_HARDFORK_1_31_ALLOW_MODIFY_LAST_RECURRENT_TRANSFER ) )
+    {
+      HIVE_CHAIN_LIMIT_ASSERT( op.executions > 1, op.executions,
+        "Executions must be at least 2 when modifying a recurrent transfer before HF29, "
+        "setting executions to 1 would cause the transfer to execute immediately and delete itself" );
+    }
     const auto& recurrent_transfer = *itr;
     _db.modify( recurrent_transfer, [&]( recurrent_transfer_object& rt )
     {

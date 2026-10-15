@@ -1,5 +1,5 @@
 #include <hive/chain/database.hpp>
-#include <hive/chain/comment_object_multiindex.hpp>
+#include <hive/chain/detail/state/comment_object_multiindex.hpp>
 
 #include <hive/chain/external_storage/placeholder_comment_archive.hpp>
 
@@ -64,7 +64,7 @@ void placeholder_comment_archive::wipe()
   // do nothing - there is no extra data
 }
 
-void placeholder_comment_archive::flush()
+void placeholder_comment_archive::flush( bool force_storage_flush )
 {
   // do nothing - there is no extra data
 }
