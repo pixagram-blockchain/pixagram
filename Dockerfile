@@ -2,14 +2,16 @@
 # Base docker file having defined environment for build and run of hived instance.
 # Build stage uses ci-base-image from common-ci-configuration (centralized build toolchain)
 # To be started from cloned hive source directory.
-ARG CI_REGISTRY_IMAGE=registry.gitlab.syncad.com/hive/hive/
+# Pixagram builds pull their base images from Docker Hub mirrors under pixadock/, copied
+# unchanged from registry.gitlab.syncad.com (same tags), so a build never touches that registry.
+ARG CI_REGISTRY_IMAGE=pixadock/
 ARG CI_IMAGE_TAG=ubuntu26.04-1
 ARG BUILD_IMAGE_TAG
 ARG IMAGE_TAG_PREFIX
 # CI base image for build stage - must be at top level for FROM to see it.
 # Pinned to the published ci-base-image version tag that ships the aarch64 cross toolchain +
 # preinstalled aarch64 RocksDB (hive/common-ci-configuration!377).
-ARG CI_BASE_IMAGE=registry.gitlab.syncad.com/hive/common-ci-configuration/ci-base-image:pypa_2_28-pg18-5
+ARG CI_BASE_IMAGE=pixadock/ci-base-image:pypa_2_28-pg18-5
 
 # Runtime base for the final `instance` image. Default: the pre-published, commit-tagged
 # minimal-runtime image (x86_64 fast path). Multiarch builds pass
