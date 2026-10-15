@@ -81,6 +81,22 @@ The shared memory layout and the exported blockchain configuration both change, 
 node from 1.30.0 needs `--force-replay`, as for every previous Pixagram release. Builds now use
 C++20 and Boost 1.90, and runtime images are based on Ubuntu 26.04 (`ci-base-image:pypa_2_28-pg18-5`).
 
+The same release moves HAF to upstream 1.28.8 (pixagram-blockchain/haf, PostgreSQL stays at 17)
+and Hivemind to upstream 1.28.8 (pixagram-blockchain/hivemind). The new Hivemind needs the new HAF,
+so API nodes wipe `haf_db_store` and resync HAF and Hivemind together, as on every upgrade.
+
+The 1.28.8 account-history fix matters on live nodes: 1.30.0's `account_history_rocksdb` keeps every
+SST file open, and a node accumulated about 14,000 files a day (128,000 open descriptors after
+nine days, against a limit of 1,048,576). After the replay the same node holds 25 files.
+
+## Building without gitlab.syncad.com
+
+Submodules come from the openhive-network mirrors on GitHub, so a recursive clone of
+pixagram-blockchain/pixagram works as is. The Dockerfile's base images are unchanged copies of
+upstream's on Docker Hub, under the same tags: `pixadock/ci-base-image:pypa_2_28-pg18-5` (build)
+and `pixadock/minimal-runtime:ubuntu26.04-1` (runtime). When a future merge bumps either tag,
+mirror the new image before building.
+
 ## Verification
 
 A mainnet node built from this tree synced Pixagram mainnet over p2p from genesis to block
@@ -99,6 +115,18 @@ same head block.
   passes on `main` and fails here, and 17 that failed on `main` now pass. `plugin_test` fails 45
   cases against 51 on `main`, with none new. Both suites still have many failures inherited from
   `main`; see below.
+- **Release candidate on a live API node**: 173.212.245.49 (blockforge.lol) has run this hived
+  since 2026-10-15 07:14 UTC, and the new HAF and Hivemind since 12:16 UTC. The fresh HAF and
+  Hivemind resync took about 30 minutes without a Hivemind restart. Compared with api.pixagram.com
+  (1.30.0) at the same head block, the following were identical:
+  - global properties, the reward fund, the feed, the witness schedule and all 18 witnesses,
+  - all 130 accounts, with their RC delegations,
+  - 45 sampled blocks with their operations,
+  - every account's profile, posts and follow counts, plus ranked posts and communities.
+
+  Account history differed only in 12 `curators_vesting_payout` values. Notifications differed in 7
+  of the 130 accounts' lists, all produced by the resync itself: a fresh sync keeps only the final
+  state of a changed vote, and creates no mention notification for a comment that was deleted.
 
 ## Unit-test builds
 
