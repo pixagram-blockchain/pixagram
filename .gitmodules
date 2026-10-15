@@ -1,6 +1,6 @@
 [submodule "tests_api"]
 	path = tests/python/hive-local-tools/tests_api
-	url = ../tests_api.git
+	url = https://github.com/openhive-network/tests_api.git
 	shallow = true
 [submodule "libraries/vendor/zstd"]
 	path = libraries/vendor/zstd
@@ -8,7 +8,7 @@
 	shallow = true
 [submodule "libraries/chain/compression_dictionaries"]
 	path = libraries/chain/compression_dictionaries
-	url = ../compression_dictionaries.git
+	url = https://github.com/openhive-network/compression_dictionaries.git
 	shallow = true
 [submodule "libraries/vendor/rocksdb"]
 	path = libraries/vendor/rocksdb
@@ -16,7 +16,7 @@
 	shallow = true
 [submodule "libraries/fc"]
 	path = libraries/fc
-	url = ../fc.git
+	url = https://github.com/openhive-network/fc.git
 [submodule "libraries/appbase"]
 	path = libraries/appbase
-	url = ../appbase.git
+	url = https://github.com/openhive-network/appbase.git
