@@ -6,24 +6,6 @@ This repository holds its node software, `hived`, and the `cli_wallet`.
 - Mainnet RPC: https://api.pixagram.com
 - Docs: https://pixa.org
 
-## Differences from Hive
-
-| | Hive | Pixagram |
-|---|---|---|
-| Liquid token | HIVE | **PIXA** |
-| Stable token | HBD | **PXS** |
-| Staked token | VESTS | VESTS |
-| Public key prefix | `STM` | **`PIX`** |
-| Inflation to content / proposals / witnesses / stakers | 65 / 10 / 10 / 15 % | **70 / 15 / 15 / 0 %** |
-| PXS savings interest | set by witnesses | **fixed at 0** |
-| Proposal fund account | `hive.fund` | **`pixa.omnibus`** |
-| Max transaction size | 64 KiB | **128 KiB** |
-| Max `custom_json` payload | 8 KiB | **64 KiB** |
-
-Holding PIXA, PXS or VESTS earns nothing by itself; stake is rewarded only through curation, for voting.
-Everything else works as on Hive: 3-second blocks, delegated proof of stake, Resource Credits instead
-of fees, and the same APIs. The [Hive developer docs](https://developers.hive.io/) apply.
-
 ## Run a node
 
 | You want | Use |

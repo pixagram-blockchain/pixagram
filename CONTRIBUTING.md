@@ -1,38 +1,17 @@
-# Hive
+# Contributing to Pixagram
 
-[![GitLab](https://img.shields.io/badge/Development%20on-Community%20GitLab-orange)](https://gitlab.syncad.com/hive/hive)
+## Security issues
 
-This project is primarily developed on a community-hosted GitLab instance. Please visit the [community GitLab repository](https://gitlab.syncad.com/hive/hive) for the latest updates, issues, and contributions.
+Do **not** open a public issue for a security vulnerability. Email it to
+[matus@pixagram.com](mailto:matus@pixagram.com) instead.
 
-# Please Read
+## Bugs
 
-Please read these instructions before submitting issues to the Hive repository. The issue tracker is for bugs and specific implementation discussion **only**. It should not be used for other purposes, as described below.
+Open an [issue](https://github.com/pixagram-blockchain/pixagram/issues). Include the
+`hived` version, what you did, what you expected, what happened, and the relevant log output.
 
-#### **Did you find a bug?**
+## Pull requests
 
-* **Do not open up a GitLab/GitHub issue if the bug is a security vulnerability, and instead please email it to [outreach+security@hive.io](mailto:outreach+security@hive.io)
-* **Ensure the bug was not already reported** by searching on community GitLab under [Issues](https://gitlab.syncad.com/hive/hive/-/issues).
-* If there is an existing feature that is not working correctly, or a glitch in the blockchain that is impacting user behaviour - please open an issue to report variance. Include as much relevant information as you can, including screen shots or log output when applicable, and steps to reproduce the issue.
-
-## Enhancement Suggestions
-
-Do **not** use the issue tracker to suggest enhancements or improvements to the platform. The best place for these discussions is on the Hive blockchain itself. If there is a well vetted idea that has the support of the community that you feel should be considered by the development team, please email it to [hiveio+suggestions@protonmail.com](mailto:hiveio+suggestions@protonmail.com) for review.
-
-## Implementation Discussion
-
-The developers frequently open issues to discuss changes that are being worked on. This is to inform the community of the changes being worked on, and to get input from the community and other developers on the implementation.
-
-Issues opened that devolve into lengthy discussion of minor site features will be closed or locked.  The issue tracker is not a general purpose discussion forum.
-
-This is not the place to make suggestions for product improvement (please see the Enhancement Suggestions section above for this). If you are not planning to work on the change yourself - do not open an issue for it.
-
-## Pull Requests
-
-Anybody in the community is welcome and encouraged to submit pull requests with any desired changes to the platform!
-
-Requests to make changes that include working, tested pull requests jump to the top of the queue. There is not a guarantee that all functionality submitted as a PR will be accepted and merged, however. Please read through our [Git Guidelines](doc/git-guidelines.md) prior to submitting a PR.
-
-## How to create a merge request when you also need to update test-tools for your feature
-* Prepare changes for hive's develop and TestTools' master.
-* All changes must be rebased to target branches. the merge request in hive should have the TestTools submodule updated to point to your test tools merge request. Both CIs has to be green. (Note: nothing is merged to master/develop yet).
-* Create merge requests in hive and TestTools and wait for review. Write a note in the hive merge request mentioning that it needs the merge request from TestTools.
+Pull requests are welcome. Keep each one focused on a single change and describe what it fixes
+and how you tested it. Changes to consensus code need a hardfork, so expect them to be
+discussed before they are merged.
