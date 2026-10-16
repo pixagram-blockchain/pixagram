@@ -4,9 +4,12 @@
 
 namespace hive{ namespace plugins { namespace p2p {
 
-// Pre-mainnet: no default seeds baked into the binary. Operators must supply
-// seeds via --p2p-seed-node or config.ini. Populate this list once real
-// Pixagram seed nodes are announced.
+#if defined(IS_TEST_NET) || defined(HIVE_CONVERTER_BUILD)
 const std::vector< std::string > default_seeds;
+#else
+const std::vector< std::string > default_seeds = {
+  "api.pixagram.com:2001"
+};
+#endif
 
 } } } // hive::plugins::p2p
