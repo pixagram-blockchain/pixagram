@@ -1,133 +1,68 @@
-# Hive - Decentralizing the exchange of ideas and information
+# Pixagram
 
-[![GitLab](https://img.shields.io/badge/Development%20on-Community%20GitLab-orange)](https://gitlab.syncad.com/hive/hive)
+Pixagram is the blockchain behind [pixagram.com](https://pixagram.com), a fork of [Hive](https://hive.io).
+This repository holds its node software, `hived`, and the `cli_wallet`.
 
-This project is primarily developed on a community-hosted GitLab instance. Please visit the [community GitLab repository](https://gitlab.syncad.com/hive/hive) for the latest updates, issues, and contributions.
+- Mainnet RPC: https://api.pixagram.com
+- Docs: https://pixa.org
 
-![Hive](https://files.peakd.com/file/peakd-hive/netuoso/jMHldwMV-horizontal.png)
+## Differences from Hive
 
-Hive is a Graphene-based social blockchain that was created as a fork of Steem and born on the core idea of decentralization. Originally, Hive was announced on the [Steem blockchain](https://peakd.com/communityfork/@hiveio/announcing-the-launch-of-hive-blockchain) prior to the initial token airdrop. Hive did not have any ICO or mining period.
+| | Hive | Pixagram |
+|---|---|---|
+| Liquid token | HIVE | **PIXA** |
+| Stable token | HBD | **PXS** |
+| Staked token | VESTS | VESTS |
+| Public key prefix | `STM` | **`PIX`** |
+| Inflation to content / proposals / witnesses / stakers | 65 / 10 / 10 / 15 % | **70 / 15 / 15 / 0 %** |
+| PXS savings interest | set by witnesses | **fixed at 0** |
+| Proposal fund account | `hive.fund` | **`pixa.omnibus`** |
+| Max transaction size | 64 KiB | **128 KiB** |
+| Max `custom_json` payload | 8 KiB | **64 KiB** |
 
-The Hive blockchain eliminates the elements of centralization and imbalanced control that plagued the Steem blockchain. Since its launch on March 20, 2020, Hive has been continuously growing and evolving. Hive's prime selling points are its decentralization, 3-second transaction speed, and ability to handle large volumes. It is an ideal platform for a variety of innovative projects focused on a broad range of fields, from open source development to games.
+Holding PIXA, PXS or VESTS earns nothing by itself; stake is rewarded only through curation, for voting.
+Everything else works as on Hive: 3-second blocks, delegated proof of stake, Resource Credits instead
+of fees, and the same APIs. The [Hive developer docs](https://developers.hive.io/) apply.
 
-Hive serves as the operational home for all kinds of projects, companies, and applications. With a highly active and passionate community, Hive has become a thriving environment for both new and experienced developers to quickly bootstrap their applications. On top of this, Hive is extremely rewarding to content creators and curators alike.
+## Run a node
 
-The technical development of the Hive blockchain is carried out by a founding decentralized group of over 30 open source developers, many of whom were instrumental in creating Steem back in 2016. This core team is supported by a growing community of additional open source developers and witnesses.
+| You want | Use |
+|---|---|
+| A witness (block producer) | [pixagram-blockchain/witness](https://github.com/pixagram-blockchain/witness) |
+| A public API node | [pixagram-blockchain/pixagram-node](https://github.com/pixagram-blockchain/pixagram-node) |
+| A witness price feed | [pixagram-blockchain/bigmac-feed](https://github.com/pixagram-blockchain/bigmac-feed) |
 
-## Documents
+Docker images are published as `pixadock/pixagram:<version>`, for example `pixadock/pixagram:1.30.1`.
+The `mainnet` tag follows the current mainnet release.
 
-* Developer Portal: https://developers.hive.io/
+To join the network with your own config, add a seed node to `config.ini`:
 
-## Advantages
-
-* Hive Fund
-* Truly Decentralized Community
-* Free Transactions (Resource Credits = Freemium Model)
-* Fast Block Confirmations (3 seconds)
-* One Block Irreversibility
-* Time Delay Security (Vested Hive & Savings)
-* Hierarchical Role Based Permissions (Keys)
-* Integrated Token Allocation
-* Lowest Entry-Barrier for User Adoption in the market
-* Dozens of dApps already built on Hive and many more to come
-
-## Technical Details
-
-* Currency symbol HIVE
-* HBD - Hive's very own stable coin with a two-way peg
-* Delegated Proof-of-Stake Consensus (DPoS)
-* 10% APR inflation narrowing to 1% APR over 20 years
-    * 65% of inflation to authors/curators.
-    * 15% of inflation to stakeholders.
-    * 10% of inflation to block producers.
-    * 10% of inflation to Hive Fund.
-
-# Installation
-
-Getting started with Hive is fairly simple. You can either choose to use pre-built Docker images, build with Docker manually, or build from source directly. All steps have been documented and while many different OSes are supported, the easiest one is Ubuntu 24.04 LTS.
-
-## Quickstart
-
-Want to get up and running quickly? We offer pre-built Docker images for your convenience. More details can be found in our [Quickstart Guide](doc/exchangequickstart.md).
-
-## Building
-
-We **strongly** recommend using one of the pre-built Docker images or building Hive using Docker. Both processes are described in the [Quickstart Guide](doc/exchangequickstart.md).
-
-However, if you prefer to build from source, we also provide [build instructions](doc/building.md) for Linux (Ubuntu LTS).
-
-## Dockerized deployment
-
-Building a `hived` docker image is described in detail here: [Building under Docker](doc/building.md#building-under-docker).
-
-If you'd like to use our pre-built official binary images, download them from the Docker Hub registry with the specific version tag. For example, to use version 1.28.0, run:
-
-```
-docker pull hiveio/hive:1.28.0
+```ini
+p2p-seed-node = api.pixagram.com:2001
 ```
 
-Please note that the `latest` tag is not supported; you must explicitly specify the version tag to avoid issues with new versions that require replay.
+## Build
 
-The recommended way to run the image is the Docker Compose deployment in [docker/exchange](docker/exchange): a `hived` service with account history, an optional `cli_wallet` daemon, a health check, and a data volume that bootstraps itself on the first start from a published state snapshot or a block log. It is configured entirely through `compose.yml`, `.env` and `config.ini`; see [docker/exchange/README.md](docker/exchange/README.md).
+```bash
+git clone --recursive https://github.com/pixagram-blockchain/pixagram.git
+cd pixagram
+docker build --target=instance -t pixagram:local .
+```
 
-The image can also be started by hand. [run_hived_img.sh](scripts/run_hived_img.sh) wraps `docker run` while emulating direct `hived` usage: `run_hived_img.sh <docker_img> [OPTION[=VALUE]]... [<hived_option>]...`; read [more about using run_hived_img.sh](doc/run_hived_img.md) to explore its usage in various scenarios.
+For native builds on Ubuntu 24.04 see [doc/building.md](doc/building.md).
 
-Environment variables understood by the image's entrypoint:
+## CLI wallet
 
-- `BLOCK_LOG_URL`: URL of a monolithic `block_log` to download on the first start when the data directory holds no block log yet (its `.artifacts` sidecar is fetched from `BLOCK_LOG_ARTIFACTS_URL`, default `BLOCK_LOG_URL.artifacts`).
-- `SNAPSHOT_URL`: URL of a `.tgz` state snapshot (as produced by `--dump-snapshot`) to download and load on the first start instead of replaying from genesis. Without a block log it implies `block-log-split=0` (no block log is kept); with `BLOCK_LOG_URL` the block log is kept and replayed forward from the snapshot.
-- `HIVED_AUTO_REPLAY`: set to `1` to have the entrypoint add `--replay-blockchain` whenever a block log is present and no replay mode was requested, so a downloaded or copied-in block log is replayed without further action. Off by default, so a mismatch between the state and the block log stops hived with an error instead of starting a replay. The exchange compose deployment turns it on.
-- `HIVED_UID`: run hived as this UID, for bind-mounted directories owned by a user other than 1000.
-- `P2P_ENDPOINT`, `WS_ENDPOINT`, `HTTP_ENDPOINT`: listening endpoints inside the container.
+The image includes `/home/hived/bin/cli_wallet`, which defaults to the Pixagram chain ID:
 
-`/home/hived/scripts/hived_healthcheck.sh` is a health check for the container: it exits 0 once hived answers JSON-RPC and its head block is at most `HIVED_HEALTHCHECK_MAX_BLOCK_AGE` seconds old (default 120).
+```bash
+docker run --rm -it -v "$PWD/wallet:/wallet" -w /wallet \
+  --entrypoint /home/hived/bin/cli_wallet pixadock/pixagram:1.30.1 -o
+```
 
-## CLI Wallet
+`-o` runs it offline, for signing. To broadcast, point it at a node with
+`--server-rpc-endpoint=ws://<node>:<port>`.
 
-We provide a basic cli wallet for interfacing with `hived`. The wallet is self-documented via command line help. The node you connect to via the cli wallet needs to be running the `account_by_key_api`, `condenser_api`, `database_api`, `account_history_api`, `wallet_bridge_api` plugins and needs to be configured to accept WebSocket connections via `webserver-ws-endpoint`.
+## License
 
-The cli_wallet offers two operating modes:
-- interactive mode: commands are entered on an interactive command line
-- daemon mode: wallet commands are sent via RPC calls. In daemon mode it is important to specify which IP addresses are allowed to establish connections to the wallet's HTTP server. See `--rpc-http-endpoint`, `--daemon`, `--rpc-http-allowip` options for details.
-
-To prepare transactions, you need to execute a few setup steps in the cli_wallet:
-- use set_password <password> call to establish a password protecting your wallet from unauthorized access
-- use unlock <password> to turn on full-operation mode in the wallet
-- import private key(s) using import_key "WIF-key" command
-
-Keys and password are stored in the wallet.json file.
-
-## Testing
-
-See [doc/devs/testing.md](doc/devs/testing.md) for testing build targets and info
-on how to use lcov to check code coverage of tests.
-
-# Configuration
-
-## Config File
-
-Run `hived --dump-config` to generate a data directory and a config file. The default data directory location is `~/.hived`. If you want to modify the config to your liking, we have [example config](contrib/config-for-docker.ini) used in the docker image. All options will be present in the default config file and there may be more options that need to be changed from the docker configs (some of the options actually used in images are configured via command line).
-
-## Seed Nodes
-
-A list of some seed nodes to get you started can be found in
-[doc/seednodes.txt](doc/seednodes.txt).
-
-This same file is baked into the binary and can be overridden by `--p2p-seed-node`
-command option set to a whitespace-delimited list of seed nodes (with port).
-
-## System Requirements
-
-Running a Hive consensus node requires the following hardware resources:
-- data directory to hold a blockchain file(s) (~600GB of disk storage is required)
-- storage to hold a shared memory file (~12GB of memory is required at the moment to store state data)
-
-# No Support & No Warranty
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-IN THE SOFTWARE.
+Based on Hive and Steem. Provided as is, without warranty. See [LICENSE.md](LICENSE.md).
